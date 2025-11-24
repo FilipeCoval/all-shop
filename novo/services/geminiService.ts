@@ -26,12 +26,12 @@ Regras:
 `;
 
 export const initializeChat = async (): Promise<Chat> => {
-  // Tenta obter a chave do Vite (Vercel) ou Node (Local)
-  // @ts-ignore
-  const apiKey = import.meta.env.VITE_API_KEY || process.env.API_KEY;
+  // IMPORTANTE: No Vercel, a variável de ambiente DEVE chamar-se VITE_API_KEY
+  const apiKey = import.meta.env.VITE_API_KEY;
 
   if (!apiKey) {
-    console.warn("API Key is missing. Chat will not work.");
+    console.warn("VITE_API_KEY não encontrada. O chat não funcionará.");
+    console.error("Configure a variável VITE_API_KEY nas definições do Vercel.");
     throw new Error("API Key not found");
   }
 
@@ -56,13 +56,13 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
     }
     
     if (!chatSession) {
-        return "Desculpe, o sistema de chat está indisponível no momento.";
+        return "Desculpe, o sistema de chat está a iniciar. Tente novamente em alguns segundos.";
     }
 
     const response: GenerateContentResponse = await chatSession.sendMessage({ message });
     return response.text || "Desculpe, não consegui entender.";
   } catch (error) {
     console.error("Error sending message to Gemini:", error);
-    return "Ocorreu um erro ao processar sua mensagem. (Verifique se a API Key está configurada).";
+    return "Ocorreu um erro técnico. Verifique se a Chave API está configurada corretamente no Vercel (VITE_API_KEY).";
   }
 };
