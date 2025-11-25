@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
@@ -9,7 +10,7 @@ import Contact from './components/Contact';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import { PRODUCTS } from './constants';
-import { Product, CartItem, User, Order } from './types';
+import { Product, CartItem, User, Order, Review } from './types';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -20,6 +21,9 @@ const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  
+  // Reviews State
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   // Simple Hash Router State
   const [route, setRoute] = useState(window.location.hash || '#/');
@@ -28,6 +32,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('allshop_user');
     const storedOrders = localStorage.getItem('allshop_orders');
+    const storedReviews = localStorage.getItem('allshop_reviews');
     
     if (storedUser) {
         try {
@@ -42,6 +47,12 @@ const App: React.FC = () => {
         try {
             setOrders(JSON.parse(storedOrders));
         } catch (e) { console.error("Error parsing orders", e); }
+    }
+
+    if (storedReviews) {
+        try {
+            setReviews(JSON.parse(storedReviews));
+        } catch (e) { console.error("Error parsing reviews", e); }
     }
 
     const handleHashChange = () => {
@@ -107,6 +118,17 @@ const App: React.FC = () => {
       setCartItems([]); // Clear cart
   };
 
+  const handleAddReview = (newReview: Review) => {
+      const updatedReviews = [newReview, ...reviews];
+      setReviews(updatedReviews);
+      try {
+          localStorage.setItem('allshop_reviews', JSON.stringify(updatedReviews));
+      } catch (e) {
+          alert("Atenção: Espaço de armazenamento cheio. Não foi possível salvar a imagem permanentemente.");
+          console.error("Storage limit reached", e);
+      }
+  };
+
   const cartTotal = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   }, [cartItems]);
@@ -132,7 +154,15 @@ const App: React.FC = () => {
         const id = parseInt(route.split('/')[1]);
         const product = PRODUCTS.find(p => p.id === id);
         if (product) {
-            return <ProductDetails product={product} onAddToCart={addToCart} />;
+            return (
+                <ProductDetails 
+                    product={product} 
+                    onAddToCart={addToCart} 
+                    reviews={reviews}
+                    onAddReview={handleAddReview}
+                    currentUser={user}
+                />
+            );
         }
     }
 
