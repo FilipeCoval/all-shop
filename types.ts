@@ -1,3 +1,4 @@
+
 export interface Product {
   id: number;
   name: string;
@@ -48,4 +49,14 @@ export interface Order {
   total: number;
   status: 'Processamento' | 'Enviado' | 'Entregue';
   items: string[];
+}
+
+export interface Review {
+  id: string;
+  productId: number;
+  userName: string;
+  rating: number; // 1 a 5
+  comment: string;
+  date: string;
+  images: string[]; // Base64 strings
 }
