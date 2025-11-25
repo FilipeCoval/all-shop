@@ -9,7 +9,7 @@ const AIChat: React.FC = () => {
     {
       id: 'welcome',
       role: 'model',
-      text: 'Olá! Sou o assistente virtual da ElectroTech. Posso ajudar você a encontrar o produto ideal ou tirar dúvidas?',
+      text: 'Olá! Sou o assistente virtual da AllShop. Como posso ajuda-lo a encontrar o produto ideal ou tirar dúvidas?',
       timestamp: new Date()
     }
   ]);
