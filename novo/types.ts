@@ -1,3 +1,4 @@
+
 export interface Product {
   id: number;
   name: string;
@@ -32,9 +33,11 @@ export interface Address {
   street: string;
   city: string;
   zip: string;
+  userId?: string; // Ligação ao ID do Firebase
 }
 
 export interface User {
+  uid?: string; // ID único do Firebase
   name: string;
   email: string;
   phone?: string;
@@ -48,4 +51,15 @@ export interface Order {
   total: number;
   status: 'Processamento' | 'Enviado' | 'Entregue';
   items: string[];
+  userId?: string; // Para ligar a encomenda ao utilizador real
+}
+
+export interface Review {
+  id: string;
+  productId: number;
+  userName: string;
+  rating: number; // 1 a 5
+  comment: string;
+  date: string;
+  images: string[]; // Base64 strings
 }

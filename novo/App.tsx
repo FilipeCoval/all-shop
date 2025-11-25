@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
@@ -9,7 +10,10 @@ import Contact from './components/Contact';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import { PRODUCTS } from './constants';
-import { Product, CartItem, User, Order } from './types';
+import { Product, CartItem, User, Order, Review } from './types';
+import { auth, db } from './services/firebaseConfig';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -20,28 +24,55 @@ const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  
+  // Reviews State
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   // Simple Hash Router State
   const [route, setRoute] = useState(window.location.hash || '#/');
 
-  // Initialization: Load from LocalStorage
+  // Initialization & Auth Listener
   useEffect(() => {
-    const storedUser = localStorage.getItem('allshop_user');
+    // Escutar mudanças no estado de autenticação REAL do Firebase
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+            // Utilizador está logado
+            try {
+                // Tenta buscar dados extra do Firestore (moradas, etc)
+                const docRef = doc(db, "users", firebaseUser.uid);
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists()) {
+                    setUser(docSnap.data() as User);
+                } else {
+                    // Se não tiver perfil na BD, cria um básico
+                    const basicUser: User = {
+                        uid: firebaseUser.uid,
+                        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Cliente',
+                        email: firebaseUser.email || '',
+                        addresses: []
+                    };
+                    setUser(basicUser);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar perfil do utilizador:", err);
+            }
+        } else {
+            // Utilizador saiu
+            setUser(null);
+        }
+    });
+
+    // Carregar dados locais (Fallback para não logados ou cache)
     const storedOrders = localStorage.getItem('allshop_orders');
+    const storedReviews = localStorage.getItem('allshop_reviews');
     
-    if (storedUser) {
-        try {
-            const parsedUser = JSON.parse(storedUser);
-            // Ensure addresses array exists for legacy data
-            if (!parsedUser.addresses) parsedUser.addresses = [];
-            setUser(parsedUser);
-        } catch (e) { console.error("Error parsing user", e); }
+    if (storedOrders) {
+        try { setOrders(JSON.parse(storedOrders)); } catch (e) { console.error(e); }
     }
 
-    if (storedOrders) {
-        try {
-            setOrders(JSON.parse(storedOrders));
-        } catch (e) { console.error("Error parsing orders", e); }
+    if (storedReviews) {
+        try { setReviews(JSON.parse(storedReviews)); } catch (e) { console.error(e); }
     }
 
     const handleHashChange = () => {
@@ -50,7 +81,12 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    
+    // Cleanup
+    return () => {
+        unsubscribe();
+        window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   const addToCart = (product: Product) => {
@@ -80,24 +116,36 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleLogin = (userData: User) => {
-    // Ensure structure consistency
-    const completeUser = { ...userData, addresses: userData.addresses || [] };
-    setUser(completeUser);
-    localStorage.setItem('allshop_user', JSON.stringify(completeUser));
+  // Login agora é gerido pelo LoginModal e onAuthStateChanged
+  const handleLoginSuccess = (incomingUser: User) => {
+    setUser(incomingUser);
     setIsLoginOpen(false);
     window.location.hash = 'account';
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
+  const handleUpdateUser = async (updatedUser: User) => {
+    // Atualiza estado local
     setUser(updatedUser);
-    localStorage.setItem('allshop_user', JSON.stringify(updatedUser));
+    
+    // Atualiza na Base de Dados Real (Firestore)
+    if (updatedUser.uid) {
+        try {
+            await setDoc(doc(db, "users", updatedUser.uid), updatedUser);
+        } catch (err) {
+            console.error("Erro ao guardar dados no Firestore:", err);
+            alert("Erro ao guardar dados. Verifique a sua conexão.");
+        }
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('allshop_user');
-    window.location.hash = '/';
+  const handleLogout = async () => {
+    try {
+        await signOut(auth);
+        setUser(null);
+        window.location.hash = '/';
+    } catch (error) {
+        console.error("Erro ao sair:", error);
+    }
   };
 
   const handleCheckout = (newOrder: Order) => {
@@ -105,6 +153,16 @@ const App: React.FC = () => {
       setOrders(updatedOrders);
       localStorage.setItem('allshop_orders', JSON.stringify(updatedOrders));
       setCartItems([]); // Clear cart
+  };
+
+  const handleAddReview = (newReview: Review) => {
+      const updatedReviews = [newReview, ...reviews];
+      setReviews(updatedReviews);
+      try {
+          localStorage.setItem('allshop_reviews', JSON.stringify(updatedReviews));
+      } catch (e) {
+          console.error("Storage limit reached", e);
+      }
   };
 
   const cartTotal = useMemo(() => {
@@ -119,6 +177,7 @@ const App: React.FC = () => {
     // Route Guard for Account
     if (route === '#account') {
       if (!user) {
+        // Redireciona se não estiver logado
         setTimeout(() => {
             window.location.hash = '/';
             setIsLoginOpen(true);
@@ -132,7 +191,15 @@ const App: React.FC = () => {
         const id = parseInt(route.split('/')[1]);
         const product = PRODUCTS.find(p => p.id === id);
         if (product) {
-            return <ProductDetails product={product} onAddToCart={addToCart} />;
+            return (
+                <ProductDetails 
+                    product={product} 
+                    onAddToCart={addToCart} 
+                    reviews={reviews}
+                    onAddReview={handleAddReview}
+                    currentUser={user}
+                />
+            );
         }
     }
 
@@ -238,7 +305,7 @@ const App: React.FC = () => {
       <LoginModal 
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
-        onLogin={handleLogin}
+        onLogin={handleLoginSuccess}
       />
 
       <AIChat />

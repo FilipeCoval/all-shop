@@ -26,13 +26,19 @@ Regras:
 `;
 
 export const initializeChat = async (): Promise<Chat> => {
-  // IMPORTANTE: No Vercel, a variável de ambiente DEVE chamar-se VITE_API_KEY
-  const apiKey = import.meta.env.VITE_API_KEY;
+  // Acesso seguro a import.meta.env
+  // @ts-ignore
+  const viteKey = (import.meta.env && import.meta.env.VITE_API_KEY);
+  // @ts-ignore
+  const processKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY);
+  
+  const apiKey = viteKey || processKey;
 
   if (!apiKey) {
-    console.warn("VITE_API_KEY não encontrada. O chat não funcionará.");
-    console.error("Configure a variável VITE_API_KEY nas definições do Vercel.");
-    throw new Error("API Key not found");
+    console.error("ERRO CRÍTICO: Chave de API não encontrada.");
+    console.error("Para Cloudflare Pages: Vá a Settings > Environment variables e adicione 'VITE_API_KEY'.");
+    // Não lança erro fatal aqui para não quebrar a app inteira, apenas o chat
+    throw new Error("API Key not found. Please set VITE_API_KEY environment variable.");
   }
 
   const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -63,6 +69,6 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
     return response.text || "Desculpe, não consegui entender.";
   } catch (error) {
     console.error("Error sending message to Gemini:", error);
-    return "Ocorreu um erro técnico. Verifique se a Chave API está configurada corretamente no Vercel (VITE_API_KEY).";
+    return "Ocorreu um erro técnico. Por favor verifique se a chave API (VITE_API_KEY) está configurada no painel do Cloudflare/Vercel.";
   }
 };
