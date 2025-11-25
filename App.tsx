@@ -30,6 +30,7 @@ const App: React.FC = () => {
 
   // Initialization: Load from LocalStorage
   useEffect(() => {
+    // Carrega utilizador da sessão atual
     const storedUser = localStorage.getItem('allshop_user');
     const storedOrders = localStorage.getItem('allshop_orders');
     const storedReviews = localStorage.getItem('allshop_reviews');
@@ -91,18 +92,44 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleLogin = (userData: User) => {
-    // Ensure structure consistency
-    const completeUser = { ...userData, addresses: userData.addresses || [] };
-    setUser(completeUser);
-    localStorage.setItem('allshop_user', JSON.stringify(completeUser));
+  const handleLogin = (incomingUser: User) => {
+    // 1. Ler a "base de dados" de utilizadores
+    const dbString = localStorage.getItem('allshop_users_db');
+    let db: Record<string, User> = dbString ? JSON.parse(dbString) : {};
+
+    let finalUser: User;
+
+    // 2. Verificar se o utilizador já existe pelo email
+    if (db[incomingUser.email]) {
+        // Se existe, usamos os dados guardados (Nome correto, NIF, moradas antigas)
+        // em vez dos dados "genéricos" que vêm do modal de login
+        finalUser = db[incomingUser.email];
+    } else {
+        // Se é novo (Registo), preparamos os dados e guardamos na DB
+        finalUser = { ...incomingUser, addresses: incomingUser.addresses || [] };
+        db[incomingUser.email] = finalUser;
+        localStorage.setItem('allshop_users_db', JSON.stringify(db));
+    }
+
+    // 3. Atualizar sessão atual
+    setUser(finalUser);
+    localStorage.setItem('allshop_user', JSON.stringify(finalUser));
+    
     setIsLoginOpen(false);
     window.location.hash = 'account';
   };
 
   const handleUpdateUser = (updatedUser: User) => {
+    // 1. Atualizar estado e sessão atual
     setUser(updatedUser);
     localStorage.setItem('allshop_user', JSON.stringify(updatedUser));
+
+    // 2. Atualizar na "base de dados" persistente
+    const dbString = localStorage.getItem('allshop_users_db');
+    let db: Record<string, User> = dbString ? JSON.parse(dbString) : {};
+    
+    db[updatedUser.email] = updatedUser;
+    localStorage.setItem('allshop_users_db', JSON.stringify(db));
   };
 
   const handleLogout = () => {
