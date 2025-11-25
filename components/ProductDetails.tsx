@@ -1,13 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
-import { Product } from '../types';
+import { Product, Review, User } from '../types';
 import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck } from 'lucide-react';
+import ReviewSection from './ReviewSection';
 
 interface ProductDetailsProps {
   product: Product;
   onAddToCart: (product: Product) => void;
+  reviews: Review[];
+  onAddReview: (review: Review) => void;
+  currentUser: User | null;
 }
 
-const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart }) => {
+const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, reviews, onAddReview, currentUser }) => {
   // Determine the list of images to show (fallback to single image if array is missing)
   const galleryImages = product.images && product.images.length > 0 
     ? product.images 
@@ -32,7 +37,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart })
         Voltar para a loja
       </a>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2">
           {/* Image Section */}
           <div className="bg-gray-100 p-8 flex flex-col items-center justify-center relative min-h-[400px]">
@@ -121,6 +126,14 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart })
           </div>
         </div>
       </div>
+
+      {/* Review Section */}
+      <ReviewSection 
+        productId={product.id}
+        reviews={reviews}
+        onAddReview={onAddReview}
+        currentUser={currentUser}
+      />
     </div>
   );
 };
