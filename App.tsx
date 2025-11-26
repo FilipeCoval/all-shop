@@ -34,12 +34,29 @@ const App: React.FC = () => {
 
   // Initialization & Auth Listener
   useEffect(() => {
-    // Escutar mudanças no estado de autenticação REAL do Firebase (v8 syntax)
+    // 1. Carregar Reviews Públicas do Firestore
+    const loadReviews = async () => {
+        try {
+            const snapshot = await db.collection('reviews').get();
+            const loadedReviews: Review[] = [];
+            snapshot.forEach(doc => {
+                loadedReviews.push(doc.data() as Review);
+            });
+            // Ordenar por data (mais recente primeiro)
+            loadedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setReviews(loadedReviews);
+        } catch (error) {
+            console.error("Erro ao carregar reviews:", error);
+        }
+    };
+    loadReviews();
+
+    // 2. Escutar mudanças no estado de autenticação REAL do Firebase (v8 syntax)
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         if (firebaseUser) {
             // Utilizador está logado
             try {
-                // 1. Buscar perfil do utilizador
+                // Buscar perfil do utilizador
                 const docRef = db.collection("users").doc(firebaseUser.uid);
                 const docSnap = await docRef.get();
                 
@@ -55,7 +72,7 @@ const App: React.FC = () => {
                     setUser(basicUser);
                 }
 
-                // 2. Buscar Encomendas Reais deste utilizador no Firestore
+                // Buscar Encomendas Reais deste utilizador no Firestore
                 const ordersRef = db.collection("orders");
                 const q = ordersRef.where("userId", "==", firebaseUser.uid);
                 const querySnapshot = await q.get();
@@ -78,11 +95,6 @@ const App: React.FC = () => {
             setOrders([]); // Limpa encomendas da sessão
         }
     });
-
-    const storedReviews = localStorage.getItem('allshop_reviews');
-    if (storedReviews) {
-        try { setReviews(JSON.parse(storedReviews)); } catch (e) { console.error(e); }
-    }
 
     const handleHashChange = () => {
       setRoute(window.location.hash || '#/');
@@ -176,13 +188,17 @@ const App: React.FC = () => {
       }
   };
 
-  const handleAddReview = (newReview: Review) => {
+  const handleAddReview = async (newReview: Review) => {
+      // 1. Atualiza localmente para feedback imediato na UI
       const updatedReviews = [newReview, ...reviews];
       setReviews(updatedReviews);
+
+      // 2. Grava na base de dados (Firestore) para todos verem
       try {
-          localStorage.setItem('allshop_reviews', JSON.stringify(updatedReviews));
+          await db.collection("reviews").doc(newReview.id).set(newReview);
       } catch (e) {
-          console.error("Storage limit reached", e);
+          console.error("Erro ao gravar review na base de dados", e);
+          // Opcional: Mostrar erro ao utilizador se falhar
       }
   };
 
