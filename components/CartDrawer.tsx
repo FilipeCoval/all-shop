@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order } from '../types';
 import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check } from 'lucide-react';
-import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
+import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -19,11 +19,34 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform'>('cart');
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [isCopied, setIsCopied] = useState(false);
+  
+  // Estado para guardar o ID gerado para esta sessão de checkout
+  const [currentOrderId, setCurrentOrderId] = useState<string>('');
+
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
     name: '',
     address: '',
     paymentMethod: 'MB Way'
   });
+
+  // Limpa o ID se o carrinho fechar ou esvaziar
+  useEffect(() => {
+    if (!isOpen) {
+        // Pequeno delay para não limpar enquanto a animação de fecho ocorre
+        const timer = setTimeout(() => {
+            setCheckoutStep('cart');
+            // Não limpamos o form (userInfo) para conveniência, mas limpamos o ID
+            setCurrentOrderId('');
+        }, 500);
+        return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  const generateOrderId = () => {
+    // Gera um ID curto e amigável: #AS-XXXXXX
+    // Ex: #AS-849201
+    return `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
+  };
 
   const handleCheckoutStart = () => {
     if (cartItems.length === 0) return;
@@ -31,17 +54,24 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const handleInfoSubmit = () => {
+      // Gera o ID agora e guarda no estado para garantir consistência
+      if (!currentOrderId) {
+          const newId = generateOrderId();
+          setCurrentOrderId(newId);
+      }
       setCheckoutStep('platform');
   };
 
-  const generateOrderMessage = () => {
+  // Recebe o ID explicitamente para evitar erros de estado assíncrono
+  const generateOrderMessage = (orderId: string) => {
     const itemsList = cartItems.map(item => 
         `- ${item.quantity}x ${item.name} (${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)})`
       ).join('\n');
   
       const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total);
   
-      return `*Novo Pedido - ${STORE_NAME}*\n` +
+      // Formata a mensagem
+      return `*Novo Pedido: ${orderId}*\n` +
         `--------------------------------\n` +
         `*Cliente:* ${userInfo.name}\n` +
         `*Endereço:* ${userInfo.address}\n` +
@@ -54,39 +84,43 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const finalizeOrder = () => {
-    // 1. Create Order Object
+    // Garante que temos um ID (usa o do estado ou gera um novo caso algo tenha falhado)
+    const finalId = currentOrderId || generateOrderId();
+
+    // 1. Create Order Object com o ID final
     const newOrder: Order = {
-        id: Date.now().toString(),
+        id: finalId,
         date: new Date().toISOString(),
         total: total,
         status: 'Processamento',
         items: cartItems.map(i => `${i.quantity}x ${i.name}`)
     };
 
-    // 2. Save to history
+    // 2. Save to history (App.tsx vai gravar no Firebase)
     onCheckout(newOrder);
 
-    // 3. Open Platform
+    // 3. Open Platform usando o MESMO ID
+    const message = generateOrderMessage(finalId);
+    
     if (platform === 'whatsapp') {
-        const message = generateOrderMessage();
         const encodedMessage = encodeURIComponent(message);
         const whatsappUrl = `https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`;
         window.open(whatsappUrl, '_blank');
     } else {
-        // Telegram logic - Abre o link do grupo/canal
+        // Telegram logic - abre o link e o utilizador cola a mensagem
+        // Copia a mensagem automaticamente para a área de transferência para facilitar
+        navigator.clipboard.writeText(message).catch(err => console.error("Erro ao copiar", err));
         window.open(TELEGRAM_LINK, '_blank');
     }
 
     // 4. Close and Reset
     onClose();
-    setTimeout(() => {
-        setCheckoutStep('cart');
-        setUserInfo({ name: '', address: '', paymentMethod: 'MB Way' });
-    }, 500);
+    // Reset dos estados é feito pelo useEffect no topo
   };
 
   const copyToClipboard = () => {
-      navigator.clipboard.writeText(generateOrderMessage());
+      // Usa o currentOrderId que já deve estar definido nesta etapa
+      navigator.clipboard.writeText(generateOrderMessage(currentOrderId || 'N/A'));
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
   };
@@ -200,6 +234,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     <div className="space-y-6 animate-fade-in">
                         <div className="text-center">
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Quase lá!</h3>
+                            <div className="bg-yellow-50 text-yellow-800 px-4 py-2 rounded-lg text-lg font-bold inline-block mb-3 border border-yellow-200">
+                                Pedido: {currentOrderId}
+                            </div>
                             <p className="text-sm text-gray-600">Escolha onde quer finalizar a sua encomenda.</p>
                         </div>
 
@@ -244,7 +281,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         
                         {platform === 'whatsapp' && (
                              <div className="bg-green-50 p-4 rounded-lg border border-green-100 text-sm text-green-800">
-                                O WhatsApp abrirá automaticamente com todos os detalhes do pedido preenchidos.
+                                O WhatsApp abrirá automaticamente com o pedido <strong>{currentOrderId}</strong> preenchido.
                              </div>
                         )}
                     </div>
