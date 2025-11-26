@@ -3,13 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { User as UserType } from '../types';
 import { auth, db } from '../services/firebaseConfig';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  sendPasswordResetEmail,
-  updateProfile
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+// import { ... } from 'firebase/auth'; // v9 removed
+// import { doc, setDoc, getDoc } from 'firebase/firestore'; // v9 removed
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -53,16 +48,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     setIsLoading(true);
 
     try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const firebaseUser = userCredential.user;
 
+        if (!firebaseUser) throw new Error("Falha ao obter utilizador");
+
         // Buscar dados extra (como moradas) da base de dados
-        const docRef = doc(db, "users", firebaseUser.uid);
-        const docSnap = await getDoc(docRef);
+        const docRef = db.collection("users").doc(firebaseUser.uid);
+        const docSnap = await docRef.get();
         
         let userData: UserType;
         
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             userData = docSnap.data() as UserType;
         } else {
             // Fallback se não houver dados no Firestore
@@ -110,11 +107,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
     try {
         // 1. Criar conta no Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const firebaseUser = userCredential.user;
 
+        if (!firebaseUser) throw new Error("Falha ao criar utilizador");
+
         // 2. Atualizar nome de exibição
-        await updateProfile(firebaseUser, { displayName: name });
+        await firebaseUser.updateProfile({ displayName: name });
 
         // 3. Criar documento na Base de Dados Real
         const newUser: UserType = {
@@ -124,7 +123,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
             addresses: []
         };
 
-        await setDoc(doc(db, "users", firebaseUser.uid), newUser);
+        await db.collection("users").doc(firebaseUser.uid).set(newUser);
 
         onLogin(newUser);
         onClose();
@@ -148,7 +147,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     setIsLoading(true);
 
     try {
-        await sendPasswordResetEmail(auth, email);
+        await auth.sendPasswordResetEmail(email);
         setSuccessMsg(`Email de recuperação enviado para ${email}. Verifique a sua caixa de entrada (e spam).`);
         setTimeout(() => setView('login'), 5000);
     } catch (err: any) {
