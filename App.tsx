@@ -12,8 +12,8 @@ import ClientArea from './components/ClientArea';
 import { PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review } from './types';
 import { auth, db } from './services/firebaseConfig';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+// import { onAuthStateChanged, signOut } from 'firebase/auth'; // v9 removed
+// import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore'; // v9 removed
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -33,19 +33,18 @@ const App: React.FC = () => {
 
   // Initialization & Auth Listener
   useEffect(() => {
-    // Escutar mudanças no estado de autenticação REAL do Firebase
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Escutar mudanças no estado de autenticação REAL do Firebase (v8 syntax)
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         if (firebaseUser) {
             // Utilizador está logado
             try {
-                // Tenta buscar dados extra do Firestore (moradas, etc)
-                const docRef = doc(db, "users", firebaseUser.uid);
-                const docSnap = await getDoc(docRef);
+                // 1. Buscar perfil do utilizador
+                const docRef = db.collection("users").doc(firebaseUser.uid);
+                const docSnap = await docRef.get();
                 
-                if (docSnap.exists()) {
+                if (docSnap.exists) {
                     setUser(docSnap.data() as User);
                 } else {
-                    // Se não tiver perfil na BD, cria um básico
                     const basicUser: User = {
                         uid: firebaseUser.uid,
                         name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Cliente',
@@ -54,23 +53,32 @@ const App: React.FC = () => {
                     };
                     setUser(basicUser);
                 }
+
+                // 2. Buscar Encomendas Reais deste utilizador no Firestore
+                const ordersRef = db.collection("orders");
+                const q = ordersRef.where("userId", "==", firebaseUser.uid);
+                const querySnapshot = await q.get();
+                
+                const userOrders: Order[] = [];
+                querySnapshot.forEach((doc) => {
+                    userOrders.push(doc.data() as Order);
+                });
+                
+                // Ordenar por data (mais recente primeiro)
+                userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                setOrders(userOrders);
+
             } catch (err) {
-                console.error("Erro ao carregar perfil do utilizador:", err);
+                console.error("Erro ao carregar dados do utilizador:", err);
             }
         } else {
             // Utilizador saiu
             setUser(null);
+            setOrders([]); // Limpa encomendas da sessão
         }
     });
 
-    // Carregar dados locais (Fallback para não logados ou cache)
-    const storedOrders = localStorage.getItem('allshop_orders');
     const storedReviews = localStorage.getItem('allshop_reviews');
-    
-    if (storedOrders) {
-        try { setOrders(JSON.parse(storedOrders)); } catch (e) { console.error(e); }
-    }
-
     if (storedReviews) {
         try { setReviews(JSON.parse(storedReviews)); } catch (e) { console.error(e); }
     }
@@ -116,7 +124,6 @@ const App: React.FC = () => {
     }));
   };
 
-  // Login agora é gerido pelo LoginModal e onAuthStateChanged
   const handleLoginSuccess = (incomingUser: User) => {
     setUser(incomingUser);
     setIsLoginOpen(false);
@@ -124,13 +131,10 @@ const App: React.FC = () => {
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
-    // Atualiza estado local
     setUser(updatedUser);
-    
-    // Atualiza na Base de Dados Real (Firestore)
     if (updatedUser.uid) {
         try {
-            await setDoc(doc(db, "users", updatedUser.uid), updatedUser);
+            await db.collection("users").doc(updatedUser.uid).set(updatedUser);
         } catch (err) {
             console.error("Erro ao guardar dados no Firestore:", err);
             alert("Erro ao guardar dados. Verifique a sua conexão.");
@@ -140,7 +144,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-        await signOut(auth);
+        await auth.signOut();
         setUser(null);
         window.location.hash = '/';
     } catch (error) {
@@ -148,11 +152,27 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCheckout = (newOrder: Order) => {
+  const handleCheckout = async (newOrder: Order) => {
+      // 1. Atualiza estado local (visual imediato)
       const updatedOrders = [newOrder, ...orders];
       setOrders(updatedOrders);
-      localStorage.setItem('allshop_orders', JSON.stringify(updatedOrders));
-      setCartItems([]); // Clear cart
+      setCartItems([]); // Limpa carrinho
+
+      // 2. Se utilizador logado, grava na BD com ID dele
+      if (user && user.uid) {
+          try {
+              newOrder.userId = user.uid; // Garante que a encomenda tem dono
+              // Grava na coleção 'orders' (acessível ao admin e ao user)
+              await db.collection("orders").doc(newOrder.id).set(newOrder);
+          } catch (e) {
+              console.error("Erro ao gravar encomenda no Firestore", e);
+          }
+      } else {
+          // Se for anónimo, grava na mesma (para o admin ver), mas sem userId
+          try {
+             await db.collection("orders").doc(newOrder.id).set(newOrder);
+          } catch (e) { console.error(e); }
+      }
   };
 
   const handleAddReview = (newReview: Review) => {
@@ -177,7 +197,6 @@ const App: React.FC = () => {
     // Route Guard for Account
     if (route === '#account') {
       if (!user) {
-        // Redireciona se não estiver logado
         setTimeout(() => {
             window.location.hash = '/';
             setIsLoginOpen(true);
