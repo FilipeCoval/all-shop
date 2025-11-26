@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { Smartphone, Landmark, Banknote } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
 import AIChat from './components/AIChat';
@@ -299,10 +300,25 @@ const App: React.FC = () => {
             </div>
             <div>
                 <h4 className="text-white font-bold mb-4">Pagamento</h4>
-                <div className="flex gap-2">
-                    <div className="w-10 h-6 bg-gray-700 rounded"></div>
-                    <div className="w-10 h-6 bg-gray-700 rounded"></div>
-                    <div className="w-10 h-6 bg-gray-700 rounded"></div>
+                <div className="flex gap-3">
+                    <div className="flex flex-col items-center gap-1 group cursor-default" title="MB Way">
+                        <div className="w-10 h-8 bg-gray-800 rounded-md flex items-center justify-center text-gray-300 group-hover:bg-white group-hover:text-red-500 transition-all duration-300">
+                            <Smartphone size={18} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">MB Way</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 group cursor-default" title="Transferência Bancária">
+                        <div className="w-10 h-8 bg-gray-800 rounded-md flex items-center justify-center text-gray-300 group-hover:bg-white group-hover:text-blue-500 transition-all duration-300">
+                            <Landmark size={18} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Transf.</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 group cursor-default" title="Pagamento na Entrega">
+                        <div className="w-10 h-8 bg-gray-800 rounded-md flex items-center justify-center text-gray-300 group-hover:bg-white group-hover:text-green-500 transition-all duration-300">
+                            <Banknote size={18} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Em Mão</span>
+                    </div>
                 </div>
             </div>
         </div>
