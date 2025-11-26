@@ -22,4 +22,7 @@ const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : fir
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Forçar idioma para Português (ajuda nos emails de recuperação e verificação)
+auth.languageCode = 'pt';
+
 export { auth, db };
