@@ -1,6 +1,7 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
+import "firebase/compat/firestore";
 
 // Configuração do Firebase da Allshop Store
 // Estas chaves são públicas e necessárias para o browser comunicar com o Firebase.
@@ -14,10 +15,11 @@ const firebaseConfig = {
 };
 
 // Inicializar Firebase
-const app = initializeApp(firebaseConfig);
+// Verifica se já existe uma app inicializada para evitar erros
+const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
 
 // Inicializar Serviços
-const auth = getAuth(app);
-const db = getFirestore(app);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 export { auth, db };
