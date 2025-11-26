@@ -1,7 +1,9 @@
-import React from 'react';
-import { ArrowRight, Star, Truck, ShieldCheck } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail } from 'lucide-react';
 import ProductList from './ProductList';
 import { Product } from '../types';
+import { db } from '../services/firebaseConfig';
 
 interface HomeProps {
   products: Product[];
@@ -9,9 +11,38 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ products, onAddToCart }) => {
+  const [email, setEmail] = useState('');
+  const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
   const handleNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     window.location.hash = path;
+  };
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setSubStatus('loading');
+
+    try {
+      // Gravar na coleção 'newsletter_subscriptions' no Firestore
+      await db.collection('newsletter_subscriptions').add({
+        email: email,
+        date: new Date().toISOString(),
+        source: 'website_home'
+      });
+
+      setSubStatus('success');
+      setEmail('');
+      
+      // Reset da mensagem de sucesso após 5 segundos
+      setTimeout(() => setSubStatus('idle'), 5000);
+
+    } catch (error) {
+      console.error("Erro ao subscrever newsletter:", error);
+      setSubStatus('error');
+    }
   };
 
   return (
@@ -89,22 +120,59 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart }) => {
       <ProductList products={products} onAddToCart={onAddToCart} />
 
       {/* Newsletter */}
-      <section className="bg-secondary text-white py-16">
-          <div className="container mx-auto px-4 text-center">
-              <h2 className="text-3xl font-bold mb-6">Fique a par das novidades</h2>
+      <section className="bg-secondary text-white py-16 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+          
+          <div className="container mx-auto px-4 text-center relative z-10">
+              <div className="inline-flex items-center justify-center p-3 bg-white/10 rounded-full mb-6">
+                 <Mail className="text-primary" size={24} />
+              </div>
+              <h2 className="text-3xl font-bold mb-4">Fique a par das novidades</h2>
               <p className="text-gray-300 mb-8 max-w-xl mx-auto">
-                  Inscreva-se para receber ofertas exclusivas e descontos em primeira mão.
+                  Inscreva-se para receber ofertas exclusivas, cupões de desconto e novidades em primeira mão.
               </p>
-              <form className="max-w-md mx-auto flex gap-2" onSubmit={(e) => e.preventDefault()}>
-                  <input 
-                      type="email" 
-                      placeholder="O seu melhor e-mail" 
-                      className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <button type="submit" className="bg-primary hover:bg-blue-600 px-6 py-3 rounded-lg font-bold transition-colors">
-                      Assinar
-                  </button>
-              </form>
+              
+              {subStatus === 'success' ? (
+                <div className="max-w-md mx-auto bg-green-500/20 border border-green-500/50 rounded-xl p-6 flex flex-col items-center animate-fade-in-up">
+                    <CheckCircle className="text-green-400 mb-2" size={32} />
+                    <h3 className="text-xl font-bold text-white mb-1">Inscrição Confirmada!</h3>
+                    <p className="text-green-200">Obrigado. Vai receber as nossas novidades em breve.</p>
+                </div>
+              ) : (
+                <form className="max-w-md mx-auto flex flex-col sm:flex-row gap-3" onSubmit={handleSubscribe}>
+                    <input 
+                        type="email" 
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="O seu melhor e-mail" 
+                        className="flex-1 px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-all backdrop-blur-sm"
+                        disabled={subStatus === 'loading'}
+                    />
+                    <button 
+                        type="submit" 
+                        disabled={subStatus === 'loading'}
+                        className="bg-primary hover:bg-blue-600 px-8 py-4 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-70"
+                    >
+                        {subStatus === 'loading' ? (
+                            <>
+                                <Loader2 className="animate-spin" size={20} /> A Subscrever...
+                            </>
+                        ) : (
+                            'Assinar'
+                        )}
+                    </button>
+                </form>
+              )}
+              
+              {subStatus === 'error' && (
+                  <p className="text-red-400 mt-4 text-sm animate-fade-in">Ocorreu um erro. Por favor tente novamente.</p>
+              )}
+
+              <p className="text-gray-500 text-xs mt-6">
+                Ao assinar, concorda com a nossa política de privacidade. Não enviamos spam.
+              </p>
           </div>
       </section>
     </>
