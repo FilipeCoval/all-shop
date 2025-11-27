@@ -82,96 +82,141 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       <head>
         <title>Comprovativo #${order.id}</title>
         <style>
-          body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; line-height: 1.6; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
-          .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
+          @page { size: A4; margin: 0; }
+          * { box-sizing: border-box; }
+          body { 
+            font-family: 'Helvetica', 'Arial', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f0f0f0; 
+            -webkit-print-color-adjust: exact; 
+          }
+          
+          /* A4 Sheet Simulation */
+          .sheet {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+          }
+
+          /* Header Styles */
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 40px; }
+          .logo { font-size: 28px; font-weight: bold; color: #2563eb; }
           .invoice-title { text-align: right; }
-          .invoice-title h1 { margin: 0; font-size: 18px; text-transform: uppercase; color: #555; }
-          .invoice-title p { margin: 0; color: #888; font-size: 14px; }
+          .invoice-title h1 { margin: 0; font-size: 24px; text-transform: uppercase; color: #333; letter-spacing: 1px; }
+          .invoice-title p { margin: 5px 0 0; color: #666; font-size: 14px; }
           
-          .grid { display: flex; justify-content: space-between; margin-bottom: 40px; }
+          /* Grid Info */
+          .grid { display: flex; justify-content: space-between; margin-bottom: 50px; }
           .box { width: 45%; }
-          .box h3 { font-size: 14px; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
-          .box p { margin: 0; font-size: 14px; }
+          .box h3 { font-size: 12px; text-transform: uppercase; color: #999; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; letter-spacing: 0.5px; }
+          .box p { margin: 4px 0; font-size: 14px; line-height: 1.5; color: #333; }
+          .box strong { font-weight: 600; font-size: 15px; }
           
-          table { w-full; width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-          th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; font-size: 12px; text-transform: uppercase; color: #888; }
-          td { padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
-          .total-row td { font-weight: bold; font-size: 16px; border-top: 2px solid #333; border-bottom: none; }
+          /* Table */
+          table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+          th { text-align: left; padding: 12px 10px; border-bottom: 2px solid #eee; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
+          td { padding: 16px 10px; border-bottom: 1px solid #eee; font-size: 14px; color: #333; }
           
-          .warranty-badge { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 15px; border-radius: 8px; font-size: 13px; margin-top: 40px; }
-          .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+          /* Totals */
+          .total-row td { border-top: 2px solid #333; border-bottom: none; padding-top: 20px; }
+          .total-label { font-weight: bold; font-size: 14px; text-transform: uppercase; }
+          .total-amount { font-weight: bold; font-size: 20px; color: #2563eb; }
           
+          /* Warranty Box */
+          .warranty-badge { 
+            background: #f0fdf4; 
+            border: 1px solid #bbf7d0; 
+            color: #166534; 
+            padding: 25px; 
+            border-radius: 12px; 
+            font-size: 13px; 
+            margin-top: 50px; 
+            line-height: 1.6;
+          }
+          .warranty-title { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #15803d; }
+          
+          /* Footer */
+          .footer { margin-top: 60px; text-align: center; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 20px; }
+
+          /* Print Specifics */
           @media print {
-            body { padding: 20px; }
+            body { background: none; }
+            .sheet { margin: 0; box-shadow: none; width: 100%; min-height: auto; }
             .no-print { display: none; }
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="logo">
-             ${LOGO_URL ? `<img src="${LOGO_URL}" style="height: 50px;" />` : STORE_NAME}
+        <div class="sheet">
+          <div class="header">
+            <div class="logo">
+               ${LOGO_URL ? `<img src="${LOGO_URL}" style="height: 60px; object-fit: contain;" />` : STORE_NAME}
+            </div>
+            <div class="invoice-title">
+              <h1>Comprovativo</h1>
+              <p>Ref: ${order.id}</p>
+              <p>Emitido a: ${dateFormatted}</p>
+            </div>
           </div>
-          <div class="invoice-title">
-            <h1>Comprovativo de Compra</h1>
-            <p>Ref: ${order.id}</p>
-            <p>Data: ${dateFormatted}</p>
-          </div>
-        </div>
 
-        <div class="grid">
-          <div class="box">
-            <h3>Vendedor</h3>
-            <p><strong>${STORE_NAME}</strong></p>
-            <p>Loja Online Especializada</p>
-            <p>Portugal</p>
-            <p>suporte@allshop.com</p>
+          <div class="grid">
+            <div class="box">
+              <h3>Vendedor</h3>
+              <p><strong>${STORE_NAME}</strong></p>
+              <p>Loja Online Especializada</p>
+              <p>Portugal</p>
+              <p>suporte@allshop.com</p>
+            </div>
+            <div class="box">
+              <h3>Cliente</h3>
+              <p><strong>${user.name}</strong></p>
+              <p>${user.email}</p>
+              <p>${user.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
+              <p>${user.phone || ''}</p>
+            </div>
           </div>
-          <div class="box">
-            <h3>Cliente</h3>
-            <p><strong>${user.name}</strong></p>
-            <p>${user.email}</p>
-            <p>${user.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
-            <p>${user.phone || ''}</p>
-          </div>
-        </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Descrição do Produto</th>
-              <th style="text-align: right;">Quantidade</th>
-              <th style="text-align: right;">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${order.items.map(item => `
+          <table>
+            <thead>
               <tr>
-                <td>${item}</td>
-                <td style="text-align: right;">1</td>
-                <td style="text-align: right;">Novo</td>
+                <th width="60%">Descrição do Produto</th>
+                <th width="20%" style="text-align: right;">Qtd.</th>
+                <th width="20%" style="text-align: right;">Estado</th>
               </tr>
-            `).join('')}
-            <tr class="total-row">
-              <td colspan="2" style="text-align: right;">TOTAL PAGO</td>
-              <td style="text-align: right;">${totalFormatted}</td>
-            </tr>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${order.items.map(item => `
+                <tr>
+                  <td>${item}</td>
+                  <td style="text-align: right;">1</td>
+                  <td style="text-align: right;">Novo</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="2" class="total-label" style="text-align: right;">TOTAL PAGO</td>
+                <td class="total-amount" style="text-align: right;">${totalFormatted}</td>
+              </tr>
+            </tbody>
+          </table>
 
-        <div class="warranty-badge">
-          <strong>🛡️ CERTIFICADO DE GARANTIA (3 ANOS)</strong><br/><br/>
-          Este documento serve como comprovativo de compra na ${STORE_NAME}. 
-          Todos os equipamentos eletrónicos novos vendidos têm garantia de 3 anos conforme a lei portuguesa (DL n.º 84/2021).
-          <br/><br/>
-          Para acionar a garantia, basta apresentar este documento e o número do pedido (${order.id}).
-          A garantia cobre defeitos de fabrico. Não cobre danos por mau uso, humidade ou alterações de software não oficiais.
-        </div>
+          <div class="warranty-badge">
+            <div class="warranty-title">🛡️ CERTIFICADO DE GARANTIA (3 ANOS)</div>
+            Este documento serve como comprovativo de compra na ${STORE_NAME}. 
+            Todos os equipamentos eletrónicos novos vendidos têm garantia de 3 anos conforme a lei portuguesa (DL n.º 84/2021).
+            <br/><br/>
+            Para acionar a garantia, basta apresentar este documento e o número do pedido (${order.id}).
+            A garantia cobre defeitos de fabrico. Não cobre danos por mau uso, humidade ou alterações de software não oficiais.
+          </div>
 
-        <div class="footer">
-          <p>Obrigado pela sua preferência.</p>
-          <p>Este documento é um comprovativo interno e de garantia. Para efeitos fiscais, por favor solicite a fatura oficial enviada separadamente.</p>
+          <div class="footer">
+            <p>Obrigado pela sua preferência.</p>
+            <p>Este documento é um comprovativo interno e de garantia. Para efeitos fiscais, por favor solicite a fatura oficial enviada separadamente.</p>
+          </div>
         </div>
         
         <script>
