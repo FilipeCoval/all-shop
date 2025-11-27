@@ -27,6 +27,16 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAdd
     ? (productReviews.reduce((acc, r) => acc + r.rating, 0) / productReviews.length).toFixed(1) 
     : null;
 
+  // Função para proteger a identidade do utilizador (Ex: "João Silva" -> "João S.")
+  const formatDisplayName = (name: string) => {
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      // Pega o primeiro nome e a primeira letra do último nome
+      return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
+    }
+    return name; // Se for só um nome (ex: "Maria"), mostra normal
+  };
+
   // Função para comprimir imagem antes de salvar (para não estourar o localStorage)
   const processImage = (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -238,11 +248,14 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAdd
             <div key={review.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-primary font-bold">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-primary font-bold flex-shrink-0">
                             {review.userName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <h4 className="font-bold text-gray-900 leading-tight">{review.userName}</h4>
+                            {/* AQUI APLICAMOS A FORMATAÇÃO DE PRIVACIDADE */}
+                            <h4 className="font-bold text-gray-900 leading-tight">
+                                {formatDisplayName(review.userName)}
+                            </h4>
                             <div className="flex items-center gap-2">
                                 <div className="flex text-yellow-400 text-xs">
                                     {[...Array(5)].map((_, i) => (
@@ -298,3 +311,4 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAdd
 };
 
 export default ReviewSection;
+
