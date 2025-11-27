@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { User, Order, Address } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText } from 'lucide-react';
+import { STORE_NAME, LOGO_URL } from '../constants';
 
 interface ClientAreaProps {
   user: User;
@@ -57,6 +59,131 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   // Stats
   const totalSpent = orders.reduce((acc, order) => acc + order.total, 0);
   const totalOrders = orders.length;
+
+  const displayOrderId = (id: string) => {
+      if (id.startsWith('#')) return id;
+      return `#${id.slice(-6).toUpperCase()}`;
+  };
+
+  // Função para Gerar o Documento de Garantia/Comprovativo
+  const handlePrintOrder = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const dateFormatted = new Date(order.date).toLocaleDateString('pt-PT', {
+        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    
+    const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total);
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="pt">
+      <head>
+        <title>Comprovativo #${order.id}</title>
+        <style>
+          body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
+          .invoice-title { text-align: right; }
+          .invoice-title h1 { margin: 0; font-size: 18px; text-transform: uppercase; color: #555; }
+          .invoice-title p { margin: 0; color: #888; font-size: 14px; }
+          
+          .grid { display: flex; justify-content: space-between; margin-bottom: 40px; }
+          .box { width: 45%; }
+          .box h3 { font-size: 14px; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
+          .box p { margin: 0; font-size: 14px; }
+          
+          table { w-full; width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; font-size: 12px; text-transform: uppercase; color: #888; }
+          td { padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+          .total-row td { font-weight: bold; font-size: 16px; border-top: 2px solid #333; border-bottom: none; }
+          
+          .warranty-badge { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 15px; border-radius: 8px; font-size: 13px; margin-top: 40px; }
+          .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+          
+          @media print {
+            body { padding: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">
+             ${LOGO_URL ? `<img src="${LOGO_URL}" style="height: 50px;" />` : STORE_NAME}
+          </div>
+          <div class="invoice-title">
+            <h1>Comprovativo de Compra</h1>
+            <p>Ref: ${order.id}</p>
+            <p>Data: ${dateFormatted}</p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <h3>Vendedor</h3>
+            <p><strong>${STORE_NAME}</strong></p>
+            <p>Loja Online Especializada</p>
+            <p>Portugal</p>
+            <p>suporte@allshop.com</p>
+          </div>
+          <div class="box">
+            <h3>Cliente</h3>
+            <p><strong>${user.name}</strong></p>
+            <p>${user.email}</p>
+            <p>${user.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
+            <p>${user.phone || ''}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Descrição do Produto</th>
+              <th style="text-align: right;">Quantidade</th>
+              <th style="text-align: right;">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.items.map(item => `
+              <tr>
+                <td>${item}</td>
+                <td style="text-align: right;">1</td>
+                <td style="text-align: right;">Novo</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="2" style="text-align: right;">TOTAL PAGO</td>
+              <td style="text-align: right;">${totalFormatted}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warranty-badge">
+          <strong>🛡️ CERTIFICADO DE GARANTIA (3 ANOS)</strong><br/><br/>
+          Este documento serve como comprovativo de compra na ${STORE_NAME}. 
+          Todos os equipamentos eletrónicos novos vendidos têm garantia de 3 anos conforme a lei portuguesa (DL n.º 84/2021).
+          <br/><br/>
+          Para acionar a garantia, basta apresentar este documento e o número do pedido (${order.id}).
+          A garantia cobre defeitos de fabrico. Não cobre danos por mau uso, humidade ou alterações de software não oficiais.
+        </div>
+
+        <div class="footer">
+          <p>Obrigado pela sua preferência.</p>
+          <p>Este documento é um comprovativo interno e de garantia. Para efeitos fiscais, por favor solicite a fatura oficial enviada separadamente.</p>
+        </div>
+        
+        <script>
+            window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   return (
     <div className="container mx-auto px-4 py-12 animate-fade-in">
@@ -122,14 +249,14 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         <th className="px-6 py-4 font-medium">ID / Data</th>
                         <th className="px-6 py-4 font-medium">Estado</th>
                         <th className="px-6 py-4 font-medium">Total</th>
-                        <th className="px-6 py-4 font-medium text-right">Itens</th>
+                        <th className="px-6 py-4 font-medium text-right">Ações</th>
                     </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
                     {orders.map((order) => (
                         <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
-                            <span className="font-bold text-gray-900 block">#{order.id.slice(-6).toUpperCase()}</span>
+                            <span className="font-bold text-gray-900 block">{displayOrderId(order.id)}</span>
                             <span className="text-xs text-gray-500">{new Date(order.date).toLocaleDateString()}</span>
                         </td>
                         <td className="px-6 py-4">
@@ -144,11 +271,14 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total)}
                         </td>
                         <td className="px-6 py-4 text-right">
-                            <div className="flex flex-col items-end gap-1">
-                                {order.items.map((item, idx) => (
-                                    <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">{item}</span>
-                                ))}
-                            </div>
+                            <button 
+                                onClick={() => handlePrintOrder(order)}
+                                className="inline-flex items-center gap-1 text-primary hover:text-blue-700 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors"
+                                title="Imprimir Comprovativo e Garantia"
+                            >
+                                <Printer size={16} />
+                                <span className="hidden sm:inline">Comprovativo</span>
+                            </button>
                         </td>
                         </tr>
                     ))}
@@ -213,7 +343,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">NIF (Opcional)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">NIF (Para Faturação)</label>
                                 <input 
                                     type="text" 
                                     value={profileForm.nif}
