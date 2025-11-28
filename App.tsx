@@ -11,7 +11,7 @@ import Contact from './components/Contact';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; // Import Dashboard
-import { PRODUCTS } from './constants';
+import { PRODUCTS, ADMIN_EMAILS } from './constants';
 import { Product, CartItem, User, Order, Review } from './types';
 import { auth, db } from './services/firebaseConfig';
 // import { onAuthStateChanged, signOut } from 'firebase/auth'; // v9 removed
@@ -32,6 +32,11 @@ const App: React.FC = () => {
 
   // Simple Hash Router State
   const [route, setRoute] = useState(window.location.hash || '#/');
+
+  // Verifica se o utilizador atual é Admin
+  const isAdmin = useMemo(() => {
+    return user && user.email && ADMIN_EMAILS.includes(user.email);
+  }, [user]);
 
   // Initialization & Auth Listener
   useEffect(() => {
@@ -212,9 +217,15 @@ const App: React.FC = () => {
   }, [cartItems]);
 
   const renderContent = () => {
-    // Route for Dashboard (Backoffice)
+    // Route for Dashboard (Backoffice) - PROTECTED ROUTE
     if (route === '#dashboard') {
-        return <Dashboard />;
+        if (isAdmin) {
+            return <Dashboard />;
+        } else {
+            // Se não for admin e tentar entrar, redireciona para a home
+            setTimeout(() => window.location.hash = '/', 0);
+            return <div className="p-8 text-center">Acesso negado. A redirecionar...</div>;
+        }
     }
 
     // Route Guard for Account
@@ -263,7 +274,8 @@ const App: React.FC = () => {
   };
 
   // Se estivermos no Dashboard, não mostrar Header/Footer padrão da loja (opcional, mas recomendado para backoffice)
-  if (route === '#dashboard') {
+  // Nota: Verificamos o isAdmin aqui também para evitar flash de conteúdo
+  if (route === '#dashboard' && isAdmin) {
       return (
           <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
               <Dashboard />
@@ -355,13 +367,17 @@ const App: React.FC = () => {
         </div>
         <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs">
             <span>&copy; 2024 Allshop Store. Todos os direitos reservados.</span>
-            <a 
-              href="#dashboard" 
-              onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }}
-              className="mt-2 md:mt-0 text-gray-800 hover:text-gray-600 transition-colors"
-            >
-              Admin
-            </a>
+            
+            {/* LINK DE ADMIN SÓ APARECE SE FOR ADMIN MESMO */}
+            {isAdmin && (
+              <a 
+                href="#dashboard" 
+                onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }}
+                className="mt-2 md:mt-0 text-gray-600 hover:text-gray-400 transition-colors"
+              >
+                Admin
+              </a>
+            )}
         </div>
       </footer>
 
