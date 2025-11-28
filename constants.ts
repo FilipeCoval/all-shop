@@ -1,3 +1,4 @@
+
 import { Product } from './types';
 
 export const STORE_NAME = "Allshop";
@@ -11,6 +12,14 @@ export const SELLER_PHONE = "351999999999"; // WhatsApp (sem +)
 // Coloque aqui o link do seu Grupo, Canal ou Utilizador do Telegram
 // Exemplo: "https://t.me/+kjsdhfksdf" ou "https://t.me/seunome"
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
+
+// LISTA DE ADMINISTRADORES
+// Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
+export const ADMIN_EMAILS = [
+  "filipe_coval_90@hotmail.com",     // Substitua pelo seu email de login
+  "mcpoleca@gmail.com",     // Substitua pelo email do sócio
+  "filipe@teste.com"       // Exemplo
+];
 
 export const PRODUCTS: Product[] = [
   {
