@@ -63,3 +63,31 @@ export interface Review {
   date: string;
   images: string[]; // Base64 strings
 }
+
+// --- BACKOFFICE / DASHBOARD TYPES ---
+
+export type ProductStatus = 'IN_STOCK' | 'SOLD' | 'PARTIAL';
+export type CashbackStatus = 'PENDING' | 'RECEIVED' | 'NONE';
+
+export interface InventoryProduct {
+  id: string; // Firebase Doc ID
+  name: string;
+  category: string;
+  purchaseDate: string; // YYYY-MM-DD
+  
+  // Quantidades
+  quantityBought: number; // Quantidade total comprada
+  quantitySold: number;   // Quantidade já vendida
+
+  // Valores Unitários (IMPORTANTE: Unitários)
+  purchasePrice: number; // Custo por unidade
+  targetSalePrice?: number; // Preço alvo/estimado de venda
+  salePrice: number;    // Preço real de venda por unidade (0 se ainda não vendeu)
+  
+  // Cashback (Valor total da compra)
+  cashbackValue: number;
+  cashbackStatus: CashbackStatus;
+  
+  // Estado
+  status: ProductStatus;
+}
