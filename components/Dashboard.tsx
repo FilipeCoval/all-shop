@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
-  Plus, Search, Edit2, Trash2, X, Sparkles, ArrowRight
+  Plus, Search, Edit2, Trash2, X, Sparkles, ArrowRight, Link as LinkIcon
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
+import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
 
 const Dashboard: React.FC = () => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory();
@@ -17,10 +18,11 @@ const Dashboard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Form State (Strings para inputs vazios)
+  // Form State
   const [formData, setFormData] = useState({
     name: '',
     category: '',
+    publicProductId: '' as string, // ID do produto público (string para o select)
     purchaseDate: new Date().toISOString().split('T')[0],
     quantityBought: '',
     quantitySold: '',
@@ -48,8 +50,7 @@ const Dashboard: React.FC = () => {
       const revenue = p.salePrice * p.quantitySold;
       realizedRevenue += revenue;
 
-      // Lucro Realizado: (Preço Venda - Preço Compra) * Qtd Vendida + Cashback Recebido
-      // Nota: O Cashback só conta para lucro se for recebido. Se for pendente, é ativo a receber.
+      // Lucro Realizado
       const profitFromSales = (p.salePrice - p.purchasePrice) * p.quantitySold;
       const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0;
       realizedProfit += profitFromSales + cashback;
@@ -58,7 +59,7 @@ const Dashboard: React.FC = () => {
         pendingCashback += p.cashbackValue;
       }
 
-      // Lucro Potencial: (Target - Compra) * Stock Restante
+      // Lucro Potencial
       const remainingStock = p.quantityBought - p.quantitySold;
       if (remainingStock > 0 && p.targetSalePrice) {
         potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock;
@@ -81,6 +82,7 @@ const Dashboard: React.FC = () => {
     setFormData({
       name: product.name,
       category: product.category,
+      publicProductId: product.publicProductId ? product.publicProductId.toString() : '',
       purchaseDate: product.purchaseDate,
       quantityBought: product.quantityBought.toString(),
       quantitySold: product.quantitySold.toString(),
@@ -98,6 +100,7 @@ const Dashboard: React.FC = () => {
     setFormData({
       name: '',
       category: 'TV Box',
+      publicProductId: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       quantityBought: '',
       quantitySold: '0',
@@ -108,6 +111,24 @@ const Dashboard: React.FC = () => {
       cashbackStatus: 'NONE'
     });
     setIsModalOpen(true);
+  };
+
+  const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const selectedId = e.target.value;
+      setFormData(prev => ({ ...prev, publicProductId: selectedId }));
+
+      // Auto-preencher nome e categoria se selecionar um produto da lista
+      if (selectedId) {
+          const publicProd = PRODUCTS.find(p => p.id === Number(selectedId));
+          if (publicProd) {
+              setFormData(prev => ({
+                  ...prev,
+                  publicProductId: selectedId,
+                  name: publicProd.name,
+                  category: publicProd.category
+              }));
+          }
+      }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,6 +145,7 @@ const Dashboard: React.FC = () => {
     const payload = {
       name: formData.name,
       category: formData.category,
+      publicProductId: formData.publicProductId ? Number(formData.publicProductId) : undefined,
       purchaseDate: formData.purchaseDate,
       quantityBought: qBought,
       quantitySold: qSold,
@@ -186,7 +208,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <button 
                 onClick={() => window.location.hash = '/'}
-                className="text-gray-500 hover:text-gray-700 font-medium px-3 py-2"
+                className="text-gray-500 hover:text-gray-700 font-medium px-3 py-2 hidden sm:block"
             >
                 Voltar à Loja
             </button>
@@ -284,7 +306,14 @@ const Dashboard: React.FC = () => {
                   filteredProducts.map((p) => (
                     <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900">{p.name}</div>
+                        <div className="font-bold text-gray-900 flex items-center gap-2">
+                            {p.name}
+                            {p.publicProductId && (
+                                <span title="Ligado à Loja">
+                                    <LinkIcon size={12} className="text-indigo-500" />
+                                </span>
+                            )}
+                        </div>
                         <div className="text-xs text-gray-500">{p.category} • {new Date(p.purchaseDate).toLocaleDateString()}</div>
                       </td>
                       <td className="px-6 py-4 w-48">
@@ -343,11 +372,31 @@ const Dashboard: React.FC = () => {
             
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               
+              {/* Ligar ao Produto do Site */}
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                  <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
+                      <LinkIcon size={16} /> Ligar a Produto da Loja (Recomendado)
+                  </label>
+                  <select 
+                      value={formData.publicProductId} 
+                      onChange={handlePublicProductSelect}
+                      className="input-field border-blue-200 focus:ring-blue-500"
+                  >
+                      <option value="">-- Apenas registo interno (Sem ligação) --</option>
+                      {PRODUCTS.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-blue-600 mt-2">
+                      Ao selecionar, o stock no site será atualizado automaticamente com base nas quantidades abaixo.
+                  </p>
+              </div>
+
               {/* Secção Geral */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
-                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi TV Box S 2nd Gen" />
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Lote/Produto</label>
+                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi TV Box S 2nd Gen - Lote #4" />
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
