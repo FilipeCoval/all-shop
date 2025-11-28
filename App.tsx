@@ -10,18 +10,20 @@ import About from './components/About';
 import Contact from './components/Contact';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
-import Dashboard from './components/Dashboard'; // Import Dashboard
+import Dashboard from './components/Dashboard'; 
 import { PRODUCTS, ADMIN_EMAILS } from './constants';
 import { Product, CartItem, User, Order, Review } from './types';
 import { auth, db } from './services/firebaseConfig';
-// import { onAuthStateChanged, signOut } from 'firebase/auth'; // v9 removed
-// import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore'; // v9 removed
+import { useStock } from './hooks/useStock'; 
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  // Stock Hook
+  const { getStockForProduct } = useStock();
+
   // Login and User State
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -33,9 +35,13 @@ const App: React.FC = () => {
   // Simple Hash Router State
   const [route, setRoute] = useState(window.location.hash || '#/');
 
-  // Verifica se o utilizador atual é Admin
+  // Verifica se o utilizador atual é Admin (Case Insensitive e Trimmed)
   const isAdmin = useMemo(() => {
-    return user && user.email && ADMIN_EMAILS.includes(user.email);
+    if (!user || !user.email) return false;
+    const userEmail = user.email.trim().toLowerCase();
+    
+    // Compara o email atual com a lista de admins, ignorando maiúsculas/minúsculas e espaços
+    return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
   // Initialization & Auth Listener
@@ -57,7 +63,7 @@ const App: React.FC = () => {
     };
     loadReviews();
 
-    // 2. Escutar mudanças no estado de autenticação REAL do Firebase (v8 syntax)
+    // 2. Escutar mudanças no estado de autenticação REAL do Firebase
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         if (firebaseUser) {
             // Utilizador está logado
@@ -98,7 +104,7 @@ const App: React.FC = () => {
         } else {
             // Utilizador saiu
             setUser(null);
-            setOrders([]); // Limpa encomendas da sessão
+            setOrders([]); 
         }
     });
 
@@ -109,7 +115,6 @@ const App: React.FC = () => {
 
     window.addEventListener('hashchange', handleHashChange);
     
-    // Cleanup
     return () => {
         unsubscribe();
         window.removeEventListener('hashchange', handleHashChange);
@@ -117,9 +122,21 @@ const App: React.FC = () => {
   }, []);
 
   const addToCart = (product: Product) => {
+    // Verificar stock antes de adicionar
+    const currentStock = getStockForProduct(product.id);
+    if (currentStock <= 0) {
+        alert("Desculpe, este produto acabou de esgotar!");
+        return;
+    }
+
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
+        // Verifica se adicionar +1 ultrapassa o stock
+        if (existing.quantity + 1 > currentStock) {
+            alert(`Apenas ${currentStock} unidades disponíveis.`);
+            return prev;
+        }
         return prev.map(item => 
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -136,8 +153,19 @@ const App: React.FC = () => {
   const updateQuantity = (id: number, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
+        const newQty = item.quantity + delta;
+        
+        // Validação de stock ao aumentar
+        if (delta > 0) {
+            const currentStock = getStockForProduct(id);
+            if (newQty > currentStock) {
+                alert(`Máximo disponível: ${currentStock}`);
+                return item;
+            }
+        }
+
+        const finalQty = Math.max(1, newQty);
+        return { ...item, quantity: finalQty };
       }
       return item;
     }));
@@ -172,22 +200,20 @@ const App: React.FC = () => {
   };
 
   const handleCheckout = async (newOrder: Order) => {
-      // 1. Atualiza estado local (visual imediato)
+      // 1. Atualiza estado local
       const updatedOrders = [newOrder, ...orders];
       setOrders(updatedOrders);
-      setCartItems([]); // Limpa carrinho
+      setCartItems([]); 
 
-      // 2. Se utilizador logado, grava na BD com ID dele
+      // 2. Grava na BD
       if (user && user.uid) {
           try {
-              newOrder.userId = user.uid; // Garante que a encomenda tem dono
-              // Grava na coleção 'orders' (acessível ao admin e ao user)
+              newOrder.userId = user.uid; 
               await db.collection("orders").doc(newOrder.id).set(newOrder);
           } catch (e) {
-              console.error("Erro ao gravar encomenda no Firestore", e);
+              console.error("Erro ao gravar encomenda", e);
           }
       } else {
-          // Se for anónimo, grava na mesma (para o admin ver), mas sem userId
           try {
              await db.collection("orders").doc(newOrder.id).set(newOrder);
           } catch (e) { console.error(e); }
@@ -195,16 +221,13 @@ const App: React.FC = () => {
   };
 
   const handleAddReview = async (newReview: Review) => {
-      // 1. Atualiza localmente para feedback imediato na UI
       const updatedReviews = [newReview, ...reviews];
       setReviews(updatedReviews);
 
-      // 2. Grava na base de dados (Firestore) para todos verem
       try {
           await db.collection("reviews").doc(newReview.id).set(newReview);
       } catch (e) {
-          console.error("Erro ao gravar review na base de dados", e);
-          // Opcional: Mostrar erro ao utilizador se falhar
+          console.error("Erro ao gravar review", e);
       }
   };
 
@@ -217,25 +240,22 @@ const App: React.FC = () => {
   }, [cartItems]);
 
   const renderContent = () => {
-    // Route for Dashboard (Backoffice) - PROTECTED ROUTE
     if (route === '#dashboard') {
         if (isAdmin) {
             return <Dashboard />;
         } else {
-            // Se não for admin e tentar entrar, redireciona para a home
             setTimeout(() => window.location.hash = '/', 0);
             return <div className="p-8 text-center">Acesso negado. A redirecionar...</div>;
         }
     }
 
-    // Route Guard for Account
     if (route === '#account') {
       if (!user) {
         setTimeout(() => {
             window.location.hash = '/';
             setIsLoginOpen(true);
         }, 0);
-        return <Home products={PRODUCTS} onAddToCart={addToCart} />; 
+        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} />; 
       }
       return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} />;
     }
@@ -251,6 +271,7 @@ const App: React.FC = () => {
                     reviews={reviews}
                     onAddReview={handleAddReview}
                     currentUser={user}
+                    stock={getStockForProduct(product.id)}
                 />
             );
         }
@@ -263,18 +284,17 @@ const App: React.FC = () => {
             return <Contact />;
         case '#/':
         default:
-            return <Home products={PRODUCTS} onAddToCart={addToCart} />;
+            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} />;
     }
   };
 
+  // ... (Restante do código igual, handlers de navegação, etc)
   const handleMobileNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     window.location.hash = path;
     setIsMobileMenuOpen(false);
   };
 
-  // Se estivermos no Dashboard, não mostrar Header/Footer padrão da loja (opcional, mas recomendado para backoffice)
-  // Nota: Verificamos o isAdmin aqui também para evitar flash de conteúdo
   if (route === '#dashboard' && isAdmin) {
       return (
           <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
@@ -373,7 +393,7 @@ const App: React.FC = () => {
               <a 
                 href="#dashboard" 
                 onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }}
-                className="mt-2 md:mt-0 text-gray-600 hover:text-gray-400 transition-colors"
+                className="mt-2 md:mt-0 text-gray-500 hover:text-white transition-colors"
               >
                 Admin
               </a>
