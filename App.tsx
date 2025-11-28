@@ -10,6 +10,7 @@ import About from './components/About';
 import Contact from './components/Contact';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
+import Dashboard from './components/Dashboard'; // Import Dashboard
 import { PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review } from './types';
 import { auth, db } from './services/firebaseConfig';
@@ -211,6 +212,11 @@ const App: React.FC = () => {
   }, [cartItems]);
 
   const renderContent = () => {
+    // Route for Dashboard (Backoffice)
+    if (route === '#dashboard') {
+        return <Dashboard />;
+    }
+
     // Route Guard for Account
     if (route === '#account') {
       if (!user) {
@@ -255,6 +261,15 @@ const App: React.FC = () => {
     window.location.hash = path;
     setIsMobileMenuOpen(false);
   };
+
+  // Se estivermos no Dashboard, não mostrar Header/Footer padrão da loja (opcional, mas recomendado para backoffice)
+  if (route === '#dashboard') {
+      return (
+          <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+              <Dashboard />
+          </div>
+      );
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans text-gray-900 bg-gray-50">
@@ -338,8 +353,15 @@ const App: React.FC = () => {
                 </div>
             </div>
         </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 text-center text-xs">
-            &copy; 2024 Allshop Store. Todos os direitos reservados.
+        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs">
+            <span>&copy; 2024 Allshop Store. Todos os direitos reservados.</span>
+            <a 
+              href="#dashboard" 
+              onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }}
+              className="mt-2 md:mt-0 text-gray-800 hover:text-gray-600 transition-colors"
+            >
+              Admin
+            </a>
         </div>
       </footer>
 
