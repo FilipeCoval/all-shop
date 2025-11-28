@@ -1,4 +1,5 @@
 
+
 export interface Product {
   id: number;
   name: string;
@@ -69,6 +70,14 @@ export interface Review {
 export type ProductStatus = 'IN_STOCK' | 'SOLD' | 'PARTIAL';
 export type CashbackStatus = 'PENDING' | 'RECEIVED' | 'NONE';
 
+export interface SaleRecord {
+  id: string;
+  date: string;
+  quantity: number;
+  unitPrice: number; // O preço a que foi vendido ESTA unidade específica
+  notes?: string; // Ex: "Vendido ao Filipe", "OLX"
+}
+
 export interface InventoryProduct {
   id: string; // Firebase Doc ID
   name: string;
@@ -80,13 +89,17 @@ export interface InventoryProduct {
 
   // Quantidades
   quantityBought: number; // Quantidade total comprada
-  quantitySold: number;   // Quantidade já vendida
+  quantitySold: number;   // Quantidade já vendida (Calculado ou manual)
 
   // Valores Unitários (IMPORTANTE: Unitários)
   purchasePrice: number; // Custo por unidade
   targetSalePrice?: number; // Preço alvo/estimado de venda
-  salePrice: number;    // Preço real de venda por unidade (0 se ainda não vendeu)
   
+  salePrice: number;    // Preço MÉDIO ou Último Preço (para compatibilidade)
+  
+  // Histórico de Vendas (NOVO - Para resolver o problema de preços variados)
+  salesHistory?: SaleRecord[];
+
   // Cashback (Valor total da compra)
   cashbackValue: number;
   cashbackStatus: CashbackStatus;
