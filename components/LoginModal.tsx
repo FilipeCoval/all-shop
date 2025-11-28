@@ -69,6 +69,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                 email: firebaseUser.email || '',
                 addresses: []
             };
+            setUser(userData); // Atualizar na base de dados se faltar
         }
 
         onLogin(userData);
@@ -76,16 +77,30 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
     } catch (err: any) {
         console.error("Login error", err);
-        if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-            setError('Email ou palavra-passe incorretos.');
+        // Tratamento robusto para auth/invalid-credential (Firebase Auth atual) e user-not-found (Legacy)
+        if (
+            err.code === 'auth/invalid-credential' || 
+            err.code === 'auth/user-not-found' || 
+            err.code === 'auth/wrong-password'
+        ) {
+            setError('Dados incorretos. Se ainda não tem conta, por favor REGISTE-SE primeiro.');
         } else if (err.code === 'auth/too-many-requests') {
-            setError('Muitas tentativas falhadas. Tente mais tarde.');
+            setError('Muitas tentativas falhadas. Tente novamente mais tarde.');
         } else {
-            setError('Ocorreu um erro ao entrar. Tente novamente.');
+            setError('Ocorreu um erro ao entrar (' + (err.code || 'desconhecido') + '). Tente novamente.');
         }
     } finally {
         setIsLoading(false);
     }
+  };
+
+  // Helper para criar user se não existir no Firestore mas existir no Auth
+  const setUser = async (user: UserType) => {
+      if(user.uid) {
+          try {
+             await db.collection("users").doc(user.uid).set(user, { merge: true });
+          } catch(e) { console.error(e); }
+      }
   };
 
   // --- REGISTO REAL ---
@@ -131,7 +146,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     } catch (err: any) {
         console.error("Register error", err);
         if (err.code === 'auth/email-already-in-use') {
-            setError('Este email já está registado.');
+            setError('Este email já está registado. Tente fazer login.');
+        } else if (err.code === 'auth/weak-password') {
+            setError('A palavra-passe é muito fraca. Escolha uma mais segura.');
         } else {
             setError('Erro ao criar conta: ' + err.message);
         }
@@ -152,10 +169,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         setTimeout(() => setView('login'), 5000);
     } catch (err: any) {
         console.error("Reset error", err);
-        if (err.code === 'auth/user-not-found') {
-            setError('Não existe conta com este email.');
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email') {
+            setError('Email inválido ou não registado.');
         } else {
-            setError('Erro ao enviar email. Verifique o endereço.');
+            setError('Erro ao enviar email. Tente novamente.');
         }
     } finally {
         setIsLoading(false);
@@ -384,3 +401,4 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 };
 
 export default LoginModal;
+
