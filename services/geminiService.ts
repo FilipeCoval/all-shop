@@ -1,5 +1,7 @@
+
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { PRODUCTS, STORE_NAME } from '../constants';
+import { InventoryProduct } from '../types';
 
 let chatSession: Chat | null = null;
 
@@ -114,4 +116,55 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
     }
     return "Estou com uma pequena dificuldade técnica. Pode tentar novamente?";
   }
+};
+
+/**
+ * Função para analisar o inventário e dar dicas financeiras.
+ * Não usa chat session, é um pedido único (stateless).
+ */
+export const getInventoryAnalysis = async (products: InventoryProduct[]): Promise<string> => {
+    // @ts-ignore
+    const viteKey = (import.meta.env && import.meta.env.VITE_API_KEY);
+    // @ts-ignore
+    const processKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY);
+    const apiKey = viteKey || processKey;
+    
+    if (!apiKey) return "API Key em falta.";
+
+    const ai = new GoogleGenAI({ apiKey });
+    
+    // Resumo dos dados para enviar ao modelo
+    const totalInvested = products.reduce((acc, p) => acc + (p.purchasePrice * p.quantityBought), 0);
+    const totalItems = products.reduce((acc, p) => acc + p.quantityBought, 0);
+    const soldItems = products.reduce((acc, p) => acc + p.quantitySold, 0);
+    const unsoldItems = totalItems - soldItems;
+
+    // Produtos com stock parado (menos de 20% vendido)
+    const stuckProducts = products
+        .filter(p => p.quantityBought > 0 && (p.quantitySold / p.quantityBought) < 0.2)
+        .map(p => p.name)
+        .join(', ');
+
+    const prompt = `
+      Analise estes dados financeiros da loja 'Allshop' (Backoffice):
+      - Investimento Total em Stock: €${totalInvested.toFixed(2)}
+      - Total Itens Comprados: ${totalItems}
+      - Total Itens Vendidos: ${soldItems}
+      - Itens em Stock: ${unsoldItems}
+      - Produtos com saída lenta: ${stuckProducts || "Nenhum em particular"}
+
+      Dê-me 1 conselho financeiro curto (máx 2 frases) e estratégico para melhorar o fluxo de caixa ou lucro. 
+      Seja direto. Use emojis. Fale como um CFO experiente.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt
+        });
+        return response.text || "Mantenha o foco na margem de lucro!";
+    } catch (e) {
+        console.error(e);
+        return "Não foi possível gerar análise no momento.";
+    }
 };
