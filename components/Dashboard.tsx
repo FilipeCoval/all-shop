@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
-  Plus, Search, Edit2, Trash2, X, Sparkles, ArrowRight, Link as LinkIcon
+  Plus, Search, Edit2, Trash2, X, Sparkles, ArrowRight, Link as LinkIcon,
+  History, ShoppingBag, Calendar
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { InventoryProduct, ProductStatus, CashbackStatus } from '../types';
+import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
 
@@ -14,23 +15,33 @@ const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [aiTip, setAiTip] = useState<string | null>(null);
   
-  // Modal State
+  // Modal State (Edit/Create Product)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Modal State (Register Sale)
+  const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [selectedProductForSale, setSelectedProductForSale] = useState<InventoryProduct | null>(null);
   
-  // Form State
+  // Form State (Product)
   const [formData, setFormData] = useState({
     name: '',
     category: '',
-    publicProductId: '' as string, // ID do produto público (string para o select)
+    publicProductId: '' as string,
     purchaseDate: new Date().toISOString().split('T')[0],
     quantityBought: '',
-    quantitySold: '',
     purchasePrice: '',
     targetSalePrice: '',
-    salePrice: '',
     cashbackValue: '',
     cashbackStatus: 'NONE' as CashbackStatus
+  });
+
+  // Form State (Sale)
+  const [saleForm, setSaleForm] = useState({
+    quantity: '1',
+    unitPrice: '',
+    date: new Date().toISOString().split('T')[0],
+    notes: ''
   });
 
   // --- KPI CALCULATIONS ---
@@ -46,12 +57,21 @@ const Dashboard: React.FC = () => {
       const invested = p.purchasePrice * p.quantityBought;
       totalInvested += invested;
 
-      // Receita: O que já vendi
-      const revenue = p.salePrice * p.quantitySold;
+      // Receita: Calculada pelo histórico se existir, senão usa o fallback antigo
+      let revenue = 0;
+      if (p.salesHistory && p.salesHistory.length > 0) {
+          revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0);
+      } else {
+          // Fallback para dados antigos
+          revenue = p.salePrice * p.quantitySold;
+      }
       realizedRevenue += revenue;
 
       // Lucro Realizado
-      const profitFromSales = (p.salePrice - p.purchasePrice) * p.quantitySold;
+      // Custo dos bens vendidos = Quantidade Vendida * Custo Unitário de Compra
+      const cogs = p.quantitySold * p.purchasePrice; 
+      const profitFromSales = revenue - cogs;
+      
       const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0;
       realizedProfit += profitFromSales + cashback;
 
@@ -59,7 +79,7 @@ const Dashboard: React.FC = () => {
         pendingCashback += p.cashbackValue;
       }
 
-      // Lucro Potencial
+      // Lucro Potencial (Stock restante * (Preço Alvo - Preço Compra))
       const remainingStock = p.quantityBought - p.quantitySold;
       if (remainingStock > 0 && p.targetSalePrice) {
         potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock;
@@ -76,7 +96,7 @@ const Dashboard: React.FC = () => {
     }
   }, [products, aiTip]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS PRODUCT ---
   const handleEdit = (product: InventoryProduct) => {
     setEditingId(product.id);
     setFormData({
@@ -85,10 +105,8 @@ const Dashboard: React.FC = () => {
       publicProductId: product.publicProductId ? product.publicProductId.toString() : '',
       purchaseDate: product.purchaseDate,
       quantityBought: product.quantityBought.toString(),
-      quantitySold: product.quantitySold.toString(),
       purchasePrice: product.purchasePrice.toString(),
       targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '',
-      salePrice: product.salePrice.toString(),
       cashbackValue: product.cashbackValue.toString(),
       cashbackStatus: product.cashbackStatus
     });
@@ -103,10 +121,8 @@ const Dashboard: React.FC = () => {
       publicProductId: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       quantityBought: '',
-      quantitySold: '0',
       purchasePrice: '',
       targetSalePrice: '',
-      salePrice: '',
       cashbackValue: '',
       cashbackStatus: 'NONE'
     });
@@ -117,7 +133,6 @@ const Dashboard: React.FC = () => {
       const selectedId = e.target.value;
       setFormData(prev => ({ ...prev, publicProductId: selectedId }));
 
-      // Auto-preencher nome e categoria se selecionar um produto da lista
       if (selectedId) {
           const publicProd = PRODUCTS.find(p => p.id === Number(selectedId));
           if (publicProd) {
@@ -131,27 +146,38 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const qBought = Number(formData.quantityBought) || 0;
-    const qSold = Number(formData.quantitySold) || 0;
     
-    // Auto status
+    // Preservar dados existentes se estiver a editar
+    const existingProduct = products.find(p => p.id === editingId);
+    const currentSold = existingProduct ? existingProduct.quantitySold : 0;
+    
+    // FIX: Garante que salesHistory nunca é undefined. Se não existir, usa [].
+    const currentHistory = existingProduct?.salesHistory || [];
+    
+    const currentSalePrice = existingProduct ? existingProduct.salePrice : 0;
+
+    // Calcular status
     let status: ProductStatus = 'IN_STOCK';
-    if (qSold >= qBought && qBought > 0) status = 'SOLD';
-    else if (qSold > 0) status = 'PARTIAL';
+    if (currentSold >= qBought && qBought > 0) status = 'SOLD';
+    else if (currentSold > 0) status = 'PARTIAL';
 
     const payload = {
       name: formData.name,
       category: formData.category,
-      publicProductId: formData.publicProductId ? Number(formData.publicProductId) : undefined,
+      // FIX: Usa null em vez de undefined para compatibilidade com Firestore
+      publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null,
       purchaseDate: formData.purchaseDate,
       quantityBought: qBought,
-      quantitySold: qSold,
+      quantitySold: currentSold, 
+      salesHistory: currentHistory, 
       purchasePrice: Number(formData.purchasePrice) || 0,
-      targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : undefined,
-      salePrice: Number(formData.salePrice) || 0,
+      // FIX: Usa null em vez de undefined
+      targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null,
+      salePrice: currentSalePrice, 
       cashbackValue: Number(formData.cashbackValue) || 0,
       cashbackStatus: formData.cashbackStatus,
       status
@@ -159,34 +185,99 @@ const Dashboard: React.FC = () => {
 
     try {
       if (editingId) {
-        await updateProduct(editingId, payload);
+        // Cast para any para aceitar null nos campos opcionais
+        await updateProduct(editingId, payload as any);
       } else {
-        await addProduct(payload);
+        await addProduct(payload as any);
       }
       setIsModalOpen(false);
     } catch (err) {
-      alert('Erro ao guardar produto');
+      console.error("Erro ao guardar produto:", err);
+      alert('Erro ao guardar produto. Verifique a consola.');
     }
+  };
+
+  // --- HANDLERS SALE ---
+  const openSaleModal = (product: InventoryProduct) => {
+      setSelectedProductForSale(product);
+      setSaleForm({
+          quantity: '1',
+          unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '',
+          date: new Date().toISOString().split('T')[0],
+          notes: ''
+      });
+      setIsSaleModalOpen(true);
+  };
+
+  const handleSaleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedProductForSale) return;
+
+      const qty = Number(saleForm.quantity);
+      const price = Number(saleForm.unitPrice);
+
+      if (qty <= 0) return alert("Quantidade deve ser maior que 0");
+      
+      const remaining = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold;
+      if (qty > remaining) {
+          return alert(`Erro: Só tem ${remaining} unidades em stock.`);
+      }
+
+      const newSale: SaleRecord = {
+          id: Date.now().toString(),
+          date: saleForm.date,
+          quantity: qty,
+          unitPrice: price,
+          notes: saleForm.notes
+      };
+
+      const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale];
+      const newQuantitySold = selectedProductForSale.quantitySold + qty;
+      
+      // Calcular nova média de venda para referência rápida
+      const totalRevenue = updatedHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0);
+      const totalUnitsSold = updatedHistory.reduce((acc, s) => acc + s.quantity, 0);
+      const averageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0;
+
+      let status: ProductStatus = 'IN_STOCK';
+      if (newQuantitySold >= selectedProductForSale.quantityBought) status = 'SOLD';
+      else if (newQuantitySold > 0) status = 'PARTIAL';
+
+      try {
+          await updateProduct(selectedProductForSale.id, {
+              quantitySold: newQuantitySold,
+              salePrice: averageSalePrice, // Atualiza com a média ponderada
+              salesHistory: updatedHistory,
+              status
+          });
+          setIsSaleModalOpen(false);
+      } catch (err) {
+          alert("Erro ao registar venda");
+          console.error(err);
+      }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Tem a certeza que quer apagar este registo?')) {
-      await deleteProduct(id);
+    if (!id) return;
+    
+    if (window.confirm('Tem a certeza absoluta que quer apagar este registo? Esta ação não pode ser desfeita.')) {
+      try {
+        await deleteProduct(id);
+        // Não é necessário alerta de sucesso, a lista atualiza automaticamente
+      } catch (error: any) {
+        console.error("Erro ao apagar:", error);
+        
+        let msg = "Não foi possível apagar o registo.";
+        if (error.code === 'permission-denied') {
+            msg = "Erro de Permissão: A sua conta não tem autorização para apagar dados na Base de Dados.";
+        } else if (error.message) {
+            msg += " Detalhe: " + error.message;
+        }
+        
+        alert(msg);
+      }
     }
   };
-
-  // --- CALCULATIONS FOR MODAL PREVIEW ---
-  const modalPreview = useMemo(() => {
-    const qBought = Number(formData.quantityBought) || 0;
-    const pBuy = Number(formData.purchasePrice) || 0;
-    const pTarget = Number(formData.targetSalePrice) || 0;
-    
-    const totalCost = qBought * pBuy;
-    const estimatedRev = qBought * pTarget;
-    const estimatedProfit = estimatedRev - totalCost + (Number(formData.cashbackValue) || 0);
-    
-    return { totalCost, estimatedRev, estimatedProfit };
-  }, [formData]);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -197,7 +288,7 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in">
       
       {/* HEADER */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-indigo-600 p-2 rounded-lg text-white">
@@ -251,7 +342,7 @@ const Dashboard: React.FC = () => {
             value={stats.realizedRevenue} 
             icon={<DollarSign size={20} />} 
             color="indigo" 
-            subtitle="Vendas efetivas"
+            subtitle="Soma exata das vendas"
           />
           <KpiCard 
             title="Lucro Realizado" 
@@ -272,7 +363,7 @@ const Dashboard: React.FC = () => {
         {/* TABLE SECTION */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-5 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="font-bold text-lg text-gray-800">Inventário</h2>
+            <h2 className="font-bold text-lg text-gray-800">Inventário & Vendas</h2>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input 
@@ -290,9 +381,9 @@ const Dashboard: React.FC = () => {
               <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Produto</th>
-                  <th className="px-6 py-4">Qtd. (Venda/Total)</th>
-                  <th className="px-6 py-4 text-right">Compra (Uni)</th>
-                  <th className="px-6 py-4 text-right">Venda (Uni)</th>
+                  <th className="px-6 py-4">Stock</th>
+                  <th className="px-6 py-4 text-right">Compra</th>
+                  <th className="px-6 py-4 text-right">Média Venda</th>
                   <th className="px-6 py-4 text-center">Status</th>
                   <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
@@ -315,8 +406,20 @@ const Dashboard: React.FC = () => {
                             )}
                         </div>
                         <div className="text-xs text-gray-500">{p.category} • {new Date(p.purchaseDate).toLocaleDateString()}</div>
+                        
+                        {/* Histórico Miniatura */}
+                        {p.salesHistory && p.salesHistory.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                                {p.salesHistory.slice(0, 3).map((s, idx) => (
+                                    <span key={idx} className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded border border-green-100" title={s.notes}>
+                                        {s.quantity}x {formatCurrency(s.unitPrice)}
+                                    </span>
+                                ))}
+                                {p.salesHistory.length > 3 && <span className="text-[10px] text-gray-400">+{p.salesHistory.length - 3}</span>}
+                            </div>
+                        )}
                       </td>
-                      <td className="px-6 py-4 w-48">
+                      <td className="px-6 py-4 w-40">
                         <div className="flex justify-between text-xs mb-1 font-medium text-gray-600">
                           <span>{p.quantitySold} vend</span>
                           <span>{p.quantityBought} total</span>
@@ -333,7 +436,10 @@ const Dashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         {p.quantitySold > 0 ? (
-                           <span className="font-bold text-green-600">{formatCurrency(p.salePrice)}</span>
+                           <div>
+                               <span className="font-bold text-green-600 block">{formatCurrency(p.salePrice)}</span>
+                               <span className="text-[10px] text-gray-400">média real</span>
+                           </div>
                         ) : (
                            <span className="text-gray-400 text-xs italic">Alvo: {p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</span>
                         )}
@@ -348,6 +454,15 @@ const Dashboard: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                        {p.status !== 'SOLD' && (
+                            <button 
+                                onClick={() => openSaleModal(p)} 
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors"
+                                title="Registrar Venda"
+                            >
+                                <DollarSign size={14} /> Vender
+                            </button>
+                        )}
                         <button onClick={() => handleEdit(p)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"><Edit2 size={16} /></button>
                         <button onClick={() => handleDelete(p.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                       </td>
@@ -360,43 +475,48 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL ADD/EDIT */}
+      {/* --- MODAL: EDIT PRODUCT --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in-up">
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
-              <h3 className="text-xl font-bold text-gray-900">{editingId ? 'Editar Produto' : 'Novo Registo de Compra'}</h3>
+              <h3 className="text-xl font-bold text-gray-900">{editingId ? 'Editar Produto / Lote' : 'Nova Compra de Stock'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleProductSubmit} className="p-6 space-y-6">
               
+              {/* Info about Batches */}
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex gap-3">
+                  <AlertCircle className="flex-shrink-0" size={20} />
+                  <p>
+                      <strong>Dica:</strong> Se comprou produtos iguais mas com preços ou cashbacks diferentes, crie um <strong>novo registo</strong> (ex: "Lote #2") para manter as contas certas.
+                  </p>
+              </div>
+
               {/* Ligar ao Produto do Site */}
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                   <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
-                      <LinkIcon size={16} /> Ligar a Produto da Loja (Recomendado)
+                      <LinkIcon size={16} /> Ligar a Produto da Loja (Para Stock)
                   </label>
                   <select 
                       value={formData.publicProductId} 
                       onChange={handlePublicProductSelect}
                       className="input-field border-blue-200 focus:ring-blue-500"
                   >
-                      <option value="">-- Apenas registo interno (Sem ligação) --</option>
+                      <option value="">-- Apenas registo interno --</option>
                       {PRODUCTS.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                   </select>
-                  <p className="text-xs text-blue-600 mt-2">
-                      Ao selecionar, o stock no site será atualizado automaticamente com base nas quantidades abaixo.
-                  </p>
               </div>
 
               {/* Secção Geral */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Lote/Produto</label>
-                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi TV Box S 2nd Gen - Lote #4" />
+                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi TV Box S - Lote #4" />
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
@@ -417,79 +537,151 @@ const Dashboard: React.FC = () => {
                       <input type="number" min="1" required value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} className="input-field" />
                    </div>
                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Preço Custo (Unidade)</label>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Custo Unitário (€)</label>
                       <input type="number" step="0.01" required value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} className="input-field" />
                    </div>
                 </div>
               </div>
 
-              {/* Secção Vendas e Alvos */}
+              {/* Secção Previsão e Cashback */}
               <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><TrendingUp size={16} /> Dados de Venda</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><TrendingUp size={16} /> Financeiro</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div>
-                      <label className="block text-sm font-medium text-indigo-800 mb-1">Preço Alvo (Est.)</label>
-                      <input type="number" step="0.01" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} className="input-field border-indigo-200 focus:ring-indigo-500" placeholder="Opcional" />
+                      <label className="block text-sm font-medium text-indigo-800 mb-1">Preço Venda Alvo (€)</label>
+                      <input type="number" step="0.01" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} className="input-field border-indigo-200 focus:ring-indigo-500" placeholder="Estimativa" />
                    </div>
                    <div>
-                      <label className="block text-sm font-medium text-indigo-800 mb-1">Qtd já Vendida</label>
-                      <input type="number" min="0" value={formData.quantitySold} onChange={e => setFormData({...formData, quantitySold: e.target.value})} className="input-field border-indigo-200 focus:ring-indigo-500" />
+                        {/* Espaço vazio para alinhar ou futuro campo */}
                    </div>
                    <div>
-                      <label className="block text-sm font-medium text-indigo-800 mb-1">Preço Venda Real</label>
-                      <input type="number" step="0.01" value={formData.salePrice} onChange={e => setFormData({...formData, salePrice: e.target.value})} className="input-field border-indigo-200 focus:ring-indigo-500" placeholder="Se já vendeu" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cashback Total (€)</label>
+                      <input type="number" step="0.01" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} className="input-field" placeholder="Ex: 5.00" />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado do Cashback</label>
+                      <select 
+                        value={formData.cashbackStatus} 
+                        onChange={e => setFormData({...formData, cashbackStatus: e.target.value as CashbackStatus})}
+                        className="input-field"
+                      >
+                        <option value="NONE">Sem Cashback</option>
+                        <option value="PENDING">Pendente</option>
+                        <option value="RECEIVED">Recebido</option>
+                      </select>
                    </div>
                 </div>
               </div>
 
-              {/* Secção Cashback */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cashback Total (€)</label>
-                    <input type="number" step="0.01" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} className="input-field" placeholder="Ex: 5.00" />
-                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado do Cashback</label>
-                    <select 
-                      value={formData.cashbackStatus} 
-                      onChange={e => setFormData({...formData, cashbackStatus: e.target.value as CashbackStatus})}
-                      className="input-field"
-                    >
-                      <option value="NONE">Sem Cashback</option>
-                      <option value="PENDING">Pendente</option>
-                      <option value="RECEIVED">Recebido</option>
-                    </select>
-                 </div>
-              </div>
-
-              {/* Live Preview Bar */}
-              <div className="bg-gray-900 text-white p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
-                 <div>
-                    <span className="block text-gray-400 text-xs uppercase">Custo Total</span>
-                    <span className="font-bold text-lg">{formatCurrency(modalPreview.totalCost)}</span>
-                 </div>
-                 <ArrowRight className="hidden sm:block text-gray-500" />
-                 <div>
-                    <span className="block text-gray-400 text-xs uppercase">Receita Estimada</span>
-                    <span className="font-bold text-lg text-blue-300">{formatCurrency(modalPreview.estimatedRev)}</span>
-                 </div>
-                 <ArrowRight className="hidden sm:block text-gray-500" />
-                 <div>
-                    <span className="block text-gray-400 text-xs uppercase">Lucro Previsto</span>
-                    <span className={`font-bold text-lg ${modalPreview.estimatedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(modalPreview.estimatedProfit)}
-                    </span>
-                 </div>
-              </div>
-
               <div className="pt-4 border-t flex gap-3 justify-end">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 border rounded-lg hover:bg-gray-50 font-medium">Cancelar</button>
-                <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-lg">Guardar Produto</button>
+                <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-lg">Guardar Lote</button>
               </div>
 
             </form>
           </div>
         </div>
+      )}
+
+      {/* --- MODAL: REGISTER SALE --- */}
+      {isSaleModalOpen && selectedProductForSale && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsSaleModalOpen(false)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in-up overflow-hidden">
+                <div className="bg-green-600 p-6 text-white">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                        <DollarSign /> Registrar Venda
+                    </h3>
+                    <p className="text-green-100 text-sm mt-1">{selectedProductForSale.name}</p>
+                </div>
+                
+                <form onSubmit={handleSaleSubmit} className="p-6 space-y-5">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade</label>
+                            <input 
+                                type="number" 
+                                min="1" 
+                                max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold}
+                                required 
+                                value={saleForm.quantity} 
+                                onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} 
+                                className="input-field text-lg font-bold" 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Preço Real (€)</label>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                required 
+                                value={saleForm.unitPrice} 
+                                onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} 
+                                className="input-field text-lg font-bold text-green-600 border-green-200 focus:ring-green-500" 
+                                placeholder="45.00"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Data da Venda</label>
+                        <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input 
+                                type="date" 
+                                required 
+                                value={saleForm.date} 
+                                onChange={e => setSaleForm({...saleForm, date: e.target.value})} 
+                                className="input-field pl-10" 
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notas (Opcional)</label>
+                        <input 
+                            type="text" 
+                            value={saleForm.notes} 
+                            onChange={e => setSaleForm({...saleForm, notes: e.target.value})} 
+                            className="input-field" 
+                            placeholder="Ex: Amigo do trabalho, OLX..." 
+                        />
+                    </div>
+                    
+                    {/* Resumo do Lucro desta Venda */}
+                    {saleForm.unitPrice && (
+                        <div className="bg-gray-50 p-3 rounded-lg text-sm flex justify-between items-center border border-gray-100">
+                            <span className="text-gray-600">Lucro nesta venda:</span>
+                            <span className={`font-bold ${(Number(saleForm.unitPrice) - selectedProductForSale.purchasePrice) > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {formatCurrency((Number(saleForm.unitPrice) - selectedProductForSale.purchasePrice) * Number(saleForm.quantity))}
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="pt-2 flex gap-3">
+                        <button type="button" onClick={() => setIsSaleModalOpen(false)} className="flex-1 py-3 border rounded-xl hover:bg-gray-50 font-medium text-gray-700">Cancelar</button>
+                        <button type="submit" className="flex-1 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-bold shadow-lg flex items-center justify-center gap-2">
+                            Confirmar Venda
+                        </button>
+                    </div>
+                </form>
+                
+                {/* Histórico Recente */}
+                {selectedProductForSale.salesHistory && selectedProductForSale.salesHistory.length > 0 && (
+                    <div className="bg-gray-50 p-4 border-t border-gray-100 max-h-40 overflow-y-auto">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1"><History size={12} /> Histórico deste Lote</h4>
+                        <div className="space-y-2">
+                            {selectedProductForSale.salesHistory.slice().reverse().map((sale, idx) => (
+                                <div key={idx} className="text-xs flex justify-between border-b border-gray-200 pb-1 last:border-0">
+                                    <span>{new Date(sale.date).toLocaleDateString()} {sale.notes && `(${sale.notes})`}</span>
+                                    <span className="font-medium">{sale.quantity}x {formatCurrency(sale.unitPrice)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+          </div>
       )}
 
       {/* Styles Injection for Inputs */}
