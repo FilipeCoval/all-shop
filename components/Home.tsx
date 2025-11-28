@@ -8,9 +8,10 @@ import { db } from '../services/firebaseConfig';
 interface HomeProps {
   products: Product[];
   onAddToCart: (product: Product) => void;
+  getStock: (productId: number) => number; // Prop adicionada
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock }) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
@@ -117,7 +118,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart }) => {
           </div>
       </section>
 
-      <ProductList products={products} onAddToCart={onAddToCart} />
+      <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} />
 
       {/* Newsletter */}
       <section className="bg-secondary text-white py-16 relative overflow-hidden">
