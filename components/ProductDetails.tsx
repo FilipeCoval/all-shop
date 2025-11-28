@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, Review, User } from '../types';
-import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 
 interface ProductDetailsProps {
@@ -10,9 +10,10 @@ interface ProductDetailsProps {
   reviews: Review[];
   onAddReview: (review: Review) => void;
   currentUser: User | null;
+  stock?: number; // Prop Opcional (será passada pelo App)
 }
 
-const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, reviews, onAddReview, currentUser }) => {
+const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, reviews, onAddReview, currentUser, stock = 999 }) => {
   // Determine the list of images to show (fallback to single image if array is missing)
   const galleryImages = product.images && product.images.length > 0 
     ? product.images 
@@ -30,6 +31,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
     window.location.hash = '/';
   };
 
+  const isOutOfStock = stock <= 0 && stock !== 999;
+  const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
+
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 animate-fade-in">
       <a href="#/" onClick={handleBack} className="inline-flex items-center text-gray-500 hover:text-primary mb-6 transition-colors font-medium">
@@ -44,8 +48,16 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
             <img 
               src={mainImage} 
               alt={product.name} 
-              className="w-full max-w-md object-contain mix-blend-multiply hover:scale-105 transition-transform duration-500 mb-4"
+              className={`w-full max-w-md object-contain mix-blend-multiply transition-all duration-500 mb-4 ${isOutOfStock ? 'grayscale opacity-60' : 'hover:scale-105'}`}
             />
+            
+            {isOutOfStock && (
+                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                    <span className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider shadow-2xl text-xl border-4 border-white transform -rotate-12">
+                        Esgotado
+                    </span>
+                 </div>
+            )}
             
             {/* Gallery Thumbnails */}
             {galleryImages.length > 1 && (
@@ -65,10 +77,23 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
 
           {/* Info Section */}
           <div className="p-8 md:p-12 flex flex-col justify-center">
-            <div className="mb-2">
+            <div className="flex justify-between items-start mb-2">
               <span className="bg-blue-50 text-primary text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                 {product.category}
               </span>
+              
+              {/* Stock Status Detail */}
+              {stock !== 999 && (
+                  <div className="text-sm font-medium">
+                      {isOutOfStock ? (
+                          <span className="text-red-600 flex items-center gap-1"><XCircle size={16}/> Indisponível</span>
+                      ) : isLowStock ? (
+                          <span className="text-orange-600 flex items-center gap-1 animate-pulse"><AlertTriangle size={16}/> Restam {stock} unidades</span>
+                      ) : (
+                          <span className="text-green-600 flex items-center gap-1"><Check size={16}/> Em Stock ({stock})</span>
+                      )}
+                  </div>
+              )}
             </div>
             
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{product.name}</h1>
@@ -102,11 +127,23 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
 
             <div className="flex flex-col sm:flex-row gap-4 mt-auto">
               <button 
-                onClick={() => onAddToCart(product)}
-                className="flex-1 bg-secondary hover:bg-primary text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95"
+                onClick={() => !isOutOfStock && onAddToCart(product)}
+                disabled={isOutOfStock}
+                className={`flex-1 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95
+                    ${isOutOfStock 
+                        ? 'bg-gray-400 cursor-not-allowed hover:shadow-none' 
+                        : 'bg-secondary hover:bg-primary hover:shadow-xl'
+                    }
+                `}
               >
-                <ShoppingCart size={24} />
-                Adicionar ao Carrinho
+                {isOutOfStock ? (
+                    <>Esgotado</>
+                ) : (
+                    <>
+                        <ShoppingCart size={24} />
+                        Adicionar ao Carrinho
+                    </>
+                )}
               </button>
               <button className="sm:w-16 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl flex items-center justify-center transition-colors">
                 <Share2 size={24} />
