@@ -15,7 +15,7 @@ export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8";
 
 // CREDENCIAIS TELEGRAM BOT (Notificações de Venda)
 export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBYs";
-export const TELEGRAM_CHAT_ID = "8486202340"; // ID de destino (Admin)
+export const TELEGRAM_CHAT_ID = "1488102165"; // ID de destino (Admin)
 
 // LISTA DE ADMINISTRADORES
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
