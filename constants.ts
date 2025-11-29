@@ -20,9 +20,10 @@ export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBY
 // ==================================================================================
 // ⚠️ ATENÇÃO: TELEGRAM_CHAT_ID (Para onde a mensagem vai)
 // ==================================================================================
-// ID CONFIRMADO DO UTILIZADOR (ADMIN)
+// ID DO GRUPO (SÓCIOS)
+// Nota: IDs de grupos do Telegram começam sempre por um sinal negativo (ex: -100...)
 // ==================================================================================
-export const TELEGRAM_CHAT_ID = "1003494194252"; 
+export const TELEGRAM_CHAT_ID = "-1003494194252"; 
 
 // LISTA DE ADMINISTRADORES
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
