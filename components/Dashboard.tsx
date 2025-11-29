@@ -8,7 +8,7 @@ import {
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
-import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
+import { PRODUCTS, TELEGRAM_CHAT_ID } from '../constants'; // Importar produtos públicos para o select
 import { db } from '../services/firebaseConfig';
 import { sendTestMessage } from '../services/telegramNotifier';
 
@@ -151,6 +151,19 @@ const Dashboard: React.FC = () => {
       getInventoryAnalysis(products).then(setAiTip);
     }
   }, [products, aiTip]);
+
+  // --- TESTE TELEGRAM HANDLER ---
+  const handleTestTelegram = () => {
+    // Pergunta o ID ao utilizador. O padrão é o que está no ficheiro constants.ts
+    const id = window.prompt(
+        "Para testar, insira o seu ID de Utilizador do Telegram (o número que recebeu do @userinfobot):", 
+        TELEGRAM_CHAT_ID
+    );
+
+    if (id) {
+        sendTestMessage(id.trim());
+    }
+  };
 
   // --- HANDLERS PRODUCT ---
   const handleEdit = (product: InventoryProduct) => {
@@ -427,7 +440,7 @@ const Dashboard: React.FC = () => {
 
             {/* TESTE TELEGRAM */}
             <button 
-                onClick={sendTestMessage}
+                onClick={handleTestTelegram}
                 className="text-blue-500 hover:text-blue-700 font-medium px-3 py-2 text-sm flex items-center gap-1 border border-blue-100 rounded-lg hover:bg-blue-50"
                 title="Testar Notificação Telegram"
             >
@@ -978,3 +991,4 @@ const KpiCard: React.FC<{ title: string, value: number, icon: React.ReactNode, c
 };
 
 export default Dashboard;
+
