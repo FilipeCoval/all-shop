@@ -8,6 +8,8 @@ import Home from './components/Home';
 import ProductDetails from './components/ProductDetails';
 import About from './components/About';
 import Contact from './components/Contact';
+import Terms from './components/Terms';
+import Privacy from './components/Privacy';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
@@ -15,6 +17,7 @@ import { PRODUCTS, ADMIN_EMAILS } from './constants';
 import { Product, CartItem, User, Order, Review } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
+import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -205,17 +208,25 @@ const App: React.FC = () => {
       setOrders(updatedOrders);
       setCartItems([]); 
 
-      // 2. Grava na BD
+      const customerName = user ? user.name : 'Cliente Anónimo';
+
+      // 2. Grava na BD e Notifica Telegram
       if (user && user.uid) {
           try {
               newOrder.userId = user.uid; 
               await db.collection("orders").doc(newOrder.id).set(newOrder);
+              
+              // Notificar Telegram
+              notifyNewOrder(newOrder, customerName);
           } catch (e) {
               console.error("Erro ao gravar encomenda", e);
           }
       } else {
           try {
              await db.collection("orders").doc(newOrder.id).set(newOrder);
+             
+             // Notificar Telegram (Cliente Anónimo)
+             notifyNewOrder(newOrder, customerName);
           } catch (e) { console.error(e); }
       }
   };
@@ -282,6 +293,10 @@ const App: React.FC = () => {
             return <About />;
         case '#contact':
             return <Contact />;
+        case '#terms':
+            return <Terms />;
+        case '#privacy':
+            return <Privacy />;
         case '#/':
         default:
             return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} />;
@@ -349,8 +364,8 @@ const App: React.FC = () => {
                 <h4 className="text-white font-bold mb-4">Links Úteis</h4>
                 <ul className="space-y-2 text-sm">
                     <li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li>
-                    <li><a href="#" onClick={e => e.preventDefault()} className="hover:text-primary">Termos de Uso</a></li>
-                    <li><a href="#" onClick={e => e.preventDefault()} className="hover:text-primary">Política de Privacidade</a></li>
+                    <li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos de Uso</a></li>
+                    <li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Política de Privacidade</a></li>
                 </ul>
             </div>
             <div>
