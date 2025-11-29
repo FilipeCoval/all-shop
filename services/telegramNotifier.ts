@@ -3,8 +3,8 @@
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, STORE_NAME } from '../constants';
 import { Order } from '../types';
 
-export const notifyNewOrder = async (order: Order, customerName: string) => {
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+export const notifyNewOrder = async (order: Order, customerName: string, targetChatId: string = TELEGRAM_CHAT_ID) => {
+    if (!TELEGRAM_BOT_TOKEN || !targetChatId) {
         console.warn("Telegram Token ou Chat ID não configurados.");
         return;
     }
@@ -39,7 +39,7 @@ ${itemsList}
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                chat_id: TELEGRAM_CHAT_ID,
+                chat_id: targetChatId,
                 text: message,
                 parse_mode: 'Markdown'
             }),
@@ -48,11 +48,14 @@ ${itemsList}
         const data = await response.json();
         if (!data.ok) {
             console.error("Erro Telegram:", data);
+            throw new Error(data.description);
         } else {
             console.log("Notificação Telegram enviada com sucesso.");
+            return true;
         }
     } catch (error) {
         console.error("Falha ao enviar notificação Telegram:", error);
+        throw error;
     }
 };
 
@@ -72,31 +75,20 @@ export const sendTestMessage = async (customId?: string) => {
         return;
     }
 
-    const message = `🔔 *Teste de Notificação* 🔔\n\nO sistema de alertas da ${STORE_NAME} está a funcionar corretamente!\nEnviado para ID: \`${targetChatId}\``;
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    // CRIA UMA ENCOMENDA FICTÍCIA PARA O TESTE
+    const fakeOrder: Order = {
+        id: `TESTE-${Math.floor(Math.random() * 9999)}`,
+        date: new Date().toISOString(),
+        total: 59.99,
+        status: 'Processamento',
+        items: ['1x Xiaomi TV Box S', '1x Cabo HDMI 2.1'],
+        userId: 'teste-user'
+    };
 
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: targetChatId,
-                text: message,
-                parse_mode: 'Markdown'
-            }),
-        });
-
-        const data = await response.json();
-        
-        if (!data.ok) {
-            // MOSTRA O ERRO EXATO DO TELEGRAM
-            alert(`❌ ERRO TELEGRAM:\n${data.description}\n\nCódigo: ${data.error_code}`);
-            console.error("Telegram Error Payload:", data);
-        } else {
-            alert("✅ SUCESSO! Mensagem enviada. Verifique o seu Telegram.");
-        }
+        await notifyNewOrder(fakeOrder, "Cliente Teste", targetChatId);
+        alert("✅ SUCESSO! Simulação de venda enviada. Verifique o seu Telegram para ver como ficou.");
     } catch (error: any) {
-        alert("Erro de conexão: " + error.message);
-        console.error(error);
+        alert(`❌ ERRO TELEGRAM:\n${error.message || 'Verifique a consola'}`);
     }
 };
