@@ -75,6 +75,7 @@ export interface SaleRecord {
   date: string;
   quantity: number;
   unitPrice: number; // O preço a que foi vendido ESTA unidade específica
+  shippingCost?: number; // Custo de envio (Portes) associado a esta venda
   notes?: string; // Ex: "Vendido ao Filipe", "OLX"
 }
 
