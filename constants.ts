@@ -13,11 +13,15 @@ export const SELLER_PHONE = "351999999999"; // WhatsApp (sem +)
 // Exemplo: "https://t.me/+kjsdhfksdf" ou "https://t.me/seunome"
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
 
+// CREDENCIAIS TELEGRAM BOT (Notificações de Venda)
+export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBYs";
+export const TELEGRAM_CHAT_ID = "8486202340"; // ID de destino (Admin)
+
 // LISTA DE ADMINISTRADORES
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
 export const ADMIN_EMAILS = [
-  "filipe_coval_90@hotmail.com",     // Substitua pelo seu email de login
-  "mcpoleca@gmail.com",     // Substitua pelo email do sócio
+  "filipe_Coval_90@hotmail.com",     // Substitua pelo seu email de login
+  "socio@allshop.com",     // Substitua pelo email do sócio
   "filipe@teste.com"       // Exemplo
 ];
 
