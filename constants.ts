@@ -22,7 +22,7 @@ export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBY
 // ==================================================================================
 // ID CONFIRMADO DO UTILIZADOR (ADMIN)
 // ==================================================================================
-export const TELEGRAM_CHAT_ID = "1488102165"; 
+export const TELEGRAM_CHAT_ID = "1003494194252"; 
 
 // LISTA DE ADMINISTRADORES
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
