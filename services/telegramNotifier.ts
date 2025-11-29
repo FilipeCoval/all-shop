@@ -50,25 +50,47 @@ ${order.items.map(i => `• ${i}`).join('\n')}
     }
 };
 
-export const sendTestMessage = async () => {
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+// Função de Teste Melhorada
+// Aceita um ID opcional para testar sem mudar o código
+export const sendTestMessage = async (customId?: string) => {
+    if (!TELEGRAM_BOT_TOKEN) {
+        alert("Erro: Token do Bot não configurado em constants.ts");
+        return;
+    }
 
-    const message = `🔔 *Teste de Notificação* 🔔\n\nO sistema de alertas da ${STORE_NAME} está a funcionar corretamente!`;
+    // Usa o ID passado manualmente OU o que está no ficheiro
+    const targetChatId = customId || TELEGRAM_CHAT_ID;
+
+    if (!targetChatId) {
+        alert("Erro: ID de Chat em falta.");
+        return;
+    }
+
+    const message = `🔔 *Teste de Notificação* 🔔\n\nO sistema de alertas da ${STORE_NAME} está a funcionar corretamente!\nEnviado para ID: \`${targetChatId}\``;
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
     try {
-        await fetch(url, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                chat_id: TELEGRAM_CHAT_ID,
+                chat_id: targetChatId,
                 text: message,
                 parse_mode: 'Markdown'
             }),
         });
-        alert("Mensagem de teste enviada! Verifique o seu Telegram.");
-    } catch (error) {
-        alert("Erro ao enviar teste. Verifique a consola.");
+
+        const data = await response.json();
+        
+        if (!data.ok) {
+            // MOSTRA O ERRO EXATO DO TELEGRAM
+            alert(`❌ ERRO TELEGRAM:\n${data.description}\n\nCódigo: ${data.error_code}`);
+            console.error("Telegram Error Payload:", data);
+        } else {
+            alert("✅ SUCESSO! Mensagem enviada. Verifique o seu Telegram.");
+        }
+    } catch (error: any) {
+        alert("Erro de conexão: " + error.message);
         console.error(error);
     }
 };
