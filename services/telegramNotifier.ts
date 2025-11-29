@@ -1,4 +1,5 @@
 
+
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, STORE_NAME } from '../constants';
 import { Order } from '../types';
 
@@ -9,19 +10,24 @@ export const notifyNewOrder = async (order: Order, customerName: string) => {
     }
 
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total);
-    const dateFormatted = new Date(order.date).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    const dateFormatted = new Date(order.date).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeFormatted = new Date(order.date).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 
+    // Ícones para cada item
+    const itemsList = order.items.map(i => `▫️ ${i}`).join('\n');
+
+    // Layout Estilo Fatura
     const message = `
-🚨 *NOVA VENDA NO SITE!* 🚨
+⚡️ *NOVA VENDA CONFIRMADA* ⚡️
 
-🛒 *Loja:* ${STORE_NAME}
-💰 *Valor:* ${totalFormatted}
 👤 *Cliente:* ${customerName}
-📦 *Produtos:*
-${order.items.map(i => `• ${i}`).join('\n')}
+🆔 *Ref:* ${order.id}
 
-📅 ${dateFormatted}
-🔗 _Aceda ao Dashboard para mais detalhes._
+🛒 *Itens:*
+${itemsList}
+
+💰 *TOTAL: ${totalFormatted}*
+📅 _${dateFormatted} às ${timeFormatted}_
 `;
 
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
