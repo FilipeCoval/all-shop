@@ -20,16 +20,9 @@ export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBY
 // ==================================================================================
 // ⚠️ ATENÇÃO: TELEGRAM_CHAT_ID (Para onde a mensagem vai)
 // ==================================================================================
-// Este número DEVE ser o seu ID pessoal, NÃO o ID do Bot.
-// Para descobrir o seu ID:
-// 1. Abra o Telegram
-// 2. Pesquise por "@userinfobot"
-// 3. Clique em Start ou envie uma mensagem
-// 4. Copie o número que aparece em "Id" (ex: 123456789)
-//
-// Se colocar o ID do Bot aqui, dará erro "Chat not found" ou "Forbidden".
+// ID CONFIRMADO DO UTILIZADOR (ADMIN)
 // ==================================================================================
-export const TELEGRAM_CHAT_ID = "8486202340"; 
+export const TELEGRAM_CHAT_ID = "1488102165"; 
 
 // LISTA DE ADMINISTRADORES
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
