@@ -1,14 +1,16 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck
+  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, CheckCircle, Send
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord } from '../types';
+import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
+import { db } from '../services/firebaseConfig';
+import { sendTestMessage } from '../services/telegramNotifier';
 
 const Dashboard: React.FC = () => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory();
@@ -27,6 +29,12 @@ const Dashboard: React.FC = () => {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [selectedProductForSale, setSelectedProductForSale] = useState<InventoryProduct | null>(null);
   
+  // Notifications State
+  const [notifications, setNotifications] = useState<Order[]>([]);
+  const [showToast, setShowToast] = useState<Order | null>(null);
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // Form State (Product)
   const [formData, setFormData] = useState({
     name: '',
@@ -48,6 +56,43 @@ const Dashboard: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  // --- REAL-TIME SALES NOTIFICATIONS ---
+  useEffect(() => {
+    // Som de notificação (opcional, simples beep)
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+
+    // Data de montagem do componente para ignorar encomendas antigas no load inicial
+    const mountTime = Date.now();
+
+    const unsubscribe = db.collection('orders')
+        .orderBy('date', 'desc')
+        .limit(10)
+        .onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const order = change.doc.data() as Order;
+                    const orderTime = new Date(order.date).getTime();
+                    
+                    // Só notifica se a encomenda foi criada DEPOIS de abrirmos o dashboard (margem de 2s)
+                    if (orderTime > (mountTime - 2000)) {
+                        setNotifications(prev => [order, ...prev]);
+                        setShowToast(order);
+                        
+                        // Tentar tocar som (browsers bloqueiam autoplay às vezes)
+                        if (audioRef.current) {
+                            audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
+                        }
+
+                        // Esconder toast após 5 segundos
+                        setTimeout(() => setShowToast(null), 5000);
+                    }
+                }
+            });
+        });
+
+    return () => unsubscribe();
+  }, []);
 
   // --- KPI CALCULATIONS ---
   const stats = useMemo(() => {
@@ -165,7 +210,12 @@ const Dashboard: React.FC = () => {
     // Preservar dados existentes se estiver a editar
     const existingProduct = products.find(p => p.id === editingId);
     const currentSold = existingProduct ? existingProduct.quantitySold : 0;
-    const currentHistory = existingProduct?.salesHistory || [];
+    
+    // CRÍTICO: Garantir que salesHistory é um array válido e não undefined
+    const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) 
+        ? existingProduct.salesHistory 
+        : [];
+        
     const currentSalePrice = existingProduct ? existingProduct.salePrice : 0;
 
     // Calcular status
@@ -177,14 +227,14 @@ const Dashboard: React.FC = () => {
     const targetPrice = formData.targetSalePrice ? Number(formData.targetSalePrice) : null;
     const publicId = formData.publicProductId ? Number(formData.publicProductId) : null;
 
-    const payload = {
+    const payload: any = {
       name: formData.name,
       category: formData.category,
       publicProductId: publicId,
       purchaseDate: formData.purchaseDate,
       quantityBought: qBought,
       quantitySold: currentSold, 
-      salesHistory: currentHistory || [], // Garante array vazio se undefined
+      salesHistory: safeSalesHistory, // Garante array vazio se undefined
       purchasePrice: Number(formData.purchasePrice) || 0,
       targetSalePrice: targetPrice,
       salePrice: currentSalePrice, 
@@ -192,12 +242,15 @@ const Dashboard: React.FC = () => {
       cashbackStatus: formData.cashbackStatus,
       status
     };
+    
+    // Remover quaisquer chaves undefined (embora a lógica acima deva prevenir)
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
     try {
       if (editingId) {
-        await updateProduct(editingId, payload as any);
+        await updateProduct(editingId, payload);
       } else {
-        await addProduct(payload as any);
+        await addProduct(payload);
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -240,7 +293,7 @@ const Dashboard: React.FC = () => {
           quantity: qty,
           unitPrice: price,
           shippingCost: shipping,
-          notes: saleForm.notes
+          notes: saleForm.notes || '' // Garante string vazia se undefined
       };
 
       const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale];
@@ -295,8 +348,31 @@ const Dashboard: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in">
+    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
       
+      {/* TOAST NOTIFICATION (POPUP) */}
+      {showToast && (
+          <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right">
+              <div className="bg-white border-l-4 border-green-500 shadow-2xl rounded-r-lg p-4 flex items-start gap-3 w-80">
+                  <div className="text-green-500 bg-green-50 p-2 rounded-full">
+                      <DollarSign size={24} />
+                  </div>
+                  <div className="flex-1">
+                      <h4 className="font-bold text-gray-900">Nova Venda Online!</h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                          Pedido #{showToast.id.slice(-6).toUpperCase()}
+                      </p>
+                      <p className="text-lg font-bold text-green-600 mt-1">
+                          {formatCurrency(showToast.total)}
+                      </p>
+                  </div>
+                  <button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600">
+                      <X size={16} />
+                  </button>
+              </div>
+          </div>
+      )}
+
       {/* HEADER */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
@@ -306,7 +382,58 @@ const Dashboard: React.FC = () => {
             </div>
             <h1 className="text-xl font-bold text-gray-900 hidden sm:block">Gestão Backoffice</h1>
           </div>
-          <div className="flex items-center gap-2">
+          
+          <div className="flex items-center gap-3">
+            {/* NOTIFICATIONS BELL */}
+            <div className="relative">
+                <button 
+                    onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"
+                >
+                    <Bell size={20} />
+                    {notifications.length > 0 && (
+                        <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
+                            {notifications.length}
+                        </span>
+                    )}
+                </button>
+
+                {isNotifDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                        <div className="p-3 border-b border-gray-100 bg-gray-50">
+                            <h4 className="text-sm font-bold text-gray-700">Notificações (Sessão Atual)</h4>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {notifications.length === 0 ? (
+                                <p className="p-4 text-center text-xs text-gray-500">Sem novas vendas nesta sessão.</p>
+                            ) : (
+                                notifications.map((n, idx) => (
+                                    <div key={idx} className="p-3 border-b border-gray-100 hover:bg-gray-50 last:border-0">
+                                        <div className="flex justify-between items-start">
+                                            <span className="font-bold text-xs text-indigo-600">#{n.id.slice(-6).toUpperCase()}</span>
+                                            <span className="text-xs text-gray-400">{new Date(n.date).toLocaleTimeString()}</span>
+                                        </div>
+                                        <p className="text-sm font-medium mt-1">Venda: {formatCurrency(n.total)}</p>
+                                        <p className="text-xs text-gray-500 truncate">{n.items.join(', ')}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="h-6 w-px bg-gray-200 mx-1"></div>
+
+            {/* TESTE TELEGRAM */}
+            <button 
+                onClick={sendTestMessage}
+                className="text-blue-500 hover:text-blue-700 font-medium px-3 py-2 text-sm flex items-center gap-1 border border-blue-100 rounded-lg hover:bg-blue-50"
+                title="Testar Notificação Telegram"
+            >
+                <Send size={14} /> <span className="hidden sm:inline">Testar Bot</span>
+            </button>
+
             <button 
                 onClick={() => window.location.hash = '/'}
                 className="text-gray-500 hover:text-gray-700 font-medium px-3 py-2 text-sm"
@@ -851,4 +978,3 @@ const KpiCard: React.FC<{ title: string, value: number, icon: React.ReactNode, c
 };
 
 export default Dashboard;
-
