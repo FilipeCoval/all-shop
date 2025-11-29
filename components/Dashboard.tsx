@@ -3,14 +3,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, CheckCircle, Send
+  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, CheckCircle, Send, PlayCircle, Loader2
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
 import { db } from '../services/firebaseConfig';
-import { sendTestMessage } from '../services/telegramNotifier';
+import { notifyNewOrder, sendTestMessage } from '../services/telegramNotifier';
 
 const Dashboard: React.FC = () => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory();
@@ -34,6 +34,9 @@ const Dashboard: React.FC = () => {
   const [showToast, setShowToast] = useState<Order | null>(null);
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Simulation State
+  const [isSimulating, setIsSimulating] = useState(false);
 
   // Form State (Product)
   const [formData, setFormData] = useState({
@@ -152,10 +155,60 @@ const Dashboard: React.FC = () => {
     }
   }, [products, aiTip]);
 
-  // --- TESTE TELEGRAM HANDLER ---
-  const handleTestTelegram = () => {
-    // Não pergunta mais ID, usa o configurado para simular uma venda real
-    sendTestMessage();
+  // --- SIMULATION MODE ---
+  const handleSimulation = async () => {
+    if (isSimulating) return;
+    
+    if(!window.confirm("🚀 Iniciar Modo Demo?\n\nIsto vai gerar 10 vendas fictícias seguidas para testar as notificações (Dashboard + Telegram).")) return;
+
+    setIsSimulating(true);
+
+    const scenarios = [
+      { name: "João Silva", items: ["1x Xiaomi TV Box S (2ª Gen)"], total: 45.00 },
+      { name: "Maria Santos", items: ["2x Cabo HDMI 2.1"], total: 13.98 },
+      { name: "Pedro Costa", items: ["1x H96 Max M2", "1x Mini Teclado"], total: 42.50 },
+      { name: "Ana Pereira", items: ["3x Xiaomi TV Box S", "3x Cabo HDMI"], total: 155.97 },
+      { name: "Rui Fernandes", items: ["1x Hub USB Ethernet"], total: 7.00 },
+      { name: "Sofia Martins", items: ["2x H96 Max M2"], total: 70.00 },
+      { name: "Tiago Rodrigues", items: ["1x Xiaomi TV Box S (3ª Gen)"], total: 50.00 },
+      { name: "Catarina Lopes", items: ["5x Cabo de Rede Cat8"], total: 62.50 },
+      { name: "Miguel Oliveira", items: ["1x Xiaomi TV Box S", "1x Hub USB"], total: 52.00 },
+      { name: "Beatriz Sousa", items: ["1x H96 Max M2"], total: 35.00 }
+    ];
+
+    try {
+        for (let i = 0; i < scenarios.length; i++) {
+            const s = scenarios[i];
+            const fakeOrder: Order = {
+                id: `DEMO-${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString(),
+                total: s.total,
+                status: 'Processamento',
+                items: s.items,
+                userId: 'demo'
+            };
+
+            // 1. Atualizar UI Localmente (Toast e Lista)
+            // Nota: Não gravamos na BD para não poluir as estatísticas reais
+            setNotifications(prev => [fakeOrder, ...prev]);
+            setShowToast(fakeOrder);
+            if (audioRef.current) audioRef.current.play().catch(() => {});
+
+            // 2. Enviar para Telegram
+            await notifyNewOrder(fakeOrder, s.name);
+
+            // 3. Aguardar 5 segundos (exceto no último)
+            if (i < scenarios.length - 1) {
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        }
+        alert("✅ Simulação terminada!");
+    } catch (e) {
+        console.error(e);
+        alert("Erro na simulação.");
+    } finally {
+        setIsSimulating(false);
+    }
   };
 
   // --- HANDLERS PRODUCT ---
@@ -431,13 +484,21 @@ const Dashboard: React.FC = () => {
 
             <div className="h-6 w-px bg-gray-200 mx-1"></div>
 
-            {/* TESTE TELEGRAM */}
+            {/* SIMULATION MODE BUTTON */}
             <button 
-                onClick={handleTestTelegram}
-                className="text-blue-500 hover:text-blue-700 font-medium px-3 py-2 text-sm flex items-center gap-1 border border-blue-100 rounded-lg hover:bg-blue-50"
-                title="Testar Notificação Telegram"
+                onClick={handleSimulation}
+                disabled={isSimulating}
+                className={`font-medium px-3 py-2 text-sm flex items-center gap-1 border rounded-lg transition-colors
+                    ${isSimulating 
+                        ? 'bg-orange-50 text-orange-600 border-orange-100' 
+                        : 'text-blue-500 hover:text-blue-700 border-blue-100 hover:bg-blue-50'}
+                `}
+                title="Iniciar Simulação de Vendas (Demo)"
             >
-                <Send size={14} /> <span className="hidden sm:inline">Testar Bot</span>
+                {isSimulating ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />} 
+                <span className="hidden sm:inline">
+                    {isSimulating ? 'A Simular...' : 'Modo Demo (10x)'}
+                </span>
             </button>
 
             <button 
