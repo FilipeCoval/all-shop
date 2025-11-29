@@ -159,7 +159,7 @@ const Dashboard: React.FC = () => {
   const handleSimulation = async () => {
     if (isSimulating) return;
     
-    if(!window.confirm("🚀 Iniciar Modo Demo?\n\nIsto vai gerar 10 vendas fictícias seguidas para testar as notificações (Dashboard + Telegram).")) return;
+    if(!window.confirm("🚀 Iniciar Simulação?\n\nIsto vai gerar 10 vendas fictícias seguidas para gravação de ecrã.")) return;
 
     setIsSimulating(true);
 
@@ -180,12 +180,13 @@ const Dashboard: React.FC = () => {
         for (let i = 0; i < scenarios.length; i++) {
             const s = scenarios[i];
             const fakeOrder: Order = {
-                id: `DEMO-${Math.floor(1000 + Math.random() * 9000)}`,
+                // ID Realista: #AS-XXXXXX (Sem DEMO)
+                id: `#AS-${Math.floor(100000 + Math.random() * 900000)}`,
                 date: new Date().toISOString(),
                 total: s.total,
                 status: 'Processamento',
                 items: s.items,
-                userId: 'demo'
+                userId: 'simulated-user'
             };
 
             // 1. Atualizar UI Localmente (Toast e Lista)
@@ -197,15 +198,15 @@ const Dashboard: React.FC = () => {
             // 2. Enviar para Telegram
             await notifyNewOrder(fakeOrder, s.name);
 
-            // 3. Aguardar 5 segundos (exceto no último)
+            // 3. Aguardar 8 segundos (Tempo para ler a notificação no vídeo)
             if (i < scenarios.length - 1) {
-                await new Promise(r => setTimeout(r, 5000));
+                await new Promise(r => setTimeout(r, 8000));
             }
         }
-        alert("✅ Simulação terminada!");
+        // Feedback discreto no final
+        console.log("Simulação terminada");
     } catch (e) {
         console.error(e);
-        alert("Erro na simulação.");
     } finally {
         setIsSimulating(false);
     }
@@ -419,7 +420,7 @@ const Dashboard: React.FC = () => {
                   <div className="flex-1">
                       <h4 className="font-bold text-gray-900">Nova Venda Online!</h4>
                       <p className="text-sm text-gray-600 mt-1">
-                          Pedido #{showToast.id.slice(-6).toUpperCase()}
+                          Pedido {showToast.id.startsWith('#') ? '' : '#'}{showToast.id.toUpperCase()}
                       </p>
                       <p className="text-lg font-bold text-green-600 mt-1">
                           {formatCurrency(showToast.total)}
@@ -469,7 +470,7 @@ const Dashboard: React.FC = () => {
                                 notifications.map((n, idx) => (
                                     <div key={idx} className="p-3 border-b border-gray-100 hover:bg-gray-50 last:border-0">
                                         <div className="flex justify-between items-start">
-                                            <span className="font-bold text-xs text-indigo-600">#{n.id.slice(-6).toUpperCase()}</span>
+                                            <span className="font-bold text-xs text-indigo-600">{n.id.startsWith('#') ? '' : '#'}{n.id.toUpperCase()}</span>
                                             <span className="text-xs text-gray-400">{new Date(n.date).toLocaleTimeString()}</span>
                                         </div>
                                         <p className="text-sm font-medium mt-1">Venda: {formatCurrency(n.total)}</p>
@@ -493,11 +494,11 @@ const Dashboard: React.FC = () => {
                         ? 'bg-orange-50 text-orange-600 border-orange-100' 
                         : 'text-blue-500 hover:text-blue-700 border-blue-100 hover:bg-blue-50'}
                 `}
-                title="Iniciar Simulação de Vendas (Demo)"
+                title="Iniciar Simulação de Vendas (Gravação)"
             >
                 {isSimulating ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />} 
                 <span className="hidden sm:inline">
-                    {isSimulating ? 'A Simular...' : 'Modo Demo (10x)'}
+                    {isSimulating ? 'A Simular...' : 'Simular Vendas'}
                 </span>
             </button>
 
