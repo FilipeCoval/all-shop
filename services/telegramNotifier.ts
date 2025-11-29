@@ -46,9 +46,18 @@ ${itemsList}
         });
 
         const data = await response.json();
+        
         if (!data.ok) {
-            console.error("Erro Telegram:", data);
-            throw new Error(data.description);
+            console.error("Erro Telegram (Raw):", data);
+            
+            // Tratamento de erros específicos para ajudar o utilizador
+            if (data.description.includes("chat not found") || data.error_code === 400) {
+                throw new Error("O BOT NÃO ESTÁ NO GRUPO!\n\nPor favor, vá ao seu grupo do Telegram, clique em 'Adicionar Membro' e adicione o seu Bot.");
+            } else if (data.error_code === 401) {
+                throw new Error("TOKEN INVÁLIDO.\n\nO token do bot em constants.ts está errado.");
+            } else {
+                throw new Error(data.description);
+            }
         } else {
             console.log("Notificação Telegram enviada com sucesso.");
             return true;
@@ -87,8 +96,8 @@ export const sendTestMessage = async (customId?: string) => {
 
     try {
         await notifyNewOrder(fakeOrder, "Cliente Teste", targetChatId);
-        alert("✅ SUCESSO! Simulação de venda enviada. Verifique o seu Telegram para ver como ficou.");
+        alert("✅ SUCESSO! O Bot está configurado corretamente.\n\nVerifique o grupo do Telegram para ver a mensagem.");
     } catch (error: any) {
-        alert(`❌ ERRO TELEGRAM:\n${error.message || 'Verifique a consola'}`);
+        alert(`❌ ERRO TELEGRAM:\n${error.message}`);
     }
 };
