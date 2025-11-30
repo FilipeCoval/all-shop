@@ -68,36 +68,3 @@ ${itemsList}
     }
 };
 
-// Função de Teste Melhorada
-// Aceita um ID opcional para testar sem mudar o código
-export const sendTestMessage = async (customId?: string) => {
-    if (!TELEGRAM_BOT_TOKEN) {
-        alert("Erro: Token do Bot não configurado em constants.ts");
-        return;
-    }
-
-    // Usa o ID passado manualmente OU o que está no ficheiro
-    const targetChatId = customId || TELEGRAM_CHAT_ID;
-
-    if (!targetChatId) {
-        alert("Erro: ID de Chat em falta.");
-        return;
-    }
-
-    // CRIA UMA ENCOMENDA FICTÍCIA PARA O TESTE
-    const fakeOrder: Order = {
-        id: `TESTE-${Math.floor(Math.random() * 9999)}`,
-        date: new Date().toISOString(),
-        total: 59.99,
-        status: 'Processamento',
-        items: ['1x Xiaomi TV Box S', '1x Cabo HDMI 2.1'],
-        userId: 'teste-user'
-    };
-
-    try {
-        await notifyNewOrder(fakeOrder, "Cliente Teste", targetChatId);
-        alert("✅ SUCESSO! O Bot está configurado corretamente.\n\nVerifique o grupo do Telegram para ver a mensagem.");
-    } catch (error: any) {
-        alert(`❌ ERRO TELEGRAM:\n${error.message}`);
-    }
-};
