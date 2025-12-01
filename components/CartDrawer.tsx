@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order } from '../types';
 import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check } from 'lucide-react';
@@ -7,8 +8,8 @@ interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
-  onRemoveItem: (id: number) => void;
-  onUpdateQuantity: (id: number, delta: number) => void;
+  onRemoveItem: (cartItemId: string) => void;
+  onUpdateQuantity: (cartItemId: string, delta: number) => void;
   total: number;
   onCheckout: (order: Order) => void;
 }
@@ -64,9 +65,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
   // Recebe o ID explicitamente para evitar erros de estado assíncrono
   const generateOrderMessage = (orderId: string) => {
-    const itemsList = cartItems.map(item => 
-        `- ${item.quantity}x ${item.name} (${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)})`
-      ).join('\n');
+    const itemsList = cartItems.map(item => {
+        const variantText = item.selectedVariant ? ` [${item.selectedVariant}]` : '';
+        return `- ${item.quantity}x ${item.name}${variantText} (${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)})`;
+    }).join('\n');
   
       const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total);
   
@@ -93,7 +95,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         date: new Date().toISOString(),
         total: total,
         status: 'Processamento',
-        items: cartItems.map(i => `${i.quantity}x ${i.name}`)
+        items: cartItems.map(i => {
+             const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
+             return `${i.quantity}x ${i.name}${variantText}`;
+        })
     };
 
     // 2. Save to history (App.tsx vai gravar no Firebase)
@@ -159,10 +164,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 {checkoutStep === 'cart' && (
                   <div className="space-y-4 animate-fade-in">
                     {cartItems.map((item) => (
-                      <div key={item.id} className="flex gap-4 border-b border-gray-100 pb-4 last:border-0">
+                      <div key={item.cartItemId} className="flex gap-4 border-b border-gray-100 pb-4 last:border-0">
                         <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-md bg-gray-100" />
                         <div className="flex-1">
                           <h4 className="font-medium text-gray-900 line-clamp-1">{item.name}</h4>
+                          {item.selectedVariant && (
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full mb-1 inline-block">
+                                  {item.selectedVariant}
+                              </span>
+                          )}
                           <p className="text-primary font-bold text-sm">
                             {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)}
                           </p>
@@ -170,17 +180,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center border rounded-md">
                               <button 
-                                onClick={() => onUpdateQuantity(item.id, -1)}
+                                onClick={() => onUpdateQuantity(item.cartItemId, -1)}
                                 className="px-2 py-1 text-gray-600 hover:bg-gray-100"
                               >-</button>
                               <span className="px-2 text-sm font-medium">{item.quantity}</span>
                               <button 
-                                onClick={() => onUpdateQuantity(item.id, 1)}
+                                onClick={() => onUpdateQuantity(item.cartItemId, 1)}
                                 className="px-2 py-1 text-gray-600 hover:bg-gray-100"
                               >+</button>
                             </div>
                             <button 
-                              onClick={() => onRemoveItem(item.id)}
+                              onClick={() => onRemoveItem(item.cartItemId)}
                               className="text-red-500 p-1 hover:bg-red-50 rounded"
                             >
                               <Trash2 size={18} />
@@ -355,3 +365,4 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 };
 
 export default CartDrawer;
+
