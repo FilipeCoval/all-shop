@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, CheckCircle, MessageCircle } from 'lucide-react';
-import { TELEGRAM_LINK } from '../constants';
+import { TELEGRAM_LINK, SELLER_PHONE } from '../constants';
 
 const Contact: React.FC = () => {
   const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
@@ -46,16 +46,24 @@ const Contact: React.FC = () => {
                 </div>
             </a>
 
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4 hover:shadow-md transition-shadow">
-                <div className="bg-green-50 p-3 rounded-full text-green-600">
+            {/* WhatsApp Card - Clickable */}
+            <a 
+                href={`https://wa.me/${SELLER_PHONE}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4 hover:shadow-lg hover:border-green-400 transition-all cursor-pointer group"
+            >
+                <div className="bg-green-50 p-3 rounded-full text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
                     <Phone size={24} />
                 </div>
                 <div>
-                    <h3 className="font-bold text-gray-900 mb-1">Telefone / WhatsApp</h3>
+                    <h3 className="font-bold text-gray-900 mb-1">WhatsApp</h3>
                     <p className="text-gray-600 mb-1">+351 933 865 907</p>
-                    <p className="text-sm text-gray-400">Seg-Sex, 9h às 18h</p>
+                    <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                        Clique para falar <span className="text-xs">↗</span>
+                    </p>
                 </div>
-            </div>
+            </a>
 
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4 hover:shadow-md transition-shadow">
                 <div className="bg-gray-50 p-3 rounded-full text-gray-600">
