@@ -1,11 +1,12 @@
 
+
 import React from 'react';
-import { Product } from '../types';
-import { Plus, Eye, AlertTriangle } from 'lucide-react';
+import { Product, ProductVariant } from '../types';
+import { Plus, Eye, AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, variant?: ProductVariant) => void;
   getStock: (productId: number) => number; // Prop adicionada
 }
 
@@ -30,6 +31,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
             const stock = getStock(product.id);
             const isOutOfStock = stock <= 0 && stock !== 999; // 999 é o estado de loading/unmanaged
             const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
+            const hasVariants = product.variants && product.variants.length > 0;
 
             return (
               <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col group relative">
@@ -92,22 +94,37 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                      <span className="text-2xl font-bold text-primary">
-                        {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}
-                      </span>
-                      <button 
-                        onClick={() => !isOutOfStock && onAddToCart(product)}
-                        disabled={isOutOfStock}
-                        className={`p-3 rounded-full transition-colors flex items-center justify-center shadow-lg active:scale-95
-                           ${isOutOfStock 
-                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' 
-                                : 'bg-secondary hover:bg-primary text-white cursor-pointer'
-                           }
-                        `}
-                        aria-label="Adicionar ao carrinho"
-                      >
-                        <Plus size={20} />
-                      </button>
+                      <div className="flex flex-col">
+                        <span className="text-2xl font-bold text-primary">
+                          {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}
+                        </span>
+                        {hasVariants && <span className="text-[10px] text-gray-400">a partir de</span>}
+                      </div>
+
+                      {hasVariants ? (
+                          <button 
+                            onClick={handleProductClick(product.id)}
+                            className="p-3 bg-white border border-secondary text-secondary hover:bg-secondary hover:text-white rounded-full transition-colors flex items-center justify-center shadow-sm active:scale-95 group"
+                            aria-label="Ver opções"
+                            title="Ver Opções"
+                          >
+                            <ArrowRight size={20} className="group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                      ) : (
+                          <button 
+                            onClick={() => !isOutOfStock && onAddToCart(product)}
+                            disabled={isOutOfStock}
+                            className={`p-3 rounded-full transition-colors flex items-center justify-center shadow-lg active:scale-95
+                               ${isOutOfStock 
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' 
+                                    : 'bg-secondary hover:bg-primary text-white cursor-pointer'
+                               }
+                            `}
+                            aria-label="Adicionar ao carrinho"
+                          >
+                            <Plus size={20} />
+                          </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -121,3 +138,4 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
 };
 
 export default ProductList;
+
