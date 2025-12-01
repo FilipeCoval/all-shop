@@ -11,10 +11,11 @@ interface ProductDetailsProps {
   reviews: Review[];
   onAddReview: (review: Review) => void;
   currentUser: User | null;
-  stock?: number; // Prop Opcional (será passada pelo App)
+  // Alteração: Agora recebe a função getStock em vez de um número fixo
+  getStock: (productId: number, variant?: string) => number; 
 }
 
-const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, reviews, onAddReview, currentUser, stock = 999 }) => {
+const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, reviews, onAddReview, currentUser, getStock }) => {
   // Determine the list of images to show (fallback to single image if array is missing)
   const galleryImages = product.images && product.images.length > 0 
     ? product.images 
@@ -48,8 +49,11 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
     window.location.hash = '/';
   };
 
-  const isOutOfStock = stock <= 0 && stock !== 999;
-  const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
+  // Calcular Stock dinâmico com base na variante selecionada
+  const currentStock = getStock(product.id, selectedVariant?.name);
+
+  const isOutOfStock = currentStock <= 0 && currentStock !== 999;
+  const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999;
   
   // Calculate current price based on variant
   const currentPrice = selectedVariant?.price ?? product.price;
@@ -103,14 +107,14 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
               </span>
               
               {/* Stock Status Detail */}
-              {stock !== 999 && (
+              {currentStock !== 999 && (
                   <div className="text-sm font-medium">
                       {isOutOfStock ? (
                           <span className="text-red-600 flex items-center gap-1"><XCircle size={16}/> Indisponível</span>
                       ) : isLowStock ? (
-                          <span className="text-orange-600 flex items-center gap-1 animate-pulse"><AlertTriangle size={16}/> Restam {stock} unidades</span>
+                          <span className="text-orange-600 flex items-center gap-1 animate-pulse"><AlertTriangle size={16}/> Restam {currentStock} unidades</span>
                       ) : (
-                          <span className="text-green-600 flex items-center gap-1"><Check size={16}/> Em Stock ({stock})</span>
+                          <span className="text-green-600 flex items-center gap-1"><Check size={16}/> Em Stock ({currentStock})</span>
                       )}
                   </div>
               )}
