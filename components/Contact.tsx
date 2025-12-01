@@ -52,7 +52,7 @@ const Contact: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-gray-900 mb-1">Telefone / WhatsApp</h3>
-                    <p className="text-gray-600 mb-1">+351 912 345 678</p>
+                    <p className="text-gray-600 mb-1">+351 933 865 907</p>
                     <p className="text-sm text-gray-400">Seg-Sex, 9h às 18h</p>
                 </div>
             </div>
