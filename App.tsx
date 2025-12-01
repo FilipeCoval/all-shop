@@ -127,7 +127,9 @@ const App: React.FC = () => {
 
   const addToCart = (product: Product, variant?: ProductVariant) => {
     // Verificar stock antes de adicionar
-    const currentStock = getStockForProduct(product.id);
+    // Se tiver variante, verifica stock dessa variante. Se não, verifica geral.
+    const currentStock = getStockForProduct(product.id, variant?.name);
+    
     if (currentStock <= 0) {
         alert("Desculpe, este produto acabou de esgotar!");
         return;
@@ -178,7 +180,7 @@ const App: React.FC = () => {
         
         // Validação de stock ao aumentar
         if (delta > 0) {
-            const currentStock = getStockForProduct(item.id);
+            const currentStock = getStockForProduct(item.id, item.selectedVariant);
             if (newQty > currentStock) {
                 alert(`Máximo disponível: ${currentStock}`);
                 return item;
@@ -300,7 +302,7 @@ const App: React.FC = () => {
                     reviews={reviews}
                     onAddReview={handleAddReview}
                     currentUser={user}
-                    stock={getStockForProduct(product.id)}
+                    getStock={getStockForProduct} // Pass function instead of static number
                 />
             );
         }
