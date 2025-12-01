@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers
+  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers, CheckCircle
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
@@ -215,6 +215,12 @@ const Dashboard: React.FC = () => {
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validação extra para variantes
+    if (selectedPublicProductVariants.length > 0 && !formData.variant) {
+        alert("Este produto tem variantes (ex: Potência, Cor). Por favor selecione qual variante está a registar.");
+        return;
+    }
+
     const qBought = Number(formData.quantityBought) || 0;
     
     // Preservar dados existentes se estiver a editar
@@ -711,57 +717,57 @@ const Dashboard: React.FC = () => {
             
             <form onSubmit={handleProductSubmit} className="p-6 space-y-6">
               
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex gap-3">
-                  <AlertCircle className="flex-shrink-0" size={20} />
-                  <p>
-                      <strong>Organização:</strong> Crie registos separados (Lotes) se comprar o mesmo produto com preços diferentes ou variantes diferentes.
-                  </p>
-              </div>
-
-              {/* Ligar ao Produto do Site */}
+              {/* PASSO 1: IDENTIFICAÇÃO DO PRODUTO (MOVIDO PARA O TOPO) */}
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                  <div className="flex items-center gap-2 mb-3">
+                     <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">PASSO 1</span>
+                     <h4 className="font-bold text-blue-900 text-sm">Identificação do Produto</h4>
+                  </div>
+                  
                   <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
-                      <LinkIcon size={16} /> Produto da Loja (Para controle de Stock)
+                      <LinkIcon size={16} /> Selecione o Produto da Loja
                   </label>
                   <select 
                       value={formData.publicProductId} 
                       onChange={handlePublicProductSelect}
-                      className="input-field border-blue-200 focus:ring-blue-500"
+                      className="input-field border-blue-200 focus:ring-blue-500 mb-2 font-medium"
                   >
-                      <option value="">-- Apenas registo interno (Sem link ao site) --</option>
+                      <option value="">-- Produto Novo / Genérico (Sem link ao site) --</option>
                       {PRODUCTS.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                   </select>
+                  <p className="text-xs text-blue-600 mb-4">Isto permite que o site saiba que tem stock deste produto para vender.</p>
 
                   {/* VARIANT SELECTOR - SÓ APARECE SE TIVER VARIANTES */}
                   {selectedPublicProductVariants.length > 0 && (
-                      <div className="mt-4 animate-fade-in">
+                      <div className="bg-white p-3 rounded-lg border-2 border-blue-200 animate-fade-in">
                           <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
-                            <Layers size={16} /> Variante do Produto (Importante para Stock Correto)
+                            <Layers size={16} /> Qual a Variante deste Lote?
                           </label>
                           <select 
+                            required
                             value={formData.variant} 
                             onChange={(e) => setFormData({...formData, variant: e.target.value})}
-                            className="input-field border-blue-200 focus:ring-blue-500"
+                            className="input-field border-blue-300 focus:ring-blue-500 font-bold text-gray-800"
                           >
-                              <option value="">-- Lote Genérico (Sem Variante) --</option>
+                              <option value="">-- SELECIONE UMA OPÇÃO --</option>
                               {selectedPublicProductVariants.map((v, idx) => (
                                   <option key={idx} value={v.name}>{v.name}</option>
                               ))}
                           </select>
-                          <p className="text-[10px] text-blue-600 mt-1">
-                              Escolha "33W", "67W", etc., para que o site saiba baixar o stock da variante correta.
+                          <p className="text-[10px] text-red-500 mt-1 font-bold flex items-center gap-1">
+                              <AlertCircle size={10} /> Obrigatório: Se não escolher a opção certa (ex: 33W), o site não vai atualizar o stock.
                           </p>
                       </div>
                   )}
               </div>
 
-              {/* Secção Geral */}
+              {/* PASSO 2: DETALHES GERAIS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Lote</label>
-                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi TV Box - Compra Worten" />
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Lote (Interno)</label>
+                   <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" placeholder="Ex: Xiaomi Carregadores - Encomenda AliExpress #203" />
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
@@ -773,9 +779,9 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Secção Quantidades e Custos */}
+              {/* PASSO 3: CUSTOS E QUANTIDADES */}
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Package size={16} /> Custo & Stock</h4>
+                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Package size={16} /> Quantidade & Custo</h4>
                 <div className="grid grid-cols-2 gap-4">
                    <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Qtd Comprada</label>
@@ -788,14 +794,13 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Secção Previsão e Cashback */}
+              {/* PASSO 4: PREVISÃO E CASHBACK */}
               <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                 <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><ArrowUpRight size={16} /> Venda & Retorno</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div>
                       <label className="block text-sm font-bold text-indigo-800 mb-1">Preço Venda Alvo (€)</label>
                       <input type="number" step="0.01" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} className="input-field border-indigo-300 focus:ring-indigo-500 bg-white" placeholder="Por quanto vai vender?" />
-                      <p className="text-[10px] text-indigo-600 mt-1">Define a sua margem prevista.</p>
                    </div>
                    <div className="hidden md:block"></div> {/* Spacer */}
                    
