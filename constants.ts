@@ -8,7 +8,7 @@ export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
 // Contactos para Checkout
-export const SELLER_PHONE = "351999999999"; // WhatsApp (sem +)
+export const SELLER_PHONE = "351933865907"; // WhatsApp (sem +)
 
 // Coloque aqui o link do seu Grupo, Canal ou Utilizador do Telegram
 // Exemplo: "https://t.me/+kjsdhfksdf" ou "https://t.me/seunome"
