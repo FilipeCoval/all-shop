@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
@@ -28,15 +29,27 @@ export const useStock = () => {
   }, []);
 
   // Função que calcula o stock real de um produto público
-  // Soma todas as compras e subtrai todas as vendas de todos os lotes ligados a esse ID
-  const getStockForProduct = (publicId: number): number => {
+  // Se 'variantName' for fornecido, filtra apenas os lotes dessa variante.
+  // Se não for, soma TUDO (útil para listagens gerais).
+  const getStockForProduct = (publicId: number, variantName?: string): number => {
     if (loading) return 999; // Assume stock infinito enquanto carrega para não bloquear UI
 
-    const relevantBatches = inventory.filter(p => p.publicProductId === publicId);
+    const relevantBatches = inventory.filter(p => {
+        const isSameProduct = p.publicProductId === publicId;
+        if (!isSameProduct) return false;
+
+        // Se o frontend pede uma variante específica (ex: "33W")
+        if (variantName) {
+            // Só retorna lotes que ou têm essa variante exata OU não têm variante definida (genéricos)
+            // Mas idealmente, se o produto tem variantes, os lotes devem ter variante.
+            return p.variant === variantName;
+        }
+
+        // Se não pede variante, retorna tudo deste produto
+        return true;
+    });
     
     // Se não houver registos no inventário ligados a este produto, assumimos que há stock (modo não gerido)
-    // Para forçar "Esgotado" se não houver registo, mude para return 0;
-    // Aqui retornamos 999 para produtos que ainda não adicionou ao Dashboard não ficarem indisponíveis.
     if (relevantBatches.length === 0) return 999; 
 
     const totalStock = relevantBatches.reduce((acc, batch) => {
