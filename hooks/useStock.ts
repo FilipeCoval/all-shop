@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
