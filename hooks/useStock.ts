@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
@@ -40,9 +39,9 @@ export const useStock = () => {
 
         // Se o frontend pede uma variante específica (ex: "33W")
         if (variantName) {
-            // Normaliza as strings (trim) para evitar erros com espaços invisíveis
-            const inventoryVariant = (p.variant || '').trim();
-            const requestedVariant = variantName.trim();
+            // Normaliza as strings (trim e lowercase) para evitar erros com espaços invisíveis ou letras maiusculas
+            const inventoryVariant = (p.variant || '').trim().toLowerCase();
+            const requestedVariant = variantName.trim().toLowerCase();
             
             // Só retorna lotes que ou têm essa variante exata
             return inventoryVariant === requestedVariant;
@@ -65,4 +64,3 @@ export const useStock = () => {
 
   return { getStockForProduct, loading };
 };
-
