@@ -97,7 +97,8 @@ export interface InventoryProduct {
   purchaseDate: string; // YYYY-MM-DD
   
   // Link ao Produto Público (Opcional, mas recomendado para sync de stock)
-  publicProductId?: number; 
+  publicProductId?: number;
+  variant?: string; // NOVO: Nome da variante (ex: "33W") para stock específico
 
   // Quantidades
   quantityBought: number; // Quantidade total comprada
