@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote } from 'lucide-react';
 import Header from './components/Header';
@@ -14,7 +15,7 @@ import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { PRODUCTS, ADMIN_EMAILS } from './constants';
-import { Product, CartItem, User, Order, Review } from './types';
+import { Product, CartItem, User, Order, Review, ProductVariant } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { notifyNewOrder } from './services/telegramNotifier';
@@ -124,7 +125,7 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, variant?: ProductVariant) => {
     // Verificar stock antes de adicionar
     const currentStock = getStockForProduct(product.id);
     if (currentStock <= 0) {
@@ -132,8 +133,17 @@ const App: React.FC = () => {
         return;
     }
 
+    // Definir preço e nome com base na variante
+    const finalPrice = variant?.price ?? product.price;
+    const variantName = variant?.name;
+    
+    // Criar um ID único para o item no carrinho (Produto + Variante)
+    const cartItemId = variantName 
+        ? `${product.id}-${variantName}` 
+        : `${product.id}`;
+
     setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const existing = prev.find(item => item.cartItemId === cartItemId);
       if (existing) {
         // Verifica se adicionar +1 ultrapassa o stock
         if (existing.quantity + 1 > currentStock) {
@@ -141,26 +151,34 @@ const App: React.FC = () => {
             return prev;
         }
         return prev.map(item => 
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      
+      // Adicionar novo item
+      return [...prev, { 
+          ...product, 
+          price: finalPrice, // Usa o preço da variante se existir
+          selectedVariant: variantName,
+          cartItemId: cartItemId,
+          quantity: 1 
+      }];
     });
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (id: number) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (cartItemId: string) => {
+    setCartItems(prev => prev.filter(item => item.cartItemId !== cartItemId));
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (cartItemId: string, delta: number) => {
     setCartItems(prev => prev.map(item => {
-      if (item.id === id) {
+      if (item.cartItemId === cartItemId) {
         const newQty = item.quantity + delta;
         
         // Validação de stock ao aumentar
         if (delta > 0) {
-            const currentStock = getStockForProduct(id);
+            const currentStock = getStockForProduct(item.id);
             if (newQty > currentStock) {
                 alert(`Máximo disponível: ${currentStock}`);
                 return item;
