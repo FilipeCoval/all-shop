@@ -1,12 +1,13 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { Product, Review, User } from '../types';
-import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle } from 'lucide-react';
+import { Product, Review, User, ProductVariant } from '../types';
+import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, ChevronDown } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 
 interface ProductDetailsProps {
   product: Product;
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, variant?: ProductVariant) => void;
   reviews: Review[];
   onAddReview: (review: Review) => void;
   currentUser: User | null;
@@ -20,11 +21,27 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
     : [product.image];
 
   const [mainImage, setMainImage] = useState(galleryImages[0]);
+  
+  // State for Variants
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
 
-  // Reset main image when product changes
+  // Reset main image and variant when product changes
   useEffect(() => {
     setMainImage(galleryImages[0]);
+    // Selecionar a primeira variante por defeito se existirem
+    if (product.variants && product.variants.length > 0) {
+        setSelectedVariant(product.variants[0]);
+    } else {
+        setSelectedVariant(null);
+    }
   }, [product]);
+
+  // Effect to change main image when variant changes (if variant has specific image)
+  useEffect(() => {
+      if (selectedVariant && selectedVariant.image) {
+          setMainImage(selectedVariant.image);
+      }
+  }, [selectedVariant]);
 
   const handleBack = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -33,6 +50,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
 
   const isOutOfStock = stock <= 0 && stock !== 999;
   const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
+  
+  // Calculate current price based on variant
+  const currentPrice = selectedVariant?.price ?? product.price;
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 animate-fade-in">
@@ -99,19 +119,42 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{product.name}</h1>
             
             <div className="flex items-center gap-4 mb-6">
-              <span className="text-3xl font-bold text-primary">
-                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}
+              <span className="text-3xl font-bold text-primary animate-fade-in">
+                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}
               </span>
               <span className="text-sm text-gray-500 line-through">
-                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price * 1.2)}
+                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice * 1.2)}
               </span>
             </div>
 
-            <p className="text-gray-600 text-lg leading-relaxed mb-8">
-              {product.description} Este produto é projetado para exceder expectativas, 
-              combinando materiais premium com desempenho de ponta para entregar uma experiência 
-              excepcional ao utilizador.
+            <p className="text-gray-600 text-lg leading-relaxed mb-6">
+              {product.description}
             </p>
+
+            {/* VARIANT SELECTOR */}
+            {product.variants && product.variants.length > 0 && (
+                <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
+                        {product.variantLabel || "Escolha uma Opção"}:
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                        {product.variants.map((v, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setSelectedVariant(v)}
+                                className={`px-4 py-2 rounded-lg font-medium border-2 transition-all flex items-center gap-2
+                                    ${selectedVariant?.name === v.name 
+                                        ? 'border-primary bg-white text-primary shadow-sm' 
+                                        : 'border-transparent bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                    }
+                                `}
+                            >
+                                {v.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="space-y-4 mb-8">
               <h3 className="font-bold text-gray-900">Destaques:</h3>
@@ -127,7 +170,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ product, onAddToCart, r
 
             <div className="flex flex-col sm:flex-row gap-4 mt-auto">
               <button 
-                onClick={() => !isOutOfStock && onAddToCart(product)}
+                onClick={() => !isOutOfStock && onAddToCart(product, selectedVariant || undefined)}
                 disabled={isOutOfStock}
                 className={`flex-1 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 active:scale-95
                     ${isOutOfStock 
