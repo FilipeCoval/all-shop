@@ -33,6 +33,26 @@ export const ADMIN_EMAILS = [
   "filipe@teste.com"       // Exemplo
 ];
 
+/* 
+  📝 COMO ADICIONAR NOVO PRODUTO COM VARIANTES:
+  
+  {
+    id: 99,
+    name: "Carregador Xiaomi",
+    price: 15.00, // Preço base (exibido na lista)
+    description: "Carregador rápido...",
+    category: "Acessórios",
+    image: "...",
+    features: ["Turbo Charge", "Cabo incluído"],
+    variantLabel: "Escolha a Potência", // Título da escolha
+    variants: [
+       { name: "33W", price: 15.00 },
+       { name: "67W", price: 25.00 }, // Preço diferente
+       { name: "120W", price: 35.00 }
+    ]
+  },
+*/
+
 export const PRODUCTS: Product[] = [
   {
     id: 6,
@@ -111,5 +131,37 @@ export const PRODUCTS: Product[] = [
         "https://img.kwcdn.com/product/fancy/ee3ca530-c421-47db-80b2-a2b74dbd7709.jpg?imageView2/2/w/800/q/70/format/avif"
     ],
     features: ["Gigabit Ethernet (1000Mbps)", "USB 3.0 Rápido", "Plug & Play", "Design Compacto"]
+  },
+  {
+    id: 7,
+    name: "Carregador Xiaomi HyperCharge (Kit c/ Cabo)",
+    price: 5.99, // Preço base (da versão mais barata)
+    description: "Carregamento ultra-rápido para o seu Xiaomi. Disponível em várias potências para se adaptar ao seu modelo. Inclui cabo USB-C Turbo de 6A.",
+    category: "Acessórios",
+    image: "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close",
+    images: [
+        "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close",
+        "https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg",
+        "https://s.alicdn.com/@sc04/kf/H6194355092934d33aa1e0c39f9199e66m.jpg?avif=close&webp=close"
+    ],
+    features: ["Tecnologia GaN", "Proteção Contra Sobrecarga", "Inclui Cabo 6A", "Original Xiaomi"],
+    variantLabel: "Escolha a Potência",
+    variants: [
+        { 
+            name: "33W Turbo", 
+            price: 5.99, 
+            image: "https://s.alicdn.com/@sc04/kf/H6194355092934d33aa1e0c39f9199e66m.jpg?avif=close&webp=close"
+        },
+        { 
+            name: "67W Max", 
+            price: 9.99,
+            image: "https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg"
+        },
+        { 
+            name: "120W HyperCharge", 
+            price: 14.99,
+            image: "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close"
+        }
+    ]
   }
 ];
