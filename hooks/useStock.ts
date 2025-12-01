@@ -1,122 +1,68 @@
 
 
-export interface ProductVariant {
-  name: string;      // Ex: "33W", "Preto", "128GB"
-  price?: number;    // Preço específico desta variante (se for null, usa o preço base)
-  stock?: number;    // Stock específico (opcional para já)
-  image?: string;    // Imagem específica desta variante
-}
+import { useState, useEffect } from 'react';
+import { db } from '../services/firebaseConfig';
+import { InventoryProduct } from '../types';
 
-export interface Product {
-  id: number;
-  name: string;
-  price: number;
-  description: string;
-  category: string;
-  image: string;
-  images?: string[];
-  features: string[];
-  variants?: ProductVariant[]; // Lista de opções
-  variantLabel?: string;       // Texto da escolha, ex: "Escolha a Potência" ou "Cor"
-}
+export const useStock = () => {
+  const [inventory, setInventory] = useState<InventoryProduct[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export interface CartItem extends Product {
-  quantity: number;
-  selectedVariant?: string; // Nome da variante escolhida
-  cartItemId: string;       // ID único no carrinho (ex: "ID_PRODUTO-VARIANTE") para distinguir
-}
+  useEffect(() => {
+    // Subscrever à coleção 'products_inventory' para ter dados sempre frescos
+    const unsubscribe = db.collection('products_inventory').onSnapshot(
+      (snapshot) => {
+        const items: InventoryProduct[] = [];
+        snapshot.forEach((doc) => {
+          items.push({ id: doc.id, ...doc.data() } as InventoryProduct);
+        });
+        setInventory(items);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Erro ao ler stock:", error);
+        setLoading(false);
+      }
+    );
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-  timestamp: Date;
-}
+    return () => unsubscribe();
+  }, []);
 
-export interface UserCheckoutInfo {
-  name: string;
-  address: string;
-  paymentMethod: string;
-}
+  // Função que calcula o stock real de um produto público
+  // Se 'variantName' for fornecido, filtra apenas os lotes dessa variante.
+  // Se não for, soma TUDO (útil para listagens gerais).
+  const getStockForProduct = (publicId: number, variantName?: string): number => {
+    if (loading) return 999; // Assume stock infinito enquanto carrega para não bloquear UI
 
-export interface Address {
-  id: string;
-  alias: string; // ex: "Casa", "Trabalho"
-  street: string;
-  city: string;
-  zip: string;
-  userId?: string; // Ligação ao ID do Firebase
-}
+    const relevantBatches = inventory.filter(p => {
+        const isSameProduct = p.publicProductId === publicId;
+        if (!isSameProduct) return false;
 
-export interface User {
-  uid?: string; // ID único do Firebase
-  name: string;
-  email: string;
-  phone?: string;
-  nif?: string;
-  addresses: Address[];
-}
+        // Se o frontend pede uma variante específica (ex: "33W")
+        if (variantName) {
+            // Normaliza as strings (trim) para evitar erros com espaços invisíveis
+            const inventoryVariant = (p.variant || '').trim();
+            const requestedVariant = variantName.trim();
+            
+            // Só retorna lotes que ou têm essa variante exata
+            return inventoryVariant === requestedVariant;
+        }
 
-export interface Order {
-  id: string;
-  date: string;
-  total: number;
-  status: 'Processamento' | 'Enviado' | 'Entregue';
-  items: string[];
-  userId?: string; // Para ligar a encomenda ao utilizador real
-}
+        // Se não pede variante, retorna tudo deste produto
+        return true;
+    });
+    
+    // Se não houver registos no inventário ligados a este produto, assumimos que há stock (modo não gerido)
+    if (relevantBatches.length === 0) return 999; 
 
-export interface Review {
-  id: string;
-  productId: number;
-  userName: string;
-  rating: number; // 1 a 5
-  comment: string;
-  date: string;
-  images: string[]; // Base64 strings
-}
+    const totalStock = relevantBatches.reduce((acc, batch) => {
+      const remaining = batch.quantityBought - batch.quantitySold;
+      return acc + Math.max(0, remaining);
+    }, 0);
 
-// --- BACKOFFICE / DASHBOARD TYPES ---
+    return totalStock;
+  };
 
-export type ProductStatus = 'IN_STOCK' | 'SOLD' | 'PARTIAL';
-export type CashbackStatus = 'PENDING' | 'RECEIVED' | 'NONE';
+  return { getStockForProduct, loading };
+};
 
-export interface SaleRecord {
-  id: string;
-  date: string;
-  quantity: number;
-  unitPrice: number; // O preço a que foi vendido ESTA unidade específica
-  shippingCost?: number; // Custo de envio (Portes) associado a esta venda
-  notes?: string; // Ex: "Vendido ao Filipe", "OLX"
-}
-
-export interface InventoryProduct {
-  id: string; // Firebase Doc ID
-  name: string;
-  category: string;
-  purchaseDate: string; // YYYY-MM-DD
-  
-  // Link ao Produto Público (Opcional, mas recomendado para sync de stock)
-  publicProductId?: number;
-  variant?: string; // NOVO: Nome da variante (ex: "33W") para stock específico
-
-  // Quantidades
-  quantityBought: number; // Quantidade total comprada
-  quantitySold: number;   // Quantidade já vendida (Calculado ou manual)
-
-  // Valores Unitários (IMPORTANTE: Unitários)
-  purchasePrice: number; // Custo por unidade
-  targetSalePrice?: number; // Preço alvo/estimado de venda
-  
-  salePrice: number;    // Preço MÉDIO ou Último Preço (para compatibilidade)
-  
-  // Histórico de Vendas (NOVO - Para resolver o problema de preços variados)
-  salesHistory?: SaleRecord[];
-
-  // Cashback (Valor total da compra)
-  cashbackValue: number;
-  cashbackStatus: CashbackStatus;
-  
-  // Estado
-  status: ProductStatus;
-}
