@@ -1,5 +1,12 @@
 
 
+export interface ProductVariant {
+  name: string;      // Ex: "33W", "Preto", "128GB"
+  price?: number;    // Preço específico desta variante (se for null, usa o preço base)
+  stock?: number;    // Stock específico (opcional para já)
+  image?: string;    // Imagem específica desta variante
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -9,10 +16,14 @@ export interface Product {
   image: string;
   images?: string[];
   features: string[];
+  variants?: ProductVariant[]; // Lista de opções
+  variantLabel?: string;       // Texto da escolha, ex: "Escolha a Potência" ou "Cor"
 }
 
 export interface CartItem extends Product {
   quantity: number;
+  selectedVariant?: string; // Nome da variante escolhida
+  cartItemId: string;       // ID único no carrinho (ex: "ID_PRODUTO-VARIANTE") para distinguir
 }
 
 export interface ChatMessage {
