@@ -1,9 +1,10 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell
+  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
@@ -39,6 +40,7 @@ const Dashboard: React.FC = () => {
     name: '',
     category: '',
     publicProductId: '' as string,
+    variant: '', // NOVO CAMPO
     purchaseDate: new Date().toISOString().split('T')[0],
     quantityBought: '',
     purchasePrice: '',
@@ -47,11 +49,18 @@ const Dashboard: React.FC = () => {
     cashbackStatus: 'NONE' as CashbackStatus
   });
 
+  // Derived state for variants dropdown in form
+  const selectedPublicProductVariants = useMemo(() => {
+      if (!formData.publicProductId) return [];
+      const prod = PRODUCTS.find(p => p.id === Number(formData.publicProductId));
+      return prod?.variants || [];
+  }, [formData.publicProductId]);
+
   // Form State (Sale)
   const [saleForm, setSaleForm] = useState({
     quantity: '1',
     unitPrice: '',
-    shippingCost: '', // NOVO CAMPO: PORTES
+    shippingCost: '', 
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
@@ -158,6 +167,7 @@ const Dashboard: React.FC = () => {
       name: product.name,
       category: product.category,
       publicProductId: product.publicProductId ? product.publicProductId.toString() : '',
+      variant: product.variant || '',
       purchaseDate: product.purchaseDate,
       quantityBought: product.quantityBought.toString(),
       purchasePrice: product.purchasePrice.toString(),
@@ -174,6 +184,7 @@ const Dashboard: React.FC = () => {
       name: '',
       category: 'TV Box',
       publicProductId: '',
+      variant: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       quantityBought: '',
       purchasePrice: '',
@@ -186,7 +197,7 @@ const Dashboard: React.FC = () => {
 
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const selectedId = e.target.value;
-      setFormData(prev => ({ ...prev, publicProductId: selectedId }));
+      setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' }));
 
       if (selectedId) {
           const publicProd = PRODUCTS.find(p => p.id === Number(selectedId));
@@ -230,6 +241,7 @@ const Dashboard: React.FC = () => {
       name: formData.name,
       category: formData.category,
       publicProductId: publicId,
+      variant: formData.variant || null,
       purchaseDate: formData.purchaseDate,
       quantityBought: qBought,
       quantitySold: currentSold, 
@@ -584,7 +596,12 @@ const Dashboard: React.FC = () => {
                                 {p.name}
                                 {p.publicProductId && <LinkIcon size={12} className="text-indigo-400 flex-shrink-0" />}
                             </div>
-                            <div className="text-xs text-gray-500">{new Date(p.purchaseDate).toLocaleDateString()}</div>
+                            {p.variant && (
+                                <span className="inline-block bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded mt-1">
+                                    {p.variant}
+                                </span>
+                            )}
+                            <div className="text-xs text-gray-500 mt-0.5">{new Date(p.purchaseDate).toLocaleDateString()}</div>
                         </td>
 
                         <td className="px-4 py-4 w-32">
@@ -697,7 +714,7 @@ const Dashboard: React.FC = () => {
               <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 flex gap-3">
                   <AlertCircle className="flex-shrink-0" size={20} />
                   <p>
-                      <strong>Organização:</strong> Crie registos separados (Lotes) se comprar o mesmo produto com preços diferentes. Ex: "Xiaomi Box Lote Jan" e "Xiaomi Box Lote Fev".
+                      <strong>Organização:</strong> Crie registos separados (Lotes) se comprar o mesmo produto com preços diferentes ou variantes diferentes.
                   </p>
               </div>
 
@@ -716,6 +733,28 @@ const Dashboard: React.FC = () => {
                           <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                   </select>
+
+                  {/* VARIANT SELECTOR - SÓ APARECE SE TIVER VARIANTES */}
+                  {selectedPublicProductVariants.length > 0 && (
+                      <div className="mt-4 animate-fade-in">
+                          <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
+                            <Layers size={16} /> Variante do Produto (Importante para Stock Correto)
+                          </label>
+                          <select 
+                            value={formData.variant} 
+                            onChange={(e) => setFormData({...formData, variant: e.target.value})}
+                            className="input-field border-blue-200 focus:ring-blue-500"
+                          >
+                              <option value="">-- Lote Genérico (Sem Variante) --</option>
+                              {selectedPublicProductVariants.map((v, idx) => (
+                                  <option key={idx} value={v.name}>{v.name}</option>
+                              ))}
+                          </select>
+                          <p className="text-[10px] text-blue-600 mt-1">
+                              Escolha "33W", "67W", etc., para que o site saiba baixar o stock da variante correta.
+                          </p>
+                      </div>
+                  )}
               </div>
 
               {/* Secção Geral */}
@@ -798,7 +837,10 @@ const Dashboard: React.FC = () => {
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <DollarSign /> Registrar Venda
                     </h3>
-                    <p className="text-green-100 text-sm mt-1">{selectedProductForSale.name}</p>
+                    <p className="text-green-100 text-sm mt-1">
+                        {selectedProductForSale.name}
+                        {selectedProductForSale.variant && ` (${selectedProductForSale.variant})`}
+                    </p>
                 </div>
                 
                 <form onSubmit={handleSaleSubmit} className="p-6 space-y-5">
