@@ -1,13 +1,14 @@
 
+
 import React, { useState } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail } from 'lucide-react';
 import ProductList from './ProductList';
-import { Product } from '../types';
+import { Product, ProductVariant } from '../types';
 import { db } from '../services/firebaseConfig';
 
 interface HomeProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, variant?: ProductVariant) => void;
   getStock: (productId: number) => number; // Prop adicionada
 }
 
