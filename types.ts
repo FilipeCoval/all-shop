@@ -37,6 +37,7 @@ export interface UserCheckoutInfo {
   name: string;
   address: string;
   paymentMethod: string;
+  phone?: string;
 }
 
 export interface Address {
@@ -64,6 +65,13 @@ export interface Order {
   status: 'Processamento' | 'Enviado' | 'Entregue';
   items: string[];
   userId?: string; // Para ligar a encomenda ao utilizador real
+  // Dados de Envio guardados na encomenda
+  shippingInfo?: {
+    name: string;
+    address: string;
+    paymentMethod: string;
+    phone?: string;
+  };
 }
 
 export interface Review {
