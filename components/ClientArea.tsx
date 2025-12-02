@@ -1,19 +1,23 @@
 
+
 import React, { useState } from 'react';
-import { User, Order, Address } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText } from 'lucide-react';
-import { STORE_NAME, LOGO_URL } from '../constants';
+import { User, Order, Address, Product, ProductVariant } from '../types';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart } from 'lucide-react';
+import { STORE_NAME, LOGO_URL, PRODUCTS } from '../constants';
 
 interface ClientAreaProps {
   user: User;
   orders: Order[];
   onLogout: () => void;
   onUpdateUser: (user: User) => void;
+  wishlist: number[];
+  onToggleWishlist: (id: number) => void;
+  onAddToCart: (product: Product, variant?: ProductVariant) => void;
 }
 
-type ActiveTab = 'orders' | 'profile' | 'addresses';
+type ActiveTab = 'orders' | 'profile' | 'addresses' | 'wishlist';
 
-const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser }) => {
+const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('orders');
   
   // State for Profile Form
@@ -64,6 +68,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       if (id.startsWith('#')) return id;
       return `#${id.slice(-6).toUpperCase()}`;
   };
+
+  // Wishlist Products Logic
+  const favoriteProducts = PRODUCTS.filter(p => wishlist.includes(p.id));
 
   // Função para Gerar o Documento de Garantia/Comprovativo
   const handlePrintOrder = (order: Order) => {
@@ -259,6 +266,13 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               <Package size={20} /> Minhas Encomendas
             </button>
             <button 
+                onClick={() => setActiveTab('wishlist')}
+                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
+                ${activeTab === 'wishlist' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
+            >
+              <Heart size={20} /> Favoritos
+            </button>
+            <button 
                 onClick={() => setActiveTab('profile')}
                 className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
                 ${activeTab === 'profile' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
@@ -344,6 +358,53 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         Ir para a Loja
                     </a>
                 </div>
+                )}
+            </div>
+          )}
+
+          {/* --- WISHLIST TAB --- */}
+          {activeTab === 'wishlist' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
+                 <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                    <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                        <Heart className="text-primary" /> Os Meus Favoritos
+                    </h3>
+                </div>
+                
+                {favoriteProducts.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <p className="text-gray-500 mb-4">Ainda não guardou nenhum produto.</p>
+                        <button onClick={() => window.location.hash = '/'} className="text-primary font-bold hover:underline">
+                            Explorar Loja
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
+                        {favoriteProducts.map(product => (
+                            <div key={product.id} className="border border-gray-200 rounded-xl p-4 flex gap-4 items-center relative group hover:border-blue-200 transition-colors">
+                                <img src={product.image} alt={product.name} className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-gray-900 line-clamp-1">{product.name}</h4>
+                                    <p className="text-primary font-bold text-lg">
+                                        {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}
+                                    </p>
+                                    <button 
+                                        onClick={() => onAddToCart(product)}
+                                        className="mt-2 text-xs bg-secondary text-white px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-primary transition-colors"
+                                    >
+                                        <ShoppingCart size={12} /> Adicionar
+                                    </button>
+                                </div>
+                                <button 
+                                    onClick={() => onToggleWishlist(product.id)}
+                                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                    title="Remover"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
           )}
