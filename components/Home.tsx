@@ -9,10 +9,12 @@ import { db } from '../services/firebaseConfig';
 interface HomeProps {
   products: Product[];
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
-  getStock: (productId: number) => number; // Prop adicionada
+  getStock: (productId: number) => number;
+  wishlist: number[];
+  onToggleWishlist: (id: number) => void;
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist }) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
@@ -119,7 +121,13 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock }) => {
           </div>
       </section>
 
-      <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} />
+      <ProductList 
+        products={products} 
+        onAddToCart={onAddToCart} 
+        getStock={getStock} 
+        wishlist={wishlist}
+        onToggleWishlist={onToggleWishlist}
+      />
 
       {/* Newsletter */}
       <section className="bg-secondary text-white py-16 relative overflow-hidden">
@@ -182,3 +190,4 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock }) => {
 };
 
 export default Home;
+
