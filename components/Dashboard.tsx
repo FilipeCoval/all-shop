@@ -1,10 +1,8 @@
-
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers, CheckCircle, ShoppingCart, User, MapPin, Smartphone, Eye
+  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers, CheckCircle, ShoppingCart, User, MapPin, Smartphone, Eye, BarChart2
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order } from '../types';
@@ -143,6 +141,33 @@ const Dashboard: React.FC = () => {
           alert("Erro ao atualizar o estado da encomenda.");
       }
   };
+
+  // --- CHART DATA CALCULATION ---
+  const chartData = useMemo(() => {
+      const days = [];
+      const today = new Date();
+      
+      // Criar array dos últimos 7 dias
+      for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dateStr = d.toISOString().split('T')[0];
+          
+          // Somar vendas deste dia
+          const totalForDay = allOrders
+            .filter(o => o.date.startsWith(dateStr))
+            .reduce((acc, o) => acc + o.total, 0);
+            
+          days.push({
+              label: d.toLocaleDateString('pt-PT', { weekday: 'short' }),
+              date: dateStr,
+              value: totalForDay
+          });
+      }
+      
+      const maxValue = Math.max(...days.map(d => d.value), 1); // Evitar divisão por zero
+      return { days, maxValue };
+  }, [allOrders]);
 
   // --- KPI CALCULATIONS ---
   const stats = useMemo(() => {
@@ -775,80 +800,110 @@ const Dashboard: React.FC = () => {
             TAB: ORDERS (Gestão de Encomendas)
            ========================================================================= */}
         {activeTab === 'orders' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
-                <div className="p-6 border-b border-gray-200 bg-gray-50/50">
-                    <h2 className="font-bold text-gray-800">Todas as Encomendas</h2>
+            <div className="space-y-6">
+                
+                {/* SALES CHART (LAST 7 DAYS) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
+                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <BarChart2 className="text-indigo-600" /> Faturação (Últimos 7 Dias)
+                    </h3>
+                    <div className="flex items-end justify-between h-48 gap-2">
+                        {chartData.days.map((day, idx) => {
+                            const heightPercent = (day.value / chartData.maxValue) * 100;
+                            return (
+                                <div key={idx} className="flex-1 flex flex-col items-center group">
+                                    <div className="w-full bg-gray-100 rounded-t-lg relative flex items-end justify-center h-full hover:bg-gray-200 transition-colors">
+                                        <div 
+                                            className="w-full mx-1 bg-indigo-500 rounded-t-lg transition-all duration-500 group-hover:bg-indigo-600 relative"
+                                            style={{ height: `${heightPercent}%` }}
+                                        >
+                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {formatCurrency(day.value)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-gray-500 font-medium mt-2">{day.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4">ID / Data</th>
-                                <th className="px-6 py-4">Cliente (Envio)</th>
-                                <th className="px-6 py-4">Total</th>
-                                <th className="px-6 py-4">Estado</th>
-                                <th className="px-6 py-4 text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {isOrdersLoading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-500">A carregar encomendas...</td></tr>
-                            ) : allOrders.length === 0 ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-500">Nenhuma encomenda registada.</td></tr>
-                            ) : (
-                                allOrders.map(order => (
-                                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <span className="font-bold text-indigo-700 block text-xs md:text-sm">
-                                                {order.id.startsWith('#') ? '' : '#'}{order.id.toUpperCase()}
-                                            </span>
-                                            <span className="text-xs text-gray-400">
-                                                {new Date(order.date).toLocaleDateString()} {new Date(order.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {order.shippingInfo ? (
-                                                <div>
-                                                    <span className="font-bold text-gray-900 block">{order.shippingInfo.name}</span>
-                                                    <span className="text-xs text-gray-500 truncate max-w-[150px] block">
-                                                        {order.shippingInfo.address.split(',')[0]}...
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-400 italic">Dados não gravados</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 font-bold text-gray-900">
-                                            {formatCurrency(order.total)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <select 
-                                                value={order.status}
-                                                onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
-                                                className={`text-xs font-bold px-2 py-1 rounded-full border-none focus:ring-2 cursor-pointer
-                                                    ${order.status === 'Entregue' ? 'bg-green-100 text-green-800 focus:ring-green-500' : 
-                                                      order.status === 'Enviado' ? 'bg-blue-100 text-blue-800 focus:ring-blue-500' : 
-                                                      'bg-yellow-100 text-yellow-800 focus:ring-yellow-500'}
-                                                `}
-                                            >
-                                                <option value="Processamento">Processamento</option>
-                                                <option value="Enviado">Enviado</option>
-                                                <option value="Entregue">Entregue</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button 
-                                                onClick={() => setSelectedOrderDetails(order)}
-                                                className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-indigo-100"
-                                            >
-                                                Ver Detalhes
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
+                    <div className="p-6 border-b border-gray-200 bg-gray-50/50">
+                        <h2 className="font-bold text-gray-800">Todas as Encomendas</h2>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                <tr>
+                                    <th className="px-6 py-4">ID / Data</th>
+                                    <th className="px-6 py-4">Cliente (Envio)</th>
+                                    <th className="px-6 py-4">Total</th>
+                                    <th className="px-6 py-4">Estado</th>
+                                    <th className="px-6 py-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-sm">
+                                {isOrdersLoading ? (
+                                    <tr><td colSpan={5} className="p-8 text-center text-gray-500">A carregar encomendas...</td></tr>
+                                ) : allOrders.length === 0 ? (
+                                    <tr><td colSpan={5} className="p-8 text-center text-gray-500">Nenhuma encomenda registada.</td></tr>
+                                ) : (
+                                    allOrders.map(order => (
+                                        <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <span className="font-bold text-indigo-700 block text-xs md:text-sm">
+                                                    {order.id.startsWith('#') ? '' : '#'}{order.id.toUpperCase()}
+                                                </span>
+                                                <span className="text-xs text-gray-400">
+                                                    {new Date(order.date).toLocaleDateString()} {new Date(order.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {order.shippingInfo ? (
+                                                    <div>
+                                                        <span className="font-bold text-gray-900 block">{order.shippingInfo.name}</span>
+                                                        <span className="text-xs text-gray-500 truncate max-w-[150px] block">
+                                                            {order.shippingInfo.address.split(',')[0]}...
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400 italic">Dados não gravados</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-gray-900">
+                                                {formatCurrency(order.total)}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <select 
+                                                    value={order.status}
+                                                    onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
+                                                    className={`text-xs font-bold px-2 py-1 rounded-full border-none focus:ring-2 cursor-pointer
+                                                        ${order.status === 'Entregue' ? 'bg-green-100 text-green-800 focus:ring-green-500' : 
+                                                        order.status === 'Enviado' ? 'bg-blue-100 text-blue-800 focus:ring-blue-500' : 
+                                                        'bg-yellow-100 text-yellow-800 focus:ring-yellow-500'}
+                                                    `}
+                                                >
+                                                    <option value="Processamento">Processamento</option>
+                                                    <option value="Enviado">Enviado</option>
+                                                    <option value="Entregue">Entregue</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button 
+                                                    onClick={() => setSelectedOrderDetails(order)}
+                                                    className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-indigo-100"
+                                                >
+                                                    Ver Detalhes
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         )}
