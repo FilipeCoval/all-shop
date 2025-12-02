@@ -25,6 +25,24 @@ const App: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  // Wishlist State (Persisted in LocalStorage)
+  const [wishlist, setWishlist] = useState<number[]>(() => {
+    const saved = localStorage.getItem('wishlist');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('wishlist', JSON.stringify(wishlist));
+  }, [wishlist]);
+
+  const toggleWishlist = (productId: number) => {
+    setWishlist(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
+  };
+  
   // Stock Hook
   const { getStockForProduct } = useStock();
 
@@ -286,9 +304,19 @@ const App: React.FC = () => {
             window.location.hash = '/';
             setIsLoginOpen(true);
         }, 0);
-        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} />; 
+        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />; 
       }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} />;
+      return (
+        <ClientArea 
+            user={user} 
+            orders={orders} 
+            onLogout={handleLogout} 
+            onUpdateUser={handleUpdateUser} 
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlist}
+            onAddToCart={addToCart}
+        />
+      );
     }
 
     if (route.startsWith('#product/')) {
@@ -302,7 +330,9 @@ const App: React.FC = () => {
                     reviews={reviews}
                     onAddReview={handleAddReview}
                     currentUser={user}
-                    getStock={getStockForProduct} // Pass function instead of static number
+                    getStock={getStockForProduct}
+                    wishlist={wishlist}
+                    onToggleWishlist={toggleWishlist}
                 />
             );
         }
@@ -319,7 +349,7 @@ const App: React.FC = () => {
             return <Privacy />;
         case '#/':
         default:
-            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} />;
+            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
   };
 
