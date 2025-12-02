@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order } from '../types';
 import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check } from 'lucide-react';
@@ -89,7 +90,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     // Garante que temos um ID (usa o do estado ou gera um novo caso algo tenha falhado)
     const finalId = currentOrderId || generateOrderId();
 
-    // 1. Create Order Object com o ID final
+    // 1. Create Order Object com o ID final e Shipping Info
     const newOrder: Order = {
         id: finalId,
         date: new Date().toISOString(),
@@ -98,7 +99,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         items: cartItems.map(i => {
              const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
              return `${i.quantity}x ${i.name}${variantText}`;
-        })
+        }),
+        shippingInfo: {
+            name: userInfo.name,
+            address: userInfo.address,
+            paymentMethod: userInfo.paymentMethod,
+            phone: userInfo.phone
+        }
     };
 
     // 2. Save to history (App.tsx vai gravar no Firebase)
@@ -213,6 +220,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         value={userInfo.name}
                         onChange={(e) => setUserInfo({...userInfo, name: e.target.value})}
                         placeholder="Ex: João da Silva"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Telemóvel (Opcional)</label>
+                      <input 
+                        type="tel" 
+                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-gray-50 focus:bg-white transition-colors"
+                        value={userInfo.phone}
+                        onChange={(e) => setUserInfo({...userInfo, phone: e.target.value})}
+                        placeholder="Ex: 912 345 678"
                       />
                     </div>
                     <div>
@@ -365,4 +382,3 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 };
 
 export default CartDrawer;
-
