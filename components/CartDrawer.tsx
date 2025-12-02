@@ -1,8 +1,6 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order } from '../types';
-import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 
 interface CartDrawerProps {
@@ -22,6 +20,11 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [isCopied, setIsCopied] = useState(false);
   
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+  
   // Estado para guardar o ID gerado para esta sessão de checkout
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
 
@@ -39,10 +42,54 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             setCheckoutStep('cart');
             // Não limpamos o form (userInfo) para conveniência, mas limpamos o ID
             setCurrentOrderId('');
+            // Reset Coupon
+            setDiscount(0);
+            setAppliedCoupon('');
+            setCouponCode('');
         }, 500);
         return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  // Recalcular desconto se o total mudar (ex: removeu items)
+  useEffect(() => {
+      if (appliedCoupon === 'BEMVINDO10') {
+          setDiscount(total * 0.10);
+      }
+      // Se o total ficar 0, limpa tudo
+      if (total === 0) {
+          setDiscount(0);
+          setAppliedCoupon('');
+      }
+  }, [total, appliedCoupon]);
+
+  const handleApplyCoupon = () => {
+      const code = couponCode.trim().toUpperCase();
+      if (!code) return;
+
+      if (code === 'BEMVINDO10') {
+          setDiscount(total * 0.10);
+          setAppliedCoupon('BEMVINDO10');
+          setCouponCode('');
+      } else if (code === 'POUPAR5') {
+          if (total < 10) {
+              alert("Este cupão requer uma compra mínima de 10€");
+              return;
+          }
+          setDiscount(5);
+          setAppliedCoupon('POUPAR5');
+          setCouponCode('');
+      } else {
+          alert('Cupão inválido ou expirado.');
+      }
+  };
+
+  const removeCoupon = () => {
+      setDiscount(0);
+      setAppliedCoupon('');
+  };
+
+  const finalTotal = Math.max(0, total - discount);
 
   const generateOrderId = () => {
     // Gera um ID curto e amigável: #AS-XXXXXX
@@ -72,312 +119,321 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     }).join('\n');
   
       const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total);
-  
-      // Formata a mensagem
-      return `*Novo Pedido: ${orderId}*\n` +
-        `--------------------------------\n` +
-        `*Cliente:* ${userInfo.name}\n` +
-        `*Endereço:* ${userInfo.address}\n` +
-        `*Pagamento:* ${userInfo.paymentMethod}\n` +
-        `--------------------------------\n` +
-        `*Itens:*\n${itemsList}\n\n` +
-        `*Total:* ${totalFormatted}\n` +
-        `--------------------------------\n` +
-        `Aguardo confirmação.`;
+      const discountFormatted = discount > 0 ? `\nDesconto (${appliedCoupon}): -${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)}` : '';
+      const finalFormatted = discount > 0 ? `\n\n*TOTAL FINAL: ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(finalTotal)}*` : `\n\n*TOTAL: ${totalFormatted}*`;
+
+      return `Olá! Quero finalizar a minha encomenda na Allshop.\n\n*Pedido:* ${orderId}\n\n*Cliente:* ${userInfo.name}\n*Morada:* ${userInfo.address}\n*Pagamento:* ${userInfo.paymentMethod}\n\n*Itens:*\n${itemsList}\n${discountFormatted}${finalFormatted}`;
   };
 
-  const finalizeOrder = () => {
-    // Garante que temos um ID (usa o do estado ou gera um novo caso algo tenha falhado)
-    const finalId = currentOrderId || generateOrderId();
+  const handleFinalize = () => {
+    // Usa o ID do estado ou gera um novo se falhar
+    const orderIdToUse = currentOrderId || generateOrderId();
 
-    // 1. Create Order Object com o ID final e Shipping Info
+    const message = generateOrderMessage(orderIdToUse);
+    const encodedMessage = encodeURIComponent(message);
+    
+    // Create Order Object
     const newOrder: Order = {
-        id: finalId,
-        date: new Date().toISOString(),
-        total: total,
-        status: 'Processamento',
-        items: cartItems.map(i => {
-             const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
-             return `${i.quantity}x ${i.name}${variantText}`;
-        }),
-        shippingInfo: {
-            name: userInfo.name,
-            address: userInfo.address,
-            paymentMethod: userInfo.paymentMethod,
-            phone: userInfo.phone
-        }
+      id: orderIdToUse,
+      date: new Date().toISOString(),
+      total: finalTotal, // Usa o total com desconto
+      status: 'Processamento',
+      items: cartItems.map(i => {
+          const variantSuffix = i.selectedVariant ? ` (${i.selectedVariant})` : '';
+          return `${i.quantity}x ${i.name}${variantSuffix}`;
+      }),
+      shippingInfo: {
+        name: userInfo.name,
+        address: userInfo.address,
+        paymentMethod: userInfo.paymentMethod,
+        phone: userInfo.phone
+      }
     };
 
-    // 2. Save to history (App.tsx vai gravar no Firebase)
     onCheckout(newOrder);
 
-    // 3. Open Platform usando o MESMO ID
-    const message = generateOrderMessage(finalId);
-    
+    // Open Platform
     if (platform === 'whatsapp') {
-        const encodedMessage = encodeURIComponent(message);
-        const whatsappUrl = `https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`;
-        window.open(whatsappUrl, '_blank');
+      window.open(`https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`, '_blank');
     } else {
-        // Telegram logic - abre o link e o utilizador cola a mensagem
-        // Copia a mensagem automaticamente para a área de transferência para facilitar
-        navigator.clipboard.writeText(message).catch(err => console.error("Erro ao copiar", err));
-        window.open(TELEGRAM_LINK, '_blank');
-    }
-
-    // 4. Close and Reset
-    onClose();
-    // Reset dos estados é feito pelo useEffect no topo
-  };
-
-  const copyToClipboard = () => {
-      // Usa o currentOrderId que já deve estar definido nesta etapa
-      navigator.clipboard.writeText(generateOrderMessage(currentOrderId || 'N/A'));
+      // Copy to clipboard for Telegram or open direct link if configured
+      navigator.clipboard.writeText(message);
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
+      window.open(TELEGRAM_LINK, '_blank');
+    }
+
+    onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      
-      <div className="absolute inset-y-0 right-0 max-w-md w-full flex">
-        <div className="w-full h-full flex flex-col bg-white shadow-2xl animate-slide-in-right">
-          
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-            <h2 className="text-lg font-bold text-gray-900">
-              {checkoutStep === 'cart' ? 'O Seu Carrinho' : 'Finalizar Pedido'}
-            </h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-              <X size={24} />
-            </button>
-          </div>
+    <>
+      <div 
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity z-50 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+        onClick={onClose}
+      />
+      <div 
+        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+          <h2 className="text-xl font-bold text-gray-800">Seu Carrinho</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+            <X size={24} />
+          </button>
+        </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {cartItems.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">
-                <Smartphone size={48} className="text-gray-300" />
+        <div className="flex-1 overflow-y-auto p-4">
+          {checkoutStep === 'cart' ? (
+            cartItems.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
+                <Smartphone size={48} className="opacity-20" />
                 <p>O seu carrinho está vazio.</p>
-                <button onClick={onClose} className="text-primary font-medium hover:underline">
-                  Continuar a comprar
+                <button onClick={onClose} className="text-primary font-bold hover:underline">
+                    Começar a comprar
                 </button>
               </div>
             ) : (
-              <>
-                {checkoutStep === 'cart' && (
-                  <div className="space-y-4 animate-fade-in">
-                    {cartItems.map((item) => (
-                      <div key={item.cartItemId} className="flex gap-4 border-b border-gray-100 pb-4 last:border-0">
-                        <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-md bg-gray-100" />
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 line-clamp-1">{item.name}</h4>
-                          {item.selectedVariant && (
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full mb-1 inline-block">
-                                  {item.selectedVariant}
-                              </span>
-                          )}
-                          <p className="text-primary font-bold text-sm">
-                            {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)}
-                          </p>
-                          
-                          <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center border rounded-md">
-                              <button 
-                                onClick={() => onUpdateQuantity(item.cartItemId, -1)}
-                                className="px-2 py-1 text-gray-600 hover:bg-gray-100"
-                              >-</button>
-                              <span className="px-2 text-sm font-medium">{item.quantity}</span>
-                              <button 
-                                onClick={() => onUpdateQuantity(item.cartItemId, 1)}
-                                className="px-2 py-1 text-gray-600 hover:bg-gray-100"
-                              >+</button>
-                            </div>
-                            <button 
-                              onClick={() => onRemoveItem(item.cartItemId)}
-                              className="text-red-500 p-1 hover:bg-red-50 rounded"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {checkoutStep === 'info' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Informações de Envio</h3>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-                      <input 
-                        type="text" 
-                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-gray-50 focus:bg-white transition-colors"
-                        value={userInfo.name}
-                        onChange={(e) => setUserInfo({...userInfo, name: e.target.value})}
-                        placeholder="Ex: João da Silva"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Telemóvel (Opcional)</label>
-                      <input 
-                        type="tel" 
-                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-gray-50 focus:bg-white transition-colors"
-                        value={userInfo.phone}
-                        onChange={(e) => setUserInfo({...userInfo, phone: e.target.value})}
-                        placeholder="Ex: 912 345 678"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Morada de Entrega</label>
-                      <textarea 
-                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-gray-50 focus:bg-white transition-colors"
-                        rows={3}
-                        value={userInfo.address}
-                        onChange={(e) => setUserInfo({...userInfo, address: e.target.value})}
-                        placeholder="Rua, Número, Andar, Cidade..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Método de Pagamento Preferido</label>
-                      <select 
-                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-gray-50 focus:bg-white transition-colors"
-                        value={userInfo.paymentMethod}
-                        onChange={(e) => setUserInfo({...userInfo, paymentMethod: e.target.value})}
-                      >
-                        <option value="MB Way">MB Way</option>
-                        <option value="Transferência">Transferência Bancária</option>
-                        <option value="Dinheiro">Dinheiro na Entrega (Em mão)</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {checkoutStep === 'platform' && (
-                    <div className="space-y-6 animate-fade-in">
-                        <div className="text-center">
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Quase lá!</h3>
-                            <div className="bg-yellow-50 text-yellow-800 px-4 py-2 rounded-lg text-lg font-bold inline-block mb-3 border border-yellow-200">
-                                Pedido: {currentOrderId}
-                            </div>
-                            <p className="text-sm text-gray-600">Escolha onde quer finalizar a sua encomenda.</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => setPlatform('whatsapp')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${platform === 'whatsapp' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
-                            >
-                                <div className="bg-green-100 p-2 rounded-full">
-                                    <Smartphone className="text-green-600" size={24} />
-                                </div>
-                                <span className="font-bold text-sm">WhatsApp</span>
-                            </button>
-                            <button 
-                                onClick={() => setPlatform('telegram')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${platform === 'telegram' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300'}`}
-                            >
-                                <div className="bg-blue-100 p-2 rounded-full">
-                                    <MessageCircle className="text-blue-600" size={24} />
-                                </div>
-                                <span className="font-bold text-sm">Telegram</span>
-                            </button>
-                        </div>
-
-                        {platform === 'telegram' && (
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm">
-                                <p className="mb-2 text-blue-800 font-medium">Finalizar no Grupo/Canal:</p>
-                                <ol className="list-decimal pl-4 space-y-1 text-blue-700 mb-4">
-                                    <li>Copie o resumo do pedido.</li>
-                                    <li>Clique em "Abrir Telegram" (irá abrir o seu grupo).</li>
-                                    <li>Cole a mensagem lá.</li>
-                                </ol>
+              <div className="space-y-4">
+                {cartItems.map((item) => (
+                  <div key={item.cartItemId} className="flex gap-4 p-3 bg-white border border-gray-100 rounded-xl shadow-sm animate-fade-in">
+                    <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
+                    <div className="flex-1">
+                        <h3 className="font-bold text-gray-800 text-sm line-clamp-2">{item.name}</h3>
+                        {item.selectedVariant && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded mt-1 inline-block">
+                                {item.selectedVariant}
+                            </span>
+                        )}
+                        <div className="flex items-center justify-between mt-2">
+                            <span className="font-bold text-primary">
+                                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)}
+                            </span>
+                            <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-2">
                                 <button 
-                                    onClick={copyToClipboard}
-                                    className="w-full bg-white border border-blue-200 text-blue-600 py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors font-bold shadow-sm"
-                                >
-                                    {isCopied ? <Check size={18} /> : <Copy size={18} />}
-                                    {isCopied ? 'Copiado!' : '1. Copiar Pedido'}
-                                </button>
+                                    onClick={() => onUpdateQuantity(item.cartItemId, -1)}
+                                    className="text-gray-500 hover:text-red-500 px-1 font-bold text-lg disabled:opacity-30"
+                                    disabled={item.quantity <= 1}
+                                >-</button>
+                                <span className="text-sm font-medium w-4 text-center">{item.quantity}</span>
+                                <button 
+                                    onClick={() => onUpdateQuantity(item.cartItemId, 1)}
+                                    className="text-gray-500 hover:text-green-500 px-1 font-bold text-lg"
+                                >+</button>
                             </div>
-                        )}
-                        
-                        {platform === 'whatsapp' && (
-                             <div className="bg-green-50 p-4 rounded-lg border border-green-100 text-sm text-green-800">
-                                O WhatsApp abrirá automaticamente com o pedido <strong>{currentOrderId}</strong> preenchido.
-                             </div>
-                        )}
+                        </div>
                     </div>
-                )}
-              </>
-            )}
-          </div>
+                    <button 
+                        onClick={() => onRemoveItem(item.cartItemId)}
+                        className="text-gray-300 hover:text-red-500 self-start p-1"
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
 
-          {/* Footer */}
-          {cartItems.length > 0 && (
-            <div className="border-t p-4 bg-gray-50">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-600">Total</span>
-                <span className="text-2xl font-bold text-gray-900">
-                  {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total)}
-                </span>
+                {/* --- COUPON SECTION --- */}
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-2">
+                        <TicketPercent size={14} /> Código Promocional
+                    </label>
+                    
+                    {appliedCoupon ? (
+                        <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg">
+                            <div className="flex items-center gap-2">
+                                <Check size={16} className="text-green-600" />
+                                <div>
+                                    <p className="text-sm font-bold text-green-700">Cupão {appliedCoupon}</p>
+                                    <p className="text-xs text-green-600">Desconto aplicado com sucesso!</p>
+                                </div>
+                            </div>
+                            <button onClick={removeCoupon} className="text-gray-400 hover:text-red-500">
+                                <X size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={couponCode}
+                                onChange={(e) => setCouponCode(e.target.value)}
+                                placeholder="BEMVINDO10"
+                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none uppercase"
+                            />
+                            <button 
+                                onClick={handleApplyCoupon}
+                                className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-black transition-colors"
+                            >
+                                Aplicar
+                            </button>
+                        </div>
+                    )}
+                </div>
+
               </div>
-              
-              {checkoutStep === 'cart' && (
-                <button 
-                  onClick={handleCheckoutStart}
-                  className="w-full bg-secondary text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors shadow-lg"
-                >
-                  Continuar
-                </button>
-              )}
+            )
+          ) : checkoutStep === 'info' ? (
+            <div className="space-y-6 animate-fade-in-right">
+                <div className="text-center mb-6">
+                    <h3 className="font-bold text-xl">Dados de Envio</h3>
+                    <p className="text-sm text-gray-500">Para onde devemos enviar a sua encomenda?</p>
+                </div>
 
-              {checkoutStep === 'info' && (
-                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => setCheckoutStep('cart')}
-                        className="flex-1 bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                    >
-                        Voltar
-                    </button>
-                    <button 
-                        onClick={handleInfoSubmit}
-                        disabled={!userInfo.name || !userInfo.address}
-                        className="flex-[2] bg-primary text-white py-3 rounded-lg font-bold hover:bg-blue-600 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Próximo
-                    </button>
-                 </div>
-              )}
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                        <input 
+                            type="text" 
+                            required 
+                            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                            placeholder="Ex: João Silva"
+                            value={userInfo.name}
+                            onChange={e => setUserInfo({...userInfo, name: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Morada Completa</label>
+                        <textarea 
+                            required 
+                            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none h-24 resize-none"
+                            placeholder="Rua, Nº, Andar, Código Postal, Cidade"
+                            value={userInfo.address}
+                            onChange={e => setUserInfo({...userInfo, address: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Telemóvel (Opcional)</label>
+                        <input 
+                            type="tel" 
+                            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none"
+                            placeholder="Para contacto da transportadora"
+                            value={userInfo.phone}
+                            onChange={e => setUserInfo({...userInfo, phone: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Método de Pagamento</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {['MB Way', 'Transferência', 'Cobrança (+2€)'].map(method => (
+                                <button
+                                    key={method}
+                                    className={`py-3 px-2 rounded-lg text-sm font-medium border transition-all ${userInfo.paymentMethod === method ? 'bg-blue-50 border-primary text-primary' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
+                                    onClick={() => setUserInfo({...userInfo, paymentMethod: method})}
+                                >
+                                    {method}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-fade-in-right text-center pt-8">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 mb-4 animate-bounce-slow">
+                    <Check size={40} />
+                </div>
+                <h3 className="font-bold text-2xl text-gray-900">Quase lá!</h3>
+                <p className="text-gray-600">
+                    Escolha onde quer finalizar o pedido. <br/>
+                    Vamos abrir a conversa com os detalhes já preenchidos.
+                </p>
 
-              {checkoutStep === 'platform' && (
-                  <div className="flex gap-2">
-                      <button 
-                        onClick={() => setCheckoutStep('info')}
-                        className="flex-1 bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                      >
-                        Voltar
-                      </button>
-                      <button 
-                        onClick={finalizeOrder}
-                        className={`flex-[2] text-white py-3 rounded-lg font-bold transition-colors shadow-lg flex items-center justify-center gap-2
-                             ${platform === 'whatsapp' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-500 hover:bg-blue-600'}
-                        `}
-                      >
-                        <Send size={18} />
-                        {platform === 'whatsapp' ? 'Enviar Pedido' : '2. Abrir Telegram'}
-                      </button>
+                <div className="grid grid-cols-1 gap-4 mt-8">
+                    <button 
+                        onClick={() => setPlatform('whatsapp')}
+                        className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${platform === 'whatsapp' ? 'border-green-500 bg-green-50' : 'border-gray-100 hover:border-gray-200'}`}
+                    >
+                        <div className="bg-green-500 text-white p-3 rounded-full">
+                            <Smartphone size={24} />
+                        </div>
+                        <div className="text-left">
+                            <h4 className="font-bold text-gray-900">WhatsApp</h4>
+                            <p className="text-xs text-gray-500">Resposta imediata</p>
+                        </div>
+                        {platform === 'whatsapp' && <div className="ml-auto w-4 h-4 bg-green-500 rounded-full"></div>}
+                    </button>
+
+                    <button 
+                        onClick={() => setPlatform('telegram')}
+                        className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${platform === 'telegram' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
+                    >
+                        <div className="bg-blue-500 text-white p-3 rounded-full">
+                            <MessageCircle size={24} />
+                        </div>
+                        <div className="text-left">
+                            <h4 className="font-bold text-gray-900">Telegram</h4>
+                            <p className="text-xs text-gray-500">Seguro e privado</p>
+                        </div>
+                        {platform === 'telegram' && <div className="ml-auto w-4 h-4 bg-blue-500 rounded-full"></div>}
+                    </button>
+                </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-gray-100 bg-gray-50">
+          {checkoutStep === 'cart' ? (
+            <>
+              <div className="flex justify-between mb-2 text-gray-600 text-sm">
+                <span>Subtotal</span>
+                <span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total)}</span>
+              </div>
+              {discount > 0 && (
+                  <div className="flex justify-between mb-2 text-green-600 font-medium text-sm">
+                    <span>Desconto ({appliedCoupon})</span>
+                    <span>-{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)}</span>
                   </div>
               )}
+              <div className="flex justify-between mb-4 text-xl font-bold text-gray-900">
+                <span>Total</span>
+                <span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(finalTotal)}</span>
+              </div>
+              <button 
+                className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={cartItems.length === 0}
+                onClick={handleCheckoutStart}
+              >
+                Finalizar Compra
+              </button>
+            </>
+          ) : checkoutStep === 'info' ? (
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => setCheckoutStep('cart')}
+                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+                >
+                    Voltar
+                </button>
+                <button 
+                    onClick={handleInfoSubmit}
+                    disabled={!userInfo.name || !userInfo.address}
+                    className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Continuar
+                </button>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => setCheckoutStep('info')}
+                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+                >
+                    Voltar
+                </button>
+                <button 
+                    onClick={handleFinalize}
+                    className={`flex-[2] py-3 rounded-xl font-bold shadow-lg transition-all text-white flex items-center justify-center gap-2
+                        ${platform === 'whatsapp' ? 'bg-green-600 hover:bg-green-700 shadow-green-200' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-200'}
+                    `}
+                >
+                    {isCopied ? <Check size={20} /> : <Send size={20} />}
+                    {platform === 'whatsapp' ? 'Enviar Pedido' : 'Abrir Telegram'}
+                </button>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
