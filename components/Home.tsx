@@ -12,9 +12,10 @@ interface HomeProps {
   getStock: (productId: number) => number;
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
+  searchTerm: string;
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist, searchTerm }) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
@@ -127,6 +128,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
         getStock={getStock} 
         wishlist={wishlist}
         onToggleWishlist={onToggleWishlist}
+        searchTerm={searchTerm}
       />
 
       {/* Newsletter */}
@@ -190,4 +192,3 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
 };
 
 export default Home;
-
