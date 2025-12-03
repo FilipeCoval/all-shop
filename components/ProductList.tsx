@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, X, Heart } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, X } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -10,10 +10,10 @@ interface ProductListProps {
   getStock: (productId: number) => number;
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
+  searchTerm: string;
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist, searchTerm }) => {
   const [selectedCategory, setSelectedCategory] = useState('Todas');
 
   const handleProductClick = (id: number) => (e: React.MouseEvent) => {
@@ -45,29 +45,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
             A melhor tecnologia selecionada para si. Encontre o que precisa com o melhor preço do mercado.
           </p>
 
-          {/* SEARCH & FILTERS CONTAINER */}
+          {/* FILTERS CONTAINER */}
           <div className="max-w-4xl mx-auto space-y-6">
             
-            {/* Search Bar */}
-            <div className="relative max-w-lg mx-auto">
-                <input 
-                    type="text" 
-                    placeholder="O que procura? (ex: TV Box, Cabo HDMI...)" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 rounded-full border border-gray-200 shadow-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-gray-700"
-                />
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                {searchTerm && (
-                    <button 
-                        onClick={() => setSearchTerm('')}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                    >
-                        <X size={16} />
-                    </button>
-                )}
-            </div>
-
             {/* Category Pills */}
             <div className="flex flex-wrap justify-center gap-2">
                 {categories.map(cat => (
@@ -85,6 +65,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
                     </button>
                 ))}
             </div>
+            
+            {/* Active Filters Display */}
+            {searchTerm && (
+                <div className="flex justify-center items-center gap-2 animate-fade-in">
+                    <span className="text-sm text-gray-500">Resultados para: <strong className="text-gray-900">"{searchTerm}"</strong></span>
+                </div>
+            )}
           </div>
         </div>
 
@@ -99,7 +86,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
                     Não encontrámos nada para "{searchTerm}" na categoria "{selectedCategory}".
                 </p>
                 <button 
-                    onClick={() => { setSearchTerm(''); setSelectedCategory('Todas'); }}
+                    onClick={() => { setSelectedCategory('Todas'); }}
                     className="mt-6 text-primary font-bold hover:underline"
                 >
                     Limpar filtros
@@ -232,4 +219,3 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
 };
 
 export default ProductList;
-
