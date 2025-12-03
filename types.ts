@@ -56,6 +56,7 @@ export interface User {
   phone?: string;
   nif?: string;
   addresses: Address[];
+  wishlist?: number[]; // IDs dos produtos favoritos
 }
 
 export interface Order {
@@ -127,4 +128,14 @@ export interface InventoryProduct {
   
   // Estado
   status: ProductStatus;
+}
+
+export interface Coupon {
+  id?: string;
+  code: string;
+  type: 'PERCENTAGE' | 'FIXED';
+  value: number; // Ex: 10 (para 10%) ou 5 (para 5€)
+  minPurchase: number; // Valor mínimo para ativar
+  isActive: boolean;
+  usageCount: number;
 }
