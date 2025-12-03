@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X } from 'lucide-react';
 import { STORE_NAME, LOGO_URL } from '../constants';
 import { User } from '../types';
 
@@ -10,6 +11,8 @@ interface HeaderProps {
   user: User | null;
   onOpenLogin: () => void;
   onLogout: () => void;
+  searchTerm: string;
+  onSearchChange: (term: string) => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -18,7 +21,9 @@ const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu, 
   user, 
   onOpenLogin, 
-  onLogout 
+  onLogout,
+  searchTerm,
+  onSearchChange
 }) => {
   const handleNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -27,9 +32,9 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-lg bg-white/95 border-b border-gray-200 shadow-sm transition-all">
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between">
-        {/* Logo Section - Maximized Size */}
-        <div className="flex items-center gap-4 h-full py-1">
+      <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-4">
+        {/* Logo Section */}
+        <div className="flex items-center gap-4 h-full py-1 shrink-0">
             <button className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg" onClick={onOpenMobileMenu}>
                 <Menu size={28} />
             </button>
@@ -58,8 +63,28 @@ const Header: React.FC<HeaderProps> = ({
           <a href="#contact" onClick={handleNav('contact')} className="hover:text-primary transition-colors py-2">Contato</a>
         </nav>
 
+        {/* Search Bar (Desktop) */}
+        <div className="hidden md:flex flex-1 max-w-sm relative">
+            <input 
+                type="text"
+                placeholder="Pesquisar..."
+                value={searchTerm}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm"
+            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            {searchTerm && (
+                <button 
+                    onClick={() => onSearchChange('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                    <X size={14} />
+                </button>
+            )}
+        </div>
+
         {/* Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {/* User/Login Button */}
           {user ? (
             <div className="relative group hidden sm:block">
