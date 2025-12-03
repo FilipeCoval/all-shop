@@ -154,7 +154,7 @@ export const getInventoryAnalysis = async (products: InventoryProduct[]): Promis
       - Produtos com saída lenta: ${stuckProducts || "Nenhum em particular"}
 
       Dê-me 1 conselho financeiro curto (máx 2 frases) e estratégico para melhorar o fluxo de caixa ou lucro. 
-      Seja direto. Use emojis. Fale como um CFO experiente.
+      Seja direto. Use emojis. Responda estritamente em Português de Portugal.
     `;
 
     try {
