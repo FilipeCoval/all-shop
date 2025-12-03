@@ -192,3 +192,4 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
 };
 
 export default Home;
+
