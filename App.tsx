@@ -25,26 +25,11 @@ const App: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Wishlist State (Persisted in LocalStorage)
+  // Wishlist State (Local + DB)
   const [wishlist, setWishlist] = useState<number[]>(() => {
     const saved = localStorage.getItem('wishlist');
     return saved ? JSON.parse(saved) : [];
   });
-
-  useEffect(() => {
-    localStorage.setItem('wishlist', JSON.stringify(wishlist));
-  }, [wishlist]);
-
-  const toggleWishlist = (productId: number) => {
-    setWishlist(prev => 
-      prev.includes(productId) 
-        ? prev.filter(id => id !== productId)
-        : [...prev, productId]
-    );
-  };
-  
-  // Stock Hook
-  const { getStockForProduct } = useStock();
 
   // Login and User State
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -57,14 +42,39 @@ const App: React.FC = () => {
   // Simple Hash Router State
   const [route, setRoute] = useState(window.location.hash || '#/');
 
+  // Stock Hook
+  const { getStockForProduct } = useStock();
+
   // Verifica se o utilizador atual é Admin (Case Insensitive e Trimmed)
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
     const userEmail = user.email.trim().toLowerCase();
-    
-    // Compara o email atual com a lista de admins, ignorando maiúsculas/minúsculas e espaços
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
+
+  // Função para gerir Wishlist (Local + DB)
+  const toggleWishlist = async (productId: number) => {
+    let newWishlist = [];
+    if (wishlist.includes(productId)) {
+        newWishlist = wishlist.filter(id => id !== productId);
+    } else {
+        newWishlist = [...wishlist, productId];
+    }
+    
+    setWishlist(newWishlist);
+    localStorage.setItem('wishlist', JSON.stringify(newWishlist));
+
+    // Se estiver logado, atualiza também na BD
+    if (user && user.uid) {
+        try {
+            await db.collection("users").doc(user.uid).update({
+                wishlist: newWishlist
+            });
+        } catch (error) {
+            console.error("Erro ao sincronizar wishlist:", error);
+        }
+    }
+  };
 
   // Initialization & Auth Listener
   useEffect(() => {
@@ -76,7 +86,6 @@ const App: React.FC = () => {
             snapshot.forEach(doc => {
                 loadedReviews.push(doc.data() as Review);
             });
-            // Ordenar por data (mais recente primeiro)
             loadedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setReviews(loadedReviews);
         } catch (error) {
@@ -90,18 +99,26 @@ const App: React.FC = () => {
         if (firebaseUser) {
             // Utilizador está logado
             try {
-                // Buscar perfil do utilizador
+                // Buscar perfil do utilizador e WISHLIST
                 const docRef = db.collection("users").doc(firebaseUser.uid);
                 const docSnap = await docRef.get();
                 
                 if (docSnap.exists) {
-                    setUser(docSnap.data() as User);
+                    const userData = docSnap.data() as User;
+                    setUser(userData);
+                    
+                    // Sincronizar Wishlist da BD para o Estado Local
+                    if (userData.wishlist && Array.isArray(userData.wishlist)) {
+                        setWishlist(userData.wishlist);
+                        localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
+                    }
                 } else {
                     const basicUser: User = {
                         uid: firebaseUser.uid,
                         name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Cliente',
                         email: firebaseUser.email || '',
-                        addresses: []
+                        addresses: [],
+                        wishlist: []
                     };
                     setUser(basicUser);
                 }
@@ -116,7 +133,6 @@ const App: React.FC = () => {
                     userOrders.push(doc.data() as Order);
                 });
                 
-                // Ordenar por data (mais recente primeiro)
                 userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 setOrders(userOrders);
 
@@ -127,6 +143,7 @@ const App: React.FC = () => {
             // Utilizador saiu
             setUser(null);
             setOrders([]); 
+            // Opcional: Limpar wishlist ao sair ou manter a local? Mantemos local por UX.
         }
     });
 
@@ -144,8 +161,6 @@ const App: React.FC = () => {
   }, []);
 
   const addToCart = (product: Product, variant?: ProductVariant) => {
-    // Verificar stock antes de adicionar
-    // Se tiver variante, verifica stock dessa variante. Se não, verifica geral.
     const currentStock = getStockForProduct(product.id, variant?.name);
     
     if (currentStock <= 0) {
@@ -153,11 +168,9 @@ const App: React.FC = () => {
         return;
     }
 
-    // Definir preço e nome com base na variante
     const finalPrice = variant?.price ?? product.price;
     const variantName = variant?.name;
     
-    // Criar um ID único para o item no carrinho (Produto + Variante)
     const cartItemId = variantName 
         ? `${product.id}-${variantName}` 
         : `${product.id}`;
@@ -165,7 +178,6 @@ const App: React.FC = () => {
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === cartItemId);
       if (existing) {
-        // Verifica se adicionar +1 ultrapassa o stock
         if (existing.quantity + 1 > currentStock) {
             alert(`Apenas ${currentStock} unidades disponíveis.`);
             return prev;
@@ -174,11 +186,9 @@ const App: React.FC = () => {
           item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      
-      // Adicionar novo item
       return [...prev, { 
           ...product, 
-          price: finalPrice, // Usa o preço da variante se existir
+          price: finalPrice,
           selectedVariant: variantName,
           cartItemId: cartItemId,
           quantity: 1 
@@ -195,8 +205,6 @@ const App: React.FC = () => {
     setCartItems(prev => prev.map(item => {
       if (item.cartItemId === cartItemId) {
         const newQty = item.quantity + delta;
-        
-        // Validação de stock ao aumentar
         if (delta > 0) {
             const currentStock = getStockForProduct(item.id, item.selectedVariant);
             if (newQty > currentStock) {
@@ -204,7 +212,6 @@ const App: React.FC = () => {
                 return item;
             }
         }
-
         const finalQty = Math.max(1, newQty);
         return { ...item, quantity: finalQty };
       }
@@ -214,6 +221,10 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (incomingUser: User) => {
     setUser(incomingUser);
+    if (incomingUser.wishlist) {
+        setWishlist(incomingUser.wishlist);
+        localStorage.setItem('wishlist', JSON.stringify(incomingUser.wishlist));
+    }
     setIsLoginOpen(false);
     window.location.hash = 'account';
   };
@@ -235,26 +246,23 @@ const App: React.FC = () => {
         await auth.signOut();
         setUser(null);
         window.location.hash = '/';
+        // Limpar wishlist local ao sair, se desejar segurança, ou manter.
     } catch (error) {
         console.error("Erro ao sair:", error);
     }
   };
 
   const handleCheckout = async (newOrder: Order) => {
-      // 1. Atualiza estado local
       const updatedOrders = [newOrder, ...orders];
       setOrders(updatedOrders);
       setCartItems([]); 
 
       const customerName = user ? user.name : 'Cliente Anónimo';
 
-      // 2. Grava na BD e Notifica Telegram
       if (user && user.uid) {
           try {
               newOrder.userId = user.uid; 
               await db.collection("orders").doc(newOrder.id).set(newOrder);
-              
-              // Notificar Telegram
               notifyNewOrder(newOrder, customerName);
           } catch (e) {
               console.error("Erro ao gravar encomenda", e);
@@ -262,8 +270,6 @@ const App: React.FC = () => {
       } else {
           try {
              await db.collection("orders").doc(newOrder.id).set(newOrder);
-             
-             // Notificar Telegram (Cliente Anónimo)
              notifyNewOrder(newOrder, customerName);
           } catch (e) { console.error(e); }
       }
@@ -272,7 +278,6 @@ const App: React.FC = () => {
   const handleAddReview = async (newReview: Review) => {
       const updatedReviews = [newReview, ...reviews];
       setReviews(updatedReviews);
-
       try {
           await db.collection("reviews").doc(newReview.id).set(newReview);
       } catch (e) {
@@ -353,7 +358,6 @@ const App: React.FC = () => {
     }
   };
 
-  // ... (Restante do código igual, handlers de navegação, etc)
   const handleMobileNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     window.location.hash = path;
@@ -379,7 +383,6 @@ const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
           <a href="#/" onClick={handleMobileNav('/')} className="block py-2 text-gray-600 font-medium">Início</a>
@@ -452,8 +455,6 @@ const App: React.FC = () => {
         </div>
         <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs">
             <span>&copy; 2024 Allshop Store. Todos os direitos reservados.</span>
-            
-            {/* LINK DE ADMIN SÓ APARECE SE FOR ADMIN MESMO */}
             {isAdmin && (
               <a 
                 href="#dashboard" 
