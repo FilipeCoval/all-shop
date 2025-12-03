@@ -405,6 +405,50 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  // --- HANDLE DELETE SALE (REVERT STOCK) ---
+  const handleDeleteSale = async (saleId: string) => {
+    if (!editingId) return;
+    
+    // 1. Encontrar produto atual
+    const product = products.find(p => p.id === editingId);
+    if (!product || !product.salesHistory) return;
+
+    const saleToDelete = product.salesHistory.find(s => s.id === saleId);
+    if (!saleToDelete) return;
+
+    if (!window.confirm(`Tem a certeza que quer cancelar esta venda de ${saleToDelete.quantity} unidade(s)? O stock será reposto.`)) {
+        return;
+    }
+
+    // 2. Calcular novo histórico e quantidades
+    const newHistory = product.salesHistory.filter(s => s.id !== saleId);
+    const newQuantitySold = product.quantitySold - saleToDelete.quantity;
+
+    // Recalcular preço médio
+    const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0);
+    const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0);
+    const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0;
+
+    // 3. Recalcular Status
+    let newStatus: ProductStatus = 'IN_STOCK';
+    if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD';
+    else if (newQuantitySold > 0) newStatus = 'PARTIAL';
+
+    // 4. Update
+    try {
+        await updateProduct(product.id, {
+            salesHistory: newHistory,
+            quantitySold: Math.max(0, newQuantitySold), // Safety
+            salePrice: newAverageSalePrice,
+            status: newStatus
+        });
+        alert("Venda anulada e stock reposto com sucesso!");
+    } catch (err) {
+        console.error(err);
+        alert("Erro ao anular venda.");
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!id) return;
     if (window.confirm('Tem a certeza absoluta que quer apagar este registo? Esta ação não pode ser desfeita.')) {
@@ -430,6 +474,10 @@ const Dashboard: React.FC = () => {
 
     return matchesSearch && matchesStatus && matchesCashback;
   });
+
+  // Summary Counts for Filter Visibility
+  const countInStock = products.filter(p => p.status !== 'SOLD').length;
+  const countSold = products.filter(p => p.status === 'SOLD').length;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
@@ -583,8 +631,23 @@ const Dashboard: React.FC = () => {
                 {/* TABLE SECTION */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 
+                {/* Filter Summary Counters */}
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500">
+                    <span className={`${statusFilter === 'ALL' ? 'text-indigo-600 font-bold' : ''}`}>
+                        Total Registos: {products.length}
+                    </span>
+                    <span className="w-px h-4 bg-gray-300"></span>
+                    <span className={`${statusFilter === 'IN_STOCK' ? 'text-green-600 font-bold' : ''}`}>
+                        Em Stock: {countInStock}
+                    </span>
+                    <span className="w-px h-4 bg-gray-300"></span>
+                    <span className={`${statusFilter === 'SOLD' ? 'text-red-600 font-bold' : ''}`}>
+                        Esgotados: {countSold}
+                    </span>
+                </div>
+
                 {/* Controls Bar */}
-                <div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4 bg-gray-50/50">
+                <div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
                         {/* Status Filter */}
                         <div className="relative">
@@ -592,11 +655,11 @@ const Dashboard: React.FC = () => {
                             <select 
                                 value={statusFilter} 
                                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                                className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white appearance-none cursor-pointer hover:border-gray-400"
+                                className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white appearance-none cursor-pointer hover:border-gray-400 shadow-sm font-medium text-gray-700"
                             >
-                                <option value="ALL">Todos os Estados</option>
-                                <option value="IN_STOCK">Em Stock (À Venda)</option>
-                                <option value="SOLD">Esgotados</option>
+                                <option value="ALL">Mostrar Tudo</option>
+                                <option value="IN_STOCK">✅ Em Stock ({countInStock})</option>
+                                <option value="SOLD">❌ Esgotados ({countSold})</option>
                             </select>
                         </div>
 
@@ -606,7 +669,7 @@ const Dashboard: React.FC = () => {
                             <select 
                                 value={cashbackFilter} 
                                 onChange={(e) => setCashbackFilter(e.target.value as any)}
-                                className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white appearance-none cursor-pointer hover:border-gray-400"
+                                className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white appearance-none cursor-pointer hover:border-gray-400 shadow-sm"
                             >
                                 <option value="ALL">Todos Cashbacks</option>
                                 <option value="PENDING">Pendente</option>
@@ -1131,6 +1194,48 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
               </div>
+
+              {/* SALES HISTORY MANAGEMENT */}
+              {editingId && products.find(p => p.id === editingId)?.salesHistory && (products.find(p => p.id === editingId)?.salesHistory?.length || 0) > 0 && (
+                  <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+                      <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                          <History size={16} className="text-gray-500" /> Histórico de Vendas deste Lote
+                      </h4>
+                      <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                          <table className="w-full text-xs text-left">
+                              <thead className="bg-gray-100 text-gray-500 font-bold uppercase">
+                                  <tr>
+                                      <th className="p-3">Data</th>
+                                      <th className="p-3">Qtd</th>
+                                      <th className="p-3">Preço</th>
+                                      <th className="p-3">Notas</th>
+                                      <th className="p-3 text-right">Ação</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                  {products.find(p => p.id === editingId)?.salesHistory?.map(sale => (
+                                      <tr key={sale.id} className="hover:bg-gray-100">
+                                          <td className="p-3">{new Date(sale.date).toLocaleDateString()}</td>
+                                          <td className="p-3 font-bold">{sale.quantity}</td>
+                                          <td className="p-3">{formatCurrency(sale.unitPrice)}</td>
+                                          <td className="p-3 text-gray-500 truncate max-w-[100px]">{sale.notes}</td>
+                                          <td className="p-3 text-right">
+                                              <button 
+                                                  type="button"
+                                                  onClick={() => handleDeleteSale(sale.id)}
+                                                  className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors"
+                                                  title="Apagar venda e devolver stock"
+                                              >
+                                                  <Trash2 size={14} />
+                                              </button>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              )}
 
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
