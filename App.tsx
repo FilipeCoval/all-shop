@@ -1,7 +1,7 @@
 
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Smartphone, Landmark, Banknote } from 'lucide-react';
+import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
 import AIChat from './components/AIChat';
@@ -25,6 +25,9 @@ const App: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  // Search State (Global)
+  const [searchTerm, setSearchTerm] = useState('');
+
   // Wishlist State (Local + DB)
   const [wishlist, setWishlist] = useState<number[]>(() => {
     const saved = localStorage.getItem('wishlist');
@@ -293,6 +296,20 @@ const App: React.FC = () => {
     return cartItems.reduce((acc, item) => acc + item.quantity, 0);
   }, [cartItems]);
 
+  // Handle Search logic: Switch to Home/Products when searching
+  const handleSearchChange = (term: string) => {
+      setSearchTerm(term);
+      if (term && route !== '#/') {
+          window.location.hash = '/';
+      }
+      if (term) {
+          setTimeout(() => {
+             const productSection = document.getElementById('products');
+             if (productSection) productSection.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+      }
+  };
+
   const renderContent = () => {
     if (route === '#dashboard') {
         if (isAdmin) {
@@ -309,7 +326,7 @@ const App: React.FC = () => {
             window.location.hash = '/';
             setIsLoginOpen(true);
         }, 0);
-        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />; 
+        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />; 
       }
       return (
         <ClientArea 
@@ -354,7 +371,7 @@ const App: React.FC = () => {
             return <Privacy />;
         case '#/':
         default:
-            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />;
     }
   };
 
@@ -381,10 +398,25 @@ const App: React.FC = () => {
         user={user}
         onOpenLogin={() => setIsLoginOpen(true)}
         onLogout={handleLogout}
+        searchTerm={searchTerm}
+        onSearchChange={handleSearchChange}
       />
 
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
+          
+          {/* Mobile Search Input */}
+          <div className="relative">
+             <input 
+                type="text" 
+                placeholder="Pesquisar produtos..." 
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+             />
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          </div>
+
           <a href="#/" onClick={handleMobileNav('/')} className="block py-2 text-gray-600 font-medium">Início</a>
           <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; setIsMobileMenuOpen(false); setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="block py-2 text-gray-600 font-medium">Produtos</a>
           <a href="#about" onClick={handleMobileNav('about')} className="block py-2 text-gray-600 font-medium">Sobre</a>
