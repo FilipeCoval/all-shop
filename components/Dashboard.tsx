@@ -502,8 +502,8 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4">
                         <div className="flex gap-2 w-full lg:w-auto">
-                             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Tudo</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select>
-                             <select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select>
+                             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select>
+                             <select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select>
                         </div>
                         <div className="flex gap-2 w-full lg:w-auto">
                             <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-3 pr-3 py-2 border border-gray-300 rounded-lg text-sm" />
@@ -513,23 +513,103 @@ const Dashboard: React.FC = () => {
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
-                                <tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda Alvo</th><th className="px-4 py-3 text-center">Status</th><th className="px-4 py-3 text-right">Ações</th></tr>
+                                <tr>
+                                    <th className="px-6 py-3">Produto</th>
+                                    <th className="px-4 py-3 text-center">Stock</th>
+                                    <th className="px-4 py-3 text-right">Compra</th>
+                                    <th className="px-4 py-3 text-right">Venda Alvo</th>
+                                    <th className="px-4 py-3 text-right">Margem Unit.</th>
+                                    <th className="px-4 py-3 text-center">Cashback / Lucro Total</th>
+                                    <th className="px-4 py-3 text-center">Estado</th>
+                                    <th className="px-4 py-3 text-right">Ações</th>
+                                </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-sm">
-                                {filteredProducts.map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4"><div className="font-bold">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
-                                        <td className="px-4 py-4 text-center">{p.quantityBought - p.quantitySold} / {p.quantityBought}</td>
-                                        <td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td>
-                                        <td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td>
-                                        <td className="px-4 py-4 text-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span>{p.status}</td>
-                                        <td className="px-4 py-4 text-right gap-1 flex justify-end">
-                                            {p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded"><DollarSign size={16} /></button>}
-                                            <button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"><Edit2 size={16} /></button>
-                                            <button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {filteredProducts.map(p => {
+                                    const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice;
+                                    const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0;
+                                    
+                                    // CÁLCULO DE LUCRO FINAL PREVISTO
+                                    const totalCost = p.quantityBought * p.purchasePrice;
+                                    
+                                    // 1. Receita Real (Histórico) + Portes Pagos
+                                    let realizedRevenue = 0;
+                                    let totalShippingPaid = 0;
+                                    if (p.salesHistory && p.salesHistory.length > 0) {
+                                        realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0);
+                                        totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0);
+                                    } else {
+                                        realizedRevenue = p.quantitySold * p.salePrice; 
+                                    }
+
+                                    // 2. Receita Potencial (Resto do Stock)
+                                    const remainingStock = p.quantityBought - p.quantitySold;
+                                    const potentialRevenue = remainingStock * (p.targetSalePrice || 0);
+                                    const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0);
+                                    const totalProjectedRevenue = realizedRevenue + potentialRevenue;
+                                    
+                                    // Lucro Final = Receita Total - Custos Compra - Portes + Cashback
+                                    const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue;
+
+                                    return (
+                                        <tr key={p.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4"><div className="font-bold">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
+                                            <td className="px-4 py-4 text-center">
+                                                <div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div>
+                                                <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                                    <div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td>
+                                            <td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td>
+                                            
+                                            {/* MARGEM UNITÁRIA */}
+                                            <td className="px-4 py-4 text-right">
+                                                {p.targetSalePrice ? (
+                                                    <span className={`font-bold text-xs ${profitUnit > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                        {profitUnit > 0 ? '+' : ''}{formatCurrency(profitUnit)}
+                                                    </span>
+                                                ) : '-'}
+                                                <div className="text-[10px] text-gray-400">s/ cashback</div>
+                                            </td>
+
+                                            {/* CASHBACK / LUCRO TOTAL */}
+                                            <td className="px-4 py-4 text-center">
+                                                {p.cashbackValue > 0 ? (
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
+                                                            {formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}
+                                                        </div>
+                                                        {canCalculate && (
+                                                            <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">
+                                                                Lucro Total: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-gray-300 text-xs">-</span>
+                                                        {canCalculate && (remainingStock === 0 || p.targetSalePrice) && (
+                                                            <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">
+                                                                Lucro Total: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            <td className="px-4 py-4 text-center">
+                                                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span>
+                                                <span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span>
+                                            </td>
+                                            <td className="px-4 py-4 text-right gap-1 flex justify-end">
+                                                {p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}
+                                                <button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button>
+                                                <button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -565,11 +645,11 @@ const Dashboard: React.FC = () => {
                                     <td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td>
                                     <td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td>
                                     <td className="px-6 py-4">
-                                        <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className="text-xs font-bold px-2 py-1 rounded-full border-none bg-gray-100">
+                                        <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className="text-xs font-bold px-2 py-1 rounded-full border-none bg-gray-100 cursor-pointer">
                                             <option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option>
                                         </select>
                                     </td>
-                                    <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs">Detalhes</button></td>
+                                    <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -672,7 +752,7 @@ const Dashboard: React.FC = () => {
 
       </div>
       
-      {/* --- MODALS SECTION (FULL RESTORED) --- */}
+      {/* --- MODALS SECTION --- */}
 
       {/* 1. PRODUCT EDIT/CREATE MODAL */}
       {isModalOpen && (
