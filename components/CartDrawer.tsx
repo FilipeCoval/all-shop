@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon } from '../types';
-import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2 } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig'; // Importar DB
 
@@ -34,6 +34,11 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
     name: '', address: '', paymentMethod: 'MB Way'
   });
+
+  // FREE SHIPPING LOGIC
+  const FREE_SHIPPING_THRESHOLD = 50;
+  const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - total);
+  const progressPercent = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
 
   useEffect(() => {
     if (!isOpen) {
@@ -191,6 +196,30 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
+          
+          {/* --- GAMIFICATION BAR (FREE SHIPPING) --- */}
+          {checkoutStep === 'cart' && cartItems.length > 0 && (
+             <div className="mb-6 bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in-down">
+                 {remainingForFreeShipping > 0 ? (
+                     <p className="text-sm text-gray-700 mb-2 flex items-center gap-2">
+                         <Truck size={18} className="text-primary" />
+                         Faltam <span className="font-bold text-primary">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(remainingForFreeShipping)}</span> para ter <span className="font-bold">Portes Grátis!</span>
+                     </p>
+                 ) : (
+                     <p className="text-sm text-green-700 mb-2 flex items-center gap-2 font-bold">
+                         <PartyPopper size={18} />
+                         Parabéns! Tem Portes Grátis.
+                     </p>
+                 )}
+                 <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                     <div 
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${remainingForFreeShipping > 0 ? 'bg-primary' : 'bg-gradient-to-r from-green-400 to-green-600'}`}
+                        style={{ width: `${progressPercent}%` }}
+                     ></div>
+                 </div>
+             </div>
+          )}
+
           {checkoutStep === 'cart' ? (
             cartItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
