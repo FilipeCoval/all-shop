@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye } from 'lucide-react';
@@ -80,7 +81,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 animate-fade-in">
+    <div className="container mx-auto px-4 py-8 animate-fade-in pb-32 md:pb-8"> {/* pb-32 to prevent sticky bar overlap */}
       {/* Breadcrumb / Back */}
       <button 
         onClick={handleBack}
@@ -274,7 +275,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                <div className="flex flex-col sm:flex-row gap-6 pt-4 border-t border-gray-100 text-sm font-medium">
                    <div className="flex items-center gap-2 text-gray-500">
                        <Truck size={20} className="text-primary" />
-                       Entrega 1-3 dias
+                       Entrega 1-3 dias (Grátis {'>'} 50€)
                    </div>
                    <div className="flex items-center gap-2 text-gray-500">
                        <ShieldCheck size={20} className="text-green-600" />
@@ -329,9 +330,35 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
               </div>
           </div>
       )}
+
+      {/* STICKY ADD TO CART BAR (MOBILE ONLY) */}
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 z-40 md:hidden shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] flex items-center justify-between animate-fade-in-up">
+           <div className="flex flex-col">
+              <span className="text-xs text-gray-500 line-clamp-1 max-w-[150px]">{product.name}</span>
+              <span className="font-bold text-lg text-primary">
+                  {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}
+              </span>
+           </div>
+           <button 
+              onClick={handleAddToCart}
+              disabled={isOutOfStock}
+              className={`px-6 py-2.5 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2
+                ${isOutOfStock 
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                    : 'bg-primary hover:bg-blue-600 text-white'
+                }
+              `}
+           >
+              {isOutOfStock ? 'Esgotado' : (
+                <>
+                  <ShoppingCart size={18} /> Comprar
+                </>
+              )}
+           </button>
+      </div>
+
     </div>
   );
 };
 
 export default ProductDetails;
-
