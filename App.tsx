@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
@@ -11,6 +10,8 @@ import About from './components/About';
 import Contact from './components/Contact';
 import Terms from './components/Terms';
 import Privacy from './components/Privacy';
+import FAQ from './components/FAQ';
+import Returns from './components/Returns';
 import LoginModal from './components/LoginModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
@@ -369,6 +370,10 @@ const App: React.FC = () => {
             return <Terms />;
         case '#privacy':
             return <Privacy />;
+        case '#faq':
+            return <FAQ />;
+        case '#returns':
+            return <Returns />;
         case '#/':
         default:
             return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />;
@@ -457,8 +462,8 @@ const App: React.FC = () => {
                 <h4 className="text-white font-bold mb-4">Atendimento</h4>
                 <ul className="space-y-2 text-sm">
                     <li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li>
-                    <li><a href="#" onClick={e => e.preventDefault()} className="hover:text-primary">Trocas e Devoluções</a></li>
-                    <li><a href="#" onClick={e => e.preventDefault()} className="hover:text-primary">FAQ</a></li>
+                    <li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Trocas e Devoluções</a></li>
+                    <li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">FAQ</a></li>
                 </ul>
             </div>
             <div>
