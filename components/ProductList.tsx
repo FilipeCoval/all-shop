@@ -1,8 +1,7 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, X } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -15,6 +14,7 @@ interface ProductListProps {
 
 const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist, searchTerm }) => {
   const [selectedCategory, setSelectedCategory] = useState('Todas');
+  const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
 
   const handleProductClick = (id: number) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -27,14 +27,24 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
     return ['Todas', ...new Set(cats)];
   }, [products]);
 
-  // Filtrar produtos
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'Todas' || product.category === selectedCategory;
+  // Filtrar e Ordenar produtos
+  const filteredAndSortedProducts = useMemo(() => {
+      let result = products.filter(product => {
+        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              product.description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = selectedCategory === 'Todas' || product.category === selectedCategory;
+        return matchesSearch && matchesCategory;
+      });
 
-    return matchesSearch && matchesCategory;
-  });
+      // Ordenação
+      if (sortOption === 'price-asc') {
+          result.sort((a, b) => a.price - b.price);
+      } else if (sortOption === 'price-desc') {
+          result.sort((a, b) => b.price - a.price);
+      }
+
+      return result;
+  }, [products, searchTerm, selectedCategory, sortOption]);
 
   return (
     <section id="products" className="py-12 bg-gray-50">
@@ -48,22 +58,38 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
           {/* FILTERS CONTAINER */}
           <div className="max-w-4xl mx-auto space-y-6">
             
-            {/* Category Pills */}
-            <div className="flex flex-wrap justify-center gap-2">
-                {categories.map(cat => (
-                    <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat)}
-                        className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 border
-                            ${selectedCategory === cat 
-                                ? 'bg-primary text-white border-primary shadow-md transform scale-105' 
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
-                            }
-                        `}
+            <div className="flex flex-col md:flex-row justify-center items-center gap-4">
+                {/* Category Pills */}
+                <div className="flex flex-wrap justify-center gap-2">
+                    {categories.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 border
+                                ${selectedCategory === cat 
+                                    ? 'bg-primary text-white border-primary shadow-md transform scale-105' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                                }
+                            `}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Sort Dropdown */}
+                <div className="relative group">
+                    <ArrowUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <select 
+                        value={sortOption}
+                        onChange={(e) => setSortOption(e.target.value as any)}
+                        className="pl-9 pr-8 py-2 border border-gray-200 rounded-full text-sm bg-white focus:ring-2 focus:ring-primary outline-none cursor-pointer hover:border-gray-300 appearance-none text-gray-700 font-medium shadow-sm"
                     >
-                        {cat}
-                    </button>
-                ))}
+                        <option value="default">Relevância</option>
+                        <option value="price-asc">Preço: Menor para Maior</option>
+                        <option value="price-desc">Preço: Maior para Menor</option>
+                    </select>
+                </div>
             </div>
             
             {/* Active Filters Display */}
@@ -76,7 +102,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
         </div>
 
         {/* RESULTS GRID */}
-        {filteredProducts.length === 0 ? (
+        {filteredAndSortedProducts.length === 0 ? (
             <div className="text-center py-16">
                 <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Search size={32} className="text-gray-400" />
@@ -86,7 +112,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
                     Não encontrámos nada para "{searchTerm}" na categoria "{selectedCategory}".
                 </p>
                 <button 
-                    onClick={() => { setSelectedCategory('Todas'); }}
+                    onClick={() => { setSelectedCategory('Todas'); setSortOption('default'); }}
                     className="mt-6 text-primary font-bold hover:underline"
                 >
                     Limpar filtros
@@ -94,7 +120,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
             </div>
         ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProducts.map((product) => {
+            {filteredAndSortedProducts.map((product) => {
                 const stock = getStock(product.id);
                 const isOutOfStock = stock <= 0 && stock !== 999;
                 const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
