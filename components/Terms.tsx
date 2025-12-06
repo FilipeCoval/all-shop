@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { STORE_NAME } from '../constants';
 import { ShieldCheck, Truck, RefreshCw, FileText } from 'lucide-react';
@@ -45,9 +46,9 @@ const Terms: React.FC = () => {
             <Truck size={20} className="text-primary" /> 3. Envios e Entregas
           </h2>
           <p>
-            Oferecemos portes de envio para Portugal Continental e Ilhas em encomendas selecionadas. 
-            O tempo estimado de entrega é de 1 a 3 dias úteis para o Continente e até 5 dias úteis para as Ilhas, 
-            salvo rutura de stock ou atrasos da transportadora alheios à nossa responsabilidade.
+            Oferecemos portes de envio para Portugal Continental e Ilhas em encomendas <strong>superiores a 50€</strong>. 
+            Para encomendas de valor inferior, será calculada a taxa de envio no checkout.
+            O tempo estimado de entrega é de 1 a 3 dias úteis para o Continente e até 5 dias úteis para as Ilhas.
           </p>
         </section>
 
