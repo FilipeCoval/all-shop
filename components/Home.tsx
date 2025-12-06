@@ -107,7 +107,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
                   </div>
                   <div>
                       <h3 className="font-bold text-gray-900">Portes Grátis</h3>
-                      <p className="text-sm text-gray-500">Oferta em todas as encomendas</p>
+                      <p className="text-sm text-gray-500">Em compras acima de 50€</p>
                   </div>
               </div>
               <div className="flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors">
@@ -192,4 +192,3 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
 };
 
 export default Home;
-
