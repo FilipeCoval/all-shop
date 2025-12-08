@@ -134,8 +134,7 @@ export const PRODUCTS: Product[] = [
     category: "Acessórios",
     image: "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close",
     images: [
-        "https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg",
-        "https://s.alicdn.com/@sc04/kf/H6194355092934d33aa1e0c39f9199e66m.jpg?avif=close&webp=close"
+        "https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg"
     ],
     features: ["Tecnologia GaN", "Proteção Contra Sobrecarga", "Inclui Cabo 6A", "Compatível Xiaomi"],
     variantLabel: "Escolha a Potência",
@@ -165,7 +164,6 @@ export const PRODUCTS: Product[] = [
     category: "Acessórios",
     image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg",
     images: [
-        "https://ae-pic-a1.aliexpress-media.com/kf/Sf7c2ba4ec92d455bbb33aba4c95784472.jpg_960x960q75.jpg_.avif",
         "https://ae-pic-a1.aliexpress-media.com/kf/S555171f359404ae89c4d848cc2fe87d9k.jpg_960x960q75.jpg_.avif"
     ],
     features: ["Carregamento Turbo", "Cabo USB-C 6A Incluído", "Compatível com POCO/Redmi", "Proteção Inteligente"],
@@ -179,7 +177,7 @@ export const PRODUCTS: Product[] = [
         {
             name: "67W Max",
             price: 18.99,
-            image: "https://ae-pic-a1.aliexpress-media.com/kf/Sf7c2ba4ec92d455bbb33aba4c95784472.jpg_960x960q75.jpg_.avif"
+            image: "https://ae-pic-a1.aliexpress-media.com/kf/S743b4ba68517490bae3380429127f3e8b.jpg_960x960q75.jpg_.avif"
         }
     ]
   },
