@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye } from 'lucide-react';
 import ReviewSection from './ReviewSection';
@@ -34,6 +34,20 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         setSelectedVariantName(undefined);
     }
     window.scrollTo(0, 0);
+  }, [product]);
+
+  // Lógica para criar lista de imagens ÚNICAS (sem duplicados)
+  const uniqueImages = useMemo(() => {
+    const imgs = new Set<string>();
+    // 1. Adiciona a imagem principal
+    if (product.image) imgs.add(product.image);
+    // 2. Adiciona as imagens da galeria extra
+    if (product.images) product.images.forEach(img => imgs.add(img));
+    // 3. Adiciona as imagens das variantes
+    if (product.variants) product.variants.forEach(v => {
+        if (v.image) imgs.add(v.image);
+    });
+    return Array.from(imgs);
   }, [product]);
 
   // Encontrar objeto da variante selecionada
@@ -114,34 +128,28 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
             </button>
           </div>
           
-          {/* Thumbnails */}
-          <div className="flex gap-4 overflow-x-auto pb-2">
-             <button 
-                onClick={() => setSelectedImage(product.image)}
-                className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white ${selectedImage === product.image ? 'border-primary ring-2 ring-primary/20' : 'border-gray-100 hover:border-gray-300'}`}
-             >
-                 <img src={product.image} alt="Principal" className="w-full h-full object-contain p-1" />
-             </button>
-             {product.images?.map((img, idx) => (
-                 <button 
-                    key={idx}
-                    onClick={() => setSelectedImage(img)}
-                    className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white ${selectedImage === img ? 'border-primary ring-2 ring-primary/20' : 'border-gray-100 hover:border-gray-300'}`}
-                 >
-                     <img src={img} alt={`View ${idx}`} className="w-full h-full object-contain p-1" />
-                 </button>
-             ))}
-             {/* Adicionar imagens das variantes também às thumbnails */}
-             {product.variants?.filter(v => v.image).map((v, idx) => (
-                  <button 
-                    key={`v-${idx}`}
-                    onClick={() => { setSelectedImage(v.image!); setSelectedVariantName(v.name); }}
-                    className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white ${selectedImage === v.image ? 'border-primary ring-2 ring-primary/20' : 'border-gray-100 hover:border-gray-300'}`}
-                    title={v.name}
-                 >
-                     <img src={v.image} alt={v.name} className="w-full h-full object-contain p-1" />
-                 </button>
-             ))}
+          {/* Thumbnails (Lista Única e Limpa) */}
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+             {uniqueImages.map((img, idx) => {
+                 // Tenta encontrar se esta imagem pertence a alguma variante para mostrar o nome no título
+                 const variantName = product.variants?.find(v => v.image === img)?.name;
+                 return (
+                    <button 
+                        key={idx}
+                        onClick={() => {
+                            setSelectedImage(img);
+                            // Opcional: Se a imagem for de uma variante, seleciona a variante também
+                            if (variantName) setSelectedVariantName(variantName);
+                        }}
+                        className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200
+                            ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}
+                        `}
+                        title={variantName || `Imagem ${idx + 1}`}
+                    >
+                        <img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-contain p-1" />
+                    </button>
+                 );
+             })}
           </div>
         </div>
 
