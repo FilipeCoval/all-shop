@@ -57,7 +57,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 6,
     name: "Xiaomi TV Box S (3ª Geração)",
-    price: 50.00,
+    price: 55.00,
     description: "A mais recente inovação da Xiaomi. Processador mais rápido, suporte para 8K e a melhor experiência Google TV para transformar a sua sala num cinema.",
     category: "TV & Streaming",
     image: "https://imiland.ir/wp-content/uploads/2025/05/1748368235_68_Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png",
@@ -69,7 +69,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração)",
-    price: 45.00,
+    price: 50.00,
     description: "Transforme a sua TV numa Smart TV completa. Acesso à Netflix, YouTube e milhares de apps com qualidade 4K e Google TV.",
     category: "TV & Streaming",
     image: "https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif",
