@@ -3,12 +3,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, Calendar, Filter, Wallet, ArrowUpRight, Truck, Bell, Layers, CheckCircle, ShoppingCart, User, MapPin, Smartphone, Eye, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
-import { PRODUCTS } from '../constants'; // Importar produtos públicos para o select
+import { PRODUCTS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 // Utility para formatação de moeda
@@ -45,7 +45,7 @@ const Dashboard: React.FC = () => {
   // --- ORDERS MANAGEMENT STATE ---
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState(false);
-  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null); // Para modal de detalhes
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
 
   // --- COUPONS MANAGEMENT STATE ---
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
     name: '',
     category: '',
     publicProductId: '' as string,
-    variant: '', // NOVO CAMPO
+    variant: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     quantityBought: '',
     purchasePrice: '',
@@ -170,9 +170,40 @@ const Dashboard: React.FC = () => {
 
   // --- UPDATE ORDER STATUS ---
   const handleOrderStatusChange = async (orderId: string, newStatus: string) => {
+      let trackingNumber = undefined;
+      
+      // Se mudar para "Enviado", pedir número de rastreio
+      if (newStatus === 'Enviado') {
+          const input = window.prompt("Insira o Número de Rastreio (Ex: DA123456789PT):");
+          if (input) {
+              trackingNumber = input.trim();
+          }
+      }
+
       try {
-          await db.collection('orders').doc(orderId).update({ status: newStatus });
-      } catch (error) { console.error(error); alert("Erro ao atualizar."); }
+          const updateData: any = { status: newStatus };
+          if (trackingNumber) {
+              updateData.trackingNumber = trackingNumber;
+          }
+          
+          await db.collection('orders').doc(orderId).update(updateData);
+      } catch (error) { 
+          console.error(error); 
+          alert("Erro ao atualizar."); 
+      }
+  };
+  
+  const handleUpdateTracking = async (orderId: string, tracking: string) => {
+      try {
+          await db.collection('orders').doc(orderId).update({ trackingNumber: tracking });
+          // Atualiza estado local do modal
+          if (selectedOrderDetails) {
+              setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking});
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Erro ao gravar rastreio");
+      }
   };
 
   // --- CHART DATA ---
@@ -977,6 +1008,31 @@ const Dashboard: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                    
+                    {/* TRACKING NUMBER SECTION */}
+                    <div>
+                        <h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4>
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                             <label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label>
+                             <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700"
+                                    placeholder="Ex: DA123456789PT"
+                                    value={selectedOrderDetails.trackingNumber || ''}
+                                    onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})}
+                                />
+                                <button 
+                                    onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')}
+                                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700"
+                                >
+                                    Guardar
+                                </button>
+                             </div>
+                             <p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p>
+                        </div>
+                    </div>
+
                     <div>
                         <h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos</h4>
                         <ul className="space-y-3">
