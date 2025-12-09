@@ -66,6 +66,7 @@ export interface Order {
   status: 'Processamento' | 'Enviado' | 'Entregue';
   items: string[];
   userId?: string; // Para ligar a encomenda ao utilizador real
+  trackingNumber?: string; // Código de Rastreio (CTT/Transportadora)
   // Dados de Envio guardados na encomenda
   shippingInfo?: {
     name: string;
