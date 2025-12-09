@@ -106,6 +106,10 @@ export interface InventoryProduct {
   category: string;
   purchaseDate: string; // YYYY-MM-DD
   
+  // RASTREABILIDADE DE FORNECEDOR (NOVO)
+  supplierName?: string; // Ex: Temu, AliExpress, Amazon
+  supplierOrderId?: string; // Ex: PO-234234234, #112-3344
+
   // Link ao Produto Público (Opcional, mas recomendado para sync de stock)
   publicProductId?: number;
   variant?: string; // NOVO: Nome da variante (ex: "33W") para stock específico
