@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
@@ -1098,14 +1098,36 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div>
-                        <h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos</h4>
+                        <h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & Origem</h4>
                         <ul className="space-y-3">
-                            {selectedOrderDetails.items.map((item, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-sm bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-                                    <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">1x</div>
-                                    <span className="text-gray-700">{item}</span>
-                                </li>
-                            ))}
+                            {selectedOrderDetails.items.map((item, idx) => {
+                                // Tentar encontrar a origem do produto no inventário pelo nome
+                                const itemNameClean = item.replace(/^\d+x\s/, '').trim().split('(')[0].trim();
+                                const relatedInventoryItem = products.find(p => 
+                                    (p.name.includes(itemNameClean) || itemNameClean.includes(p.name)) && 
+                                    (p.supplierName || p.supplierOrderId)
+                                );
+
+                                return (
+                                    <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
+                                        <div className="flex items-start gap-2 text-sm">
+                                            <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">1x</div>
+                                            <span className="text-gray-700 font-medium">{item}</span>
+                                        </div>
+                                        
+                                        {/* EXIBIR ORIGEM SE ENCONTRADA */}
+                                        {relatedInventoryItem && (
+                                            <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2">
+                                                <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
+                                                <div className="text-xs">
+                                                    <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
+                                                    <span className="text-green-600">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </div>
                     <div className="flex justify-between items-center pt-4 border-t border-gray-100">
