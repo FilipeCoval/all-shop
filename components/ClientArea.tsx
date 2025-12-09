@@ -1,8 +1,9 @@
 
 
+
 import React, { useState } from 'react';
 import { User, Order, Address, Product, ProductVariant } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart } from 'lucide-react';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, PRODUCTS } from '../constants';
 
 interface ClientAreaProps {
@@ -307,6 +308,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     <tr>
                         <th className="px-6 py-4 font-medium">ID / Data</th>
                         <th className="px-6 py-4 font-medium">Estado</th>
+                        <th className="px-6 py-4 font-medium">Rastreio</th>
                         <th className="px-6 py-4 font-medium">Total</th>
                         <th className="px-6 py-4 font-medium text-right">Ações</th>
                     </tr>
@@ -325,6 +327,20 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 'bg-yellow-100 text-yellow-800'}`}>
                             {order.status}
                             </span>
+                        </td>
+                        <td className="px-6 py-4">
+                            {order.trackingNumber ? (
+                                <a 
+                                    href={`https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${order.trackingNumber}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-md text-xs font-bold hover:bg-blue-100 transition-colors"
+                                >
+                                    <Truck size={12} /> Rastrear
+                                </a>
+                            ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                            )}
                         </td>
                         <td className="px-6 py-4 font-bold text-gray-900">
                             {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total)}
