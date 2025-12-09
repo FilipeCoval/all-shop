@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
@@ -61,6 +61,8 @@ const Dashboard: React.FC = () => {
     publicProductId: '' as string,
     variant: '',
     purchaseDate: new Date().toISOString().split('T')[0],
+    supplierName: '', // NOVO
+    supplierOrderId: '', // NOVO
     quantityBought: '',
     purchasePrice: '',
     targetSalePrice: '',
@@ -269,6 +271,8 @@ const Dashboard: React.FC = () => {
       publicProductId: product.publicProductId ? product.publicProductId.toString() : '',
       variant: product.variant || '',
       purchaseDate: product.purchaseDate,
+      supplierName: product.supplierName || '',
+      supplierOrderId: product.supplierOrderId || '',
       quantityBought: product.quantityBought.toString(),
       purchasePrice: product.purchasePrice.toString(),
       targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '',
@@ -286,6 +290,8 @@ const Dashboard: React.FC = () => {
       publicProductId: '',
       variant: '',
       purchaseDate: new Date().toISOString().split('T')[0],
+      supplierName: '',
+      supplierOrderId: '',
       quantityBought: '',
       purchasePrice: '',
       targetSalePrice: '',
@@ -328,6 +334,8 @@ const Dashboard: React.FC = () => {
       publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null,
       variant: formData.variant || null,
       purchaseDate: formData.purchaseDate,
+      supplierName: formData.supplierName, // NOVO
+      supplierOrderId: formData.supplierOrderId, // NOVO
       quantityBought: qBought,
       quantitySold: currentSold, 
       salesHistory: safeSalesHistory,
@@ -437,7 +445,11 @@ const Dashboard: React.FC = () => {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.supplierOrderId?.toLowerCase().includes(searchTerm.toLowerCase());
+    
     let matchesStatus = true;
     if (statusFilter === 'IN_STOCK') matchesStatus = p.status !== 'SOLD';
     if (statusFilter === 'SOLD') matchesStatus = p.status === 'SOLD';
@@ -546,11 +558,11 @@ const Dashboard: React.FC = () => {
                             <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
                                 <tr>
                                     <th className="px-6 py-3">Produto</th>
+                                    <th className="px-4 py-3">Origem</th> {/* NOVA COLUNA */}
                                     <th className="px-4 py-3 text-center">Stock</th>
                                     <th className="px-4 py-3 text-right">Compra</th>
                                     <th className="px-4 py-3 text-right">Venda Alvo</th>
-                                    <th className="px-4 py-3 text-right">Margem Unit.</th>
-                                    <th className="px-4 py-3 text-center">Cashback / Lucro Total</th>
+                                    <th className="px-4 py-3 text-center">Cashback / Lucro</th>
                                     <th className="px-4 py-3 text-center">Estado</th>
                                     <th className="px-4 py-3 text-right">Ações</th>
                                 </tr>
@@ -585,6 +597,23 @@ const Dashboard: React.FC = () => {
                                     return (
                                         <tr key={p.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4"><div className="font-bold">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
+                                            
+                                            {/* COLUNA ORIGEM (NOVA) */}
+                                            <td className="px-4 py-4">
+                                                {p.supplierName ? (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 font-bold text-gray-700">
+                                                            <Globe size={12} className="text-indigo-500" /> {p.supplierName}
+                                                        </div>
+                                                        {p.supplierOrderId && (
+                                                            <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1">
+                                                                <FileText size={10} /> {p.supplierOrderId}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : <span className="text-gray-400 text-xs">-</span>}
+                                            </td>
+
                                             <td className="px-4 py-4 text-center">
                                                 <div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div>
                                                 <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
@@ -594,16 +623,6 @@ const Dashboard: React.FC = () => {
                                             <td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td>
                                             <td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td>
                                             
-                                            {/* MARGEM UNITÁRIA */}
-                                            <td className="px-4 py-4 text-right">
-                                                {p.targetSalePrice ? (
-                                                    <span className={`font-bold text-xs ${profitUnit > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                        {profitUnit > 0 ? '+' : ''}{formatCurrency(profitUnit)}
-                                                    </span>
-                                                ) : '-'}
-                                                <div className="text-[10px] text-gray-400">s/ cashback</div>
-                                            </td>
-
                                             {/* CASHBACK / LUCRO TOTAL */}
                                             <td className="px-4 py-4 text-center">
                                                 {p.cashbackValue > 0 ? (
@@ -613,7 +632,7 @@ const Dashboard: React.FC = () => {
                                                         </div>
                                                         {canCalculate && (
                                                             <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">
-                                                                Lucro Total: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
                                                             </span>
                                                         )}
                                                     </div>
@@ -622,7 +641,7 @@ const Dashboard: React.FC = () => {
                                                         <span className="text-gray-300 text-xs">-</span>
                                                         {canCalculate && (remainingStock === 0 || p.targetSalePrice) && (
                                                             <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">
-                                                                Lucro Total: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
                                                             </span>
                                                         )}
                                                     </div>
@@ -849,6 +868,22 @@ const Dashboard: React.FC = () => {
                             <select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
                                 <option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option>
                             </select>
+                        </div>
+                    </div>
+
+                    {/* DADOS FORNECEDOR (NOVO) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <div className="md:col-span-2">
+                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4>
+                             <p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label>
+                            <input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label>
+                            <input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} />
                         </div>
                     </div>
 
