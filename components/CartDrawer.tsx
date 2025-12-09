@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { CartItem, UserCheckoutInfo, Order, Coupon } from '../types';
-import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper } from 'lucide-react';
+import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
+import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper, Lock } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig'; // Importar DB
 
@@ -13,10 +12,12 @@ interface CartDrawerProps {
   onUpdateQuantity: (cartItemId: string, delta: number) => void;
   total: number;
   onCheckout: (order: Order) => void;
+  user: User | null;
+  onOpenLogin: () => void;
 }
 
 const CartDrawer: React.FC<CartDrawerProps> = ({ 
-  isOpen, onClose, cartItems, onRemoveItem, onUpdateQuantity, total, onCheckout
+  isOpen, onClose, cartItems, onRemoveItem, onUpdateQuantity, total, onCheckout, user, onOpenLogin
 }) => {
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform'>('cart');
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
@@ -53,6 +54,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  // AUTO-FILL USER DATA
+  useEffect(() => {
+      if (user) {
+          setUserInfo(prev => ({
+              ...prev,
+              name: user.name,
+              // Tenta usar a primeira morada se existir, senão deixa vazio
+              address: user.addresses && user.addresses.length > 0 
+                  ? `${user.addresses[0].street}, ${user.addresses[0].zip} ${user.addresses[0].city}` 
+                  : prev.address
+          }));
+      }
+  }, [user]);
 
   useEffect(() => {
       // Recalcular desconto se o total mudar
@@ -139,6 +154,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleCheckoutStart = () => {
     if (cartItems.length === 0) return;
+
+    // SEGURANÇA: Verificar login antes de avançar
+    if (!user) {
+        onOpenLogin();
+        // Não fechamos o carrinho para o utilizador perceber o contexto, 
+        // mas o modal de login vai aparecer por cima (devido ao z-index).
+        return;
+    }
+
     setCheckoutStep('info');
   };
 
@@ -170,7 +194,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       total: finalTotal,
       status: 'Processamento',
       items: cartItems.map(i => `${i.quantity}x ${i.name}${i.selectedVariant ? ` (${i.selectedVariant})` : ''}`),
-      shippingInfo: { ...userInfo }
+      shippingInfo: { ...userInfo },
+      userId: user?.uid // Associa ID do user logado
     };
 
     onCheckout(newOrder);
@@ -317,7 +342,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="flex justify-between mb-2 text-gray-600 text-sm"><span>Subtotal</span><span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total)}</span></div>
               {discount > 0 && (<div className="flex justify-between mb-2 text-green-600 font-medium text-sm"><span>Desconto ({appliedCoupon?.code})</span><span>-{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)}</span></div>)}
               <div className="flex justify-between mb-4 text-xl font-bold text-gray-900"><span>Total</span><span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(finalTotal)}</span></div>
-              <button className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg transition-all disabled:opacity-50" disabled={cartItems.length === 0} onClick={handleCheckoutStart}>Finalizar Compra</button>
+              
+              {/* LOGIN PROTECTION MESSAGE */}
+              {!user && cartItems.length > 0 && (
+                  <div className="mb-3 text-xs bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-200 flex items-center gap-2">
+                      <Lock size={12} /> Login necessário para finalizar compra.
+                  </div>
+              )}
+
+              <button className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg transition-all disabled:opacity-50" disabled={cartItems.length === 0} onClick={handleCheckoutStart}>
+                  {user ? 'Finalizar Compra' : 'Entrar para Comprar'}
+              </button>
             </>
           ) : checkoutStep === 'info' ? (
             <div className="flex gap-3"><button onClick={() => setCheckoutStep('cart')} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold">Voltar</button><button onClick={handleInfoSubmit} disabled={!userInfo.name || !userInfo.address} className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Continuar</button></div>
