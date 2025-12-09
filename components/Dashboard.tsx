@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
@@ -209,6 +209,12 @@ const Dashboard: React.FC = () => {
           console.error(e);
           alert("Erro ao gravar rastreio");
       }
+  };
+
+  // --- UTILS ---
+  const handleCopy = (text: string) => {
+      navigator.clipboard.writeText(text);
+      // Feedback visual simples (pode ser melhorado com toast)
   };
 
   // --- CHART DATA ---
@@ -604,6 +610,11 @@ const Dashboard: React.FC = () => {
                                     // Lucro Final = Receita Total - Custos Compra - Portes + Cashback
                                     const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue;
 
+                                    // Margem de Lucro %
+                                    const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 
+                                        ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) 
+                                        : 0;
+
                                     return (
                                         <tr key={p.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4"><div className="font-bold">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
@@ -616,8 +627,8 @@ const Dashboard: React.FC = () => {
                                                             <Globe size={12} className="text-indigo-500" /> {p.supplierName}
                                                         </div>
                                                         {p.supplierOrderId && (
-                                                            <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1">
-                                                                <FileText size={10} /> {p.supplierOrderId}
+                                                            <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar">
+                                                                <FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                                                             </div>
                                                         )}
                                                     </div>
@@ -643,6 +654,7 @@ const Dashboard: React.FC = () => {
                                                         {canCalculate && (
                                                             <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">
                                                                 Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                {projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}
                                                             </span>
                                                         )}
                                                     </div>
@@ -652,6 +664,7 @@ const Dashboard: React.FC = () => {
                                                         {canCalculate && (remainingStock === 0 || p.targetSalePrice) && (
                                                             <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">
                                                                 Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                {projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1117,11 +1130,18 @@ const Dashboard: React.FC = () => {
                                         
                                         {/* EXIBIR ORIGEM SE ENCONTRADA */}
                                         {relatedInventoryItem && (
-                                            <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2">
+                                            <div 
+                                                className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors"
+                                                onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)}
+                                                title="Clique para copiar ID de Origem"
+                                            >
                                                 <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
                                                 <div className="text-xs">
                                                     <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
-                                                    <span className="text-green-600">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}</span>
+                                                    <span className="text-green-600 flex items-center gap-1">
+                                                        ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}
+                                                        {relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}
