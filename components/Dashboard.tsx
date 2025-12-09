@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -570,7 +569,7 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
                             <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
                                 <tr>
                                     <th className="px-6 py-3">Produto</th>
@@ -617,7 +616,7 @@ const Dashboard: React.FC = () => {
 
                                     return (
                                         <tr key={p.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4"><div className="font-bold">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
+                                            <td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td>
                                             
                                             {/* COLUNA ORIGEM (NOVA) */}
                                             <td className="px-4 py-4">
@@ -707,26 +706,28 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
-                            <tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {allOrders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td>
-                                    <td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td>
-                                    <td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td>
-                                    <td className="px-6 py-4">
-                                        <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className="text-xs font-bold px-2 py-1 rounded-full border-none bg-gray-100 cursor-pointer">
-                                            <option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option>
-                                        </select>
-                                    </td>
-                                    <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left whitespace-nowrap">
+                            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                                <tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-sm">
+                                {allOrders.map(order => (
+                                    <tr key={order.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td>
+                                        <td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td>
+                                        <td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td>
+                                        <td className="px-6 py-4">
+                                            <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className="text-xs font-bold px-2 py-1 rounded-full border-none bg-gray-100 cursor-pointer">
+                                                <option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         )}
@@ -1038,7 +1039,7 @@ const Dashboard: React.FC = () => {
 
                         {/* ATUALIZAR DADOS DE ORIGEM */}
                         <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Globe size={16} /> Atualizar Origem / Garantia</h4>
+                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Atualizar Origem / Garantia</h4>
                              <div className="space-y-3">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor</label>
