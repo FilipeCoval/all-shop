@@ -83,7 +83,10 @@ const Dashboard: React.FC = () => {
     unitPrice: '',
     shippingCost: '', 
     date: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    // Campos para atualizar o produto pai durante a venda
+    supplierName: '',
+    supplierOrderId: ''
   });
 
   // --- REAL-TIME SALES NOTIFICATIONS ---
@@ -363,7 +366,10 @@ const Dashboard: React.FC = () => {
           unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '',
           shippingCost: '',
           date: new Date().toISOString().split('T')[0],
-          notes: ''
+          notes: '',
+          // Carregar dados existentes para facilitar a atualização
+          supplierName: product.supplierName || '',
+          supplierOrderId: product.supplierOrderId || ''
       });
       setIsSaleModalOpen(true);
   };
@@ -398,11 +404,15 @@ const Dashboard: React.FC = () => {
       else if (newQuantitySold > 0) status = 'PARTIAL';
 
       try {
+          // Atualiza a venda E as informações de fornecedor se o utilizador as preencheu
           await updateProduct(selectedProductForSale.id, {
               quantitySold: newQuantitySold,
               salePrice: averageSalePrice,
               salesHistory: updatedHistory,
-              status
+              status,
+              // Atualiza o produto pai com os dados novos se fornecidos
+              supplierName: saleForm.supplierName,
+              supplierOrderId: saleForm.supplierOrderId
           });
           setIsSaleModalOpen(false);
       } catch (err) { alert("Erro ao registar venda"); console.error(err); }
@@ -981,41 +991,60 @@ const Dashboard: React.FC = () => {
       {/* 2. SALE REGISTER MODAL */}
       {isSaleModalOpen && selectedProductForSale && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                  <div className="bg-green-600 p-6 text-white">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="bg-green-600 p-6 text-white shrink-0">
                       <h3 className="text-xl font-bold flex items-center gap-2"><DollarSign /> Registar Venda</h3>
                       <p className="opacity-90 mt-1 text-sm">{selectedProductForSale.name}</p>
                       <div className="mt-2 text-xs bg-green-700 inline-block px-2 py-1 rounded">Stock Atual: {selectedProductForSale.quantityBought - selectedProductForSale.quantitySold}</div>
                   </div>
-                  <form onSubmit={handleSaleSubmit} className="p-6 space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label>
-                              <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Unitário (€)</label>
-                              <input type="number" step="0.01" required className="w-full p-3 border border-gray-300 rounded-lg text-lg" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} />
-                          </div>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label>
-                          <input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} />
-                          <p className="text-[10px] text-gray-400 mt-1">Se ofereceu portes, deixe 0. Se pagou CTT, coloque aqui o custo.</p>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Venda</label>
-                          <input type="date" required className="w-full p-3 border border-gray-300 rounded-lg" value={saleForm.date} onChange={e => setSaleForm({...saleForm, date: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas (Cliente/Origem)</label>
-                          <input type="text" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ex: Vendido no OLX ao Rui" value={saleForm.notes} onChange={e => setSaleForm({...saleForm, notes: e.target.value})} />
-                      </div>
-                      <div className="flex gap-3">
-                          <button type="button" onClick={() => setIsSaleModalOpen(false)} className="px-4 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-                          <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar Venda</button>
-                      </div>
-                  </form>
+                  <div className="overflow-y-auto p-6">
+                    <form onSubmit={handleSaleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label>
+                                <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Unitário (€)</label>
+                                <input type="number" step="0.01" required className="w-full p-3 border border-gray-300 rounded-lg text-lg" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label>
+                            <input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} />
+                            <p className="text-[10px] text-gray-400 mt-1">Se ofereceu portes, deixe 0. Se pagou CTT, coloque aqui o custo.</p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Venda</label>
+                            <input type="date" required className="w-full p-3 border border-gray-300 rounded-lg" value={saleForm.date} onChange={e => setSaleForm({...saleForm, date: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas (Cliente/Origem)</label>
+                            <input type="text" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ex: Vendido no OLX ao Rui" value={saleForm.notes} onChange={e => setSaleForm({...saleForm, notes: e.target.value})} />
+                        </div>
+
+                        {/* ATUALIZAR DADOS DE ORIGEM */}
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Globe size={16} /> Atualizar Origem / Garantia</h4>
+                             <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor</label>
+                                    <input type="text" className="w-full p-2 border border-gray-300 rounded-lg text-sm" placeholder="Ex: Temu, AliExpress" value={saleForm.supplierName} onChange={e => setSaleForm({...saleForm, supplierName: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID da Encomenda (Origem)</label>
+                                    <input type="text" className="w-full p-2 border border-gray-300 rounded-lg text-sm" placeholder="Ex: PO-2023-9999" value={saleForm.supplierOrderId} onChange={e => setSaleForm({...saleForm, supplierOrderId: e.target.value})} />
+                                    <p className="text-[10px] text-gray-400 mt-1">Ao preencher, atualiza automaticamente o registo do produto.</p>
+                                </div>
+                             </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button type="button" onClick={() => setIsSaleModalOpen(false)} className="px-4 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
+                            <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar Venda</button>
+                        </div>
+                    </form>
+                  </div>
               </div>
           </div>
       )}
