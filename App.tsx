@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
@@ -230,7 +229,8 @@ const App: React.FC = () => {
         localStorage.setItem('wishlist', JSON.stringify(incomingUser.wishlist));
     }
     setIsLoginOpen(false);
-    window.location.hash = 'account';
+    // Não redirecionar se o modal estava aberto (para continuar compra)
+    // window.location.hash = 'account';
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -512,6 +512,8 @@ const App: React.FC = () => {
         onUpdateQuantity={updateQuantity}
         total={cartTotal}
         onCheckout={handleCheckout}
+        user={user}
+        onOpenLogin={() => setIsLoginOpen(true)}
       />
 
       <LoginModal 
