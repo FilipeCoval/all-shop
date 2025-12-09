@@ -29,7 +29,7 @@ export const TELEGRAM_CHAT_ID = "-1003494194252";
 // Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
 export const ADMIN_EMAILS = [
   "filipe_Coval_90@hotmail.com",     // Substitua pelo seu email de login
-  "socio@allshop.com",     // Substitua pelo email do sócio
+  "mcpoleca@hotmail.com",     // Substitua pelo email do sócio
   "filipe@teste.com"       // Exemplo
 ];
 
