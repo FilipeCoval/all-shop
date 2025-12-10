@@ -1,10 +1,12 @@
 
 
 
+
 import React, { useState } from 'react';
 import { User, Order, Address, Product, ProductVariant } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck } from 'lucide-react';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, PRODUCTS } from '../constants';
+import { db } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
   user: User;
@@ -61,9 +63,19 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     onUpdateUser({ ...user, addresses: updatedAddresses });
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+      if(!window.confirm("Tem a certeza que deseja cancelar esta encomenda?")) return;
+      try {
+          await db.collection('orders').doc(orderId).update({ status: 'Cancelado' });
+      } catch (e) {
+          console.error(e);
+          alert("Não foi possível cancelar. Tente novamente ou contacte o suporte.");
+      }
+  };
+
   // Stats
-  const totalSpent = orders.reduce((acc, order) => acc + order.total, 0);
-  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((acc, order) => acc + (order.status !== 'Cancelado' ? order.total : 0), 0);
+  const totalOrders = orders.filter(o => o.status !== 'Cancelado').length;
 
   const displayOrderId = (id: string) => {
       if (id.startsWith('#')) return id;
@@ -324,6 +336,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
                             ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : 
                                 order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : 
+                                order.status === 'Cancelado' ? 'bg-red-100 text-red-800 line-through' :
                                 'bg-yellow-100 text-yellow-800'}`}>
                             {order.status}
                             </span>
@@ -345,15 +358,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         <td className="px-6 py-4 font-bold text-gray-900">
                             {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total)}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                            <button 
-                                onClick={() => handlePrintOrder(order)}
-                                className="inline-flex items-center gap-1 text-primary hover:text-blue-700 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors"
-                                title="Imprimir Comprovativo e Garantia"
-                            >
-                                <Printer size={16} />
-                                <span className="hidden sm:inline">Comprovativo</span>
-                            </button>
+                        <td className="px-6 py-4 text-right flex justify-end gap-2">
+                            {order.status !== 'Cancelado' && (
+                                <button 
+                                    onClick={() => handlePrintOrder(order)}
+                                    className="inline-flex items-center gap-1 text-primary hover:text-blue-700 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors"
+                                    title="Imprimir Comprovativo e Garantia"
+                                >
+                                    <Printer size={16} />
+                                </button>
+                            )}
+                            {order.status === 'Processamento' && (
+                                <button 
+                                    onClick={() => handleCancelOrder(order.id)}
+                                    className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 font-medium text-xs bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors"
+                                    title="Cancelar Encomenda"
+                                >
+                                    <XCircle size={16} />
+                                </button>
+                            )}
                         </td>
                         </tr>
                     ))}
