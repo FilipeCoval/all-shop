@@ -63,7 +63,7 @@ export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Enviado' | 'Entregue';
+  status: 'Processamento' | 'Enviado' | 'Entregue' | 'Cancelado';
   items: string[];
   userId?: string; // Para ligar a encomenda ao utilizador real
   trackingNumber?: string; // Código de Rastreio (CTT/Transportadora)
