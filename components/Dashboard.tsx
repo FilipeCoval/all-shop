@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -757,26 +758,54 @@ const Dashboard: React.FC = () => {
                          <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span>
                     </div>
                     
-                    <div className="flex items-end justify-between h-48 gap-2">
-                        {chartData.days.map((day, idx) => (
-                            <div key={idx} className="flex-1 flex flex-col items-center group">
-                                <div className="w-full bg-gray-100 rounded-t-lg relative flex items-end justify-center h-full hover:bg-gray-200">
-                                    <div 
-                                        className="w-full mx-1 bg-indigo-500 rounded-t-lg transition-all relative group/bar" 
-                                        style={{ height: `${Math.max((day.value / chartData.maxValue) * 100, day.value > 0 ? 5 : 0)}%` }}
-                                    >
-                                         {day.value > 0 && (
-                                             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                 {formatCurrency(day.value)}
-                                             </div>
-                                         )}
+                    {/* CHART CONTAINER - MODERN STYLE */}
+                    <div className="flex items-stretch h-64 gap-4">
+                        {/* Y-Axis Labels */}
+                        <div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right">
+                            <span>{formatCurrency(chartData.maxValue)}</span>
+                            <span>{formatCurrency(chartData.maxValue / 2)}</span>
+                            <span>0€</span>
+                        </div>
+
+                        {/* Bars Area */}
+                        <div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200">
+                             {/* Background Grid Lines */}
+                            <div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div>
+                            <div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>
+
+                            {chartData.days.map((day, idx) => {
+                                const heightPercent = (day.value / chartData.maxValue) * 100;
+                                const isZero = day.value === 0;
+
+                                return (
+                                    <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10">
+                                        {/* Bar */}
+                                        <div 
+                                            className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110
+                                                ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}
+                                            `} 
+                                            style={{ 
+                                                height: isZero ? '4px' : `${heightPercent}%`,
+                                                minHeight: '4px'
+                                            }}
+                                        >
+                                            {/* Tooltip on Hover */}
+                                            {!isZero && (
+                                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">
+                                                    {formatCurrency(day.value)}
+                                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* X-Axis Label */}
+                                        <span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span>
                                     </div>
-                                </div>
-                                <span className="text-xs text-gray-500 font-medium mt-2">{day.label}</span>
-                            </div>
-                        ))}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
+
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left whitespace-nowrap">
