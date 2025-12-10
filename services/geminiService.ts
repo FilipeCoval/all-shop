@@ -120,9 +120,9 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
 
 /**
  * Função para analisar o inventário e dar dicas financeiras.
- * Não usa chat session, é um pedido único (stateless).
+ * Aceita um prompt do utilizador para personalizar a resposta.
  */
-export const getInventoryAnalysis = async (products: InventoryProduct[]): Promise<string> => {
+export const getInventoryAnalysis = async (products: InventoryProduct[], userPrompt: string): Promise<string> => {
     // @ts-ignore
     const viteKey = (import.meta.env && import.meta.env.VITE_API_KEY);
     // @ts-ignore
@@ -133,28 +133,35 @@ export const getInventoryAnalysis = async (products: InventoryProduct[]): Promis
 
     const ai = new GoogleGenAI({ apiKey });
     
-    // Resumo dos dados para enviar ao modelo
-    const totalInvested = products.reduce((acc, p) => acc + (p.purchasePrice * p.quantityBought), 0);
-    const totalItems = products.reduce((acc, p) => acc + p.quantityBought, 0);
-    const soldItems = products.reduce((acc, p) => acc + p.quantitySold, 0);
-    const unsoldItems = totalItems - soldItems;
-
-    // Produtos com stock parado (menos de 20% vendido)
-    const stuckProducts = products
-        .filter(p => p.quantityBought > 0 && (p.quantitySold / p.quantityBought) < 0.2)
-        .map(p => p.name)
-        .join(', ');
+    // Formatar dados do inventário para a IA entender custos vs lucro
+    const inventoryContext = products
+        .filter(p => p.status !== 'SOLD')
+        .map(p => {
+            const currentStock = p.quantityBought - p.quantitySold;
+            return `
+            - Produto: ${p.name}
+              Stock Atual: ${currentStock}
+              Custo de Compra (Unid): €${p.purchasePrice}
+              Preço Venda Atual (Estimado): €${p.targetSalePrice || 'N/A'}
+            `;
+        }).join('\n');
 
     const prompt = `
-      Analise estes dados financeiros da loja 'Allshop' (Backoffice):
-      - Investimento Total em Stock: €${totalInvested.toFixed(2)}
-      - Total Itens Comprados: ${totalItems}
-      - Total Itens Vendidos: ${soldItems}
-      - Itens em Stock: ${unsoldItems}
-      - Produtos com saída lenta: ${stuckProducts || "Nenhum em particular"}
+      Atue como um **Consultor de Negócios Sênior** para a loja 'Allshop'.
+      
+      **DADOS DO INVENTÁRIO (CONFIDENCIAL):**
+      ${inventoryContext}
 
-      Dê-me 1 conselho financeiro curto (máx 2 frases) e estratégico para melhorar o fluxo de caixa ou lucro. 
-      Seja direto. Use emojis. Responda OBRIGATORIAMENTE em Português de Portugal (PT-PT).
+      **PEDIDO DO UTILIZADOR:**
+      "${userPrompt}"
+
+      **REGRAS ESTRITAS DE NEGÓCIO:**
+      1. **Proteção de Lucro:** NUNCA sugira vender abaixo do Preço de Custo. Se sugerir desconto, garanta que ainda há margem.
+      2. **Combos Inteligentes:** Se sugerir bundles (Produto A + B), some os custos de ambos e sugira um preço final que seja atrativo mas lucrativo.
+      3. **Realismo:** Sugira descontos pequenos (ex: 2€ a 5€) ou ofertas de valor percebido (ex: portes grátis se a margem permitir).
+      4. **Formato:** Responda de forma curta, estratégica e use emojis. Foque em ação.
+      
+      Se o utilizador pedir para analisar stock parado, identifique os produtos e sugira uma ação específica.
     `;
 
     try {
@@ -162,7 +169,7 @@ export const getInventoryAnalysis = async (products: InventoryProduct[]): Promis
             model: 'gemini-2.5-flash',
             contents: prompt
         });
-        return response.text || "Mantenha o foco na margem de lucro!";
+        return response.text || "Sem sugestões no momento.";
     } catch (e) {
         console.error(e);
         return "Não foi possível gerar análise no momento.";
