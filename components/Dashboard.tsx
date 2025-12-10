@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
@@ -22,7 +22,11 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons'>('inventory');
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [aiTip, setAiTip] = useState<string | null>(null);
+  
+  // AI Consultant State
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   
   // Filters Inventory
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'SOLD'>('ALL');
@@ -223,6 +227,21 @@ const Dashboard: React.FC = () => {
       navigator.clipboard.writeText(text);
   };
 
+  // --- AI HANDLER ---
+  const handleAskAi = async () => {
+      if (!aiQuery.trim()) return;
+      setIsAiLoading(true);
+      setAiResponse(null);
+      try {
+          const response = await getInventoryAnalysis(products, aiQuery);
+          setAiResponse(response);
+      } catch (e) {
+          setAiResponse("Não foi possível processar o pedido.");
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
+
   // --- CHART DATA (ROBUST VERSION) ---
   const chartData = useMemo(() => {
       // Helper para normalizar datas para YYYY-MM-DD local
@@ -324,11 +343,6 @@ const Dashboard: React.FC = () => {
 
     return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit };
   }, [products]);
-
-  // --- AI TIP ---
-  useEffect(() => {
-    if (products.length > 0 && !aiTip) getInventoryAnalysis(products).then(setAiTip);
-  }, [products, aiTip]);
 
   // --- HANDLERS PRODUCT ---
   const handleEdit = (product: InventoryProduct) => {
@@ -610,7 +624,41 @@ const Dashboard: React.FC = () => {
                     <KpiCard title="Lucro Líquido" value={stats.realizedProfit} icon={<TrendingUp size={18} />} color={stats.realizedProfit >= 0 ? "green" : "red"} />
                     <KpiCard title="Cashback Pendente" value={stats.pendingCashback} icon={<AlertCircle size={18} />} color="yellow" />
                 </div>
-                {aiTip && <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100 flex items-center gap-3 shadow-sm"><Sparkles size={16} className="text-indigo-600" /><p className="text-indigo-900 text-sm italic">"{aiTip}"</p></div>}
+
+                {/* AI CONSULTANT SECTION */}
+                <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div>
+                        <div>
+                            <h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3>
+                            <p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            value={aiQuery} 
+                            onChange={(e) => setAiQuery(e.target.value)}
+                            placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles."
+                            className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                            onKeyDown={(e) => e.key === 'Enter' && handleAskAi()}
+                        />
+                        <button 
+                            onClick={handleAskAi}
+                            disabled={isAiLoading || !aiQuery.trim()}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            {isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}
+                        </button>
+                    </div>
+
+                    {aiResponse && (
+                        <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">
+                            {aiResponse}
+                        </div>
+                    )}
+                </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500">
