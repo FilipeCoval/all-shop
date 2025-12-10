@@ -197,6 +197,16 @@ const Dashboard: React.FC = () => {
       }
   };
   
+  const handleDeleteOrder = async (orderId: string) => {
+      if (!window.confirm("ATENÇÃO: Tem a certeza que quer APAGAR esta encomenda para sempre? Isto é útil para limpar duplicados.")) return;
+      try {
+          await db.collection('orders').doc(orderId).delete();
+      } catch (e) {
+          console.error(e);
+          alert("Erro ao apagar encomenda");
+      }
+  };
+
   const handleUpdateTracking = async (orderId: string, tracking: string) => {
       try {
           await db.collection('orders').doc(orderId).update({ trackingNumber: tracking });
@@ -224,7 +234,10 @@ const Dashboard: React.FC = () => {
           const d = new Date(today);
           d.setDate(today.getDate() - i);
           const dateStr = d.toISOString().split('T')[0];
-          const totalForDay = allOrders.filter(o => o.date.startsWith(dateStr)).reduce((acc, o) => acc + o.total, 0);
+          // Filter out cancelled orders from chart
+          const totalForDay = allOrders
+            .filter(o => o.date.startsWith(dateStr) && o.status !== 'Cancelado')
+            .reduce((acc, o) => acc + o.total, 0);
           days.push({ label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), date: dateStr, value: totalForDay });
       }
       const maxValue = Math.max(...days.map(d => d.value), 1);
@@ -718,11 +731,31 @@ const Dashboard: React.FC = () => {
                                         <td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td>
                                         <td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td>
                                         <td className="px-6 py-4">
-                                            <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className="text-xs font-bold px-2 py-1 rounded-full border-none bg-gray-100 cursor-pointer">
-                                                <option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option>
+                                            <select 
+                                                value={order.status} 
+                                                onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} 
+                                                className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer
+                                                    ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : 
+                                                    order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : 
+                                                    order.status === 'Cancelado' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'}`}
+                                            >
+                                                <option value="Processamento">Processamento</option>
+                                                <option value="Enviado">Enviado</option>
+                                                <option value="Entregue">Entregue</option>
+                                                <option value="Cancelado">Cancelado</option>
                                             </select>
                                         </td>
-                                        <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button></td>
+                                        <td className="px-6 py-4 text-right flex justify-end items-center gap-2">
+                                            <button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button>
+                                            <button 
+                                                onClick={() => handleDeleteOrder(order.id)} 
+                                                className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded"
+                                                title="Apagar Duplicado / Remover Encomenda"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
