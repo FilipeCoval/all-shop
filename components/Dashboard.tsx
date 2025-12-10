@@ -60,8 +60,8 @@ const Dashboard: React.FC = () => {
     publicProductId: '' as string,
     variant: '',
     purchaseDate: new Date().toISOString().split('T')[0],
-    supplierName: '', // NOVO
-    supplierOrderId: '', // NOVO
+    supplierName: '', 
+    supplierOrderId: '', 
     quantityBought: '',
     purchasePrice: '',
     targetSalePrice: '',
@@ -83,7 +83,6 @@ const Dashboard: React.FC = () => {
     shippingCost: '', 
     date: new Date().toISOString().split('T')[0],
     notes: '',
-    // Campos para atualizar o produto pai durante a venda
     supplierName: '',
     supplierOrderId: ''
   });
@@ -117,16 +116,14 @@ const Dashboard: React.FC = () => {
 
   // --- FETCH ORDERS ---
   useEffect(() => {
-    if (activeTab === 'orders') {
-        setIsOrdersLoading(true);
-        const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => {
-            const ordersData = snapshot.docs.map(doc => doc.data() as Order);
-            setAllOrders(ordersData);
-            setIsOrdersLoading(false);
-        });
-        return () => unsubscribe();
-    }
-  }, [activeTab]);
+    // Carregar sempre as encomendas para alimentar o gráfico, independentemente da tab
+    const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => {
+        const ordersData = snapshot.docs.map(doc => doc.data() as Order);
+        setAllOrders(ordersData);
+        setIsOrdersLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // --- FETCH COUPONS ---
   useEffect(() => {
@@ -223,44 +220,64 @@ const Dashboard: React.FC = () => {
   // --- UTILS ---
   const handleCopy = (text: string) => {
       navigator.clipboard.writeText(text);
-      // Feedback visual simples (pode ser melhorado com toast)
   };
 
-  // --- CHART DATA ---
+  // --- CHART DATA (ROBUST VERSION) ---
   const chartData = useMemo(() => {
-      const days = [];
-      const today = new Date(); // Data local
+      // Helper para normalizar datas para YYYY-MM-DD local
+      const toLocalISO = (dateStr: string) => {
+          if (!dateStr) return '';
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) return '';
+          
+          // Se já for YYYY-MM-DD simples (vendas manuais), usa direto
+          if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr;
 
+          // Se for ISO string (vendas online), extrai ano/mês/dia local
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      };
+
+      // 1. Extrair vendas manuais (Backoffice)
+      const manualSales = products.flatMap(p => 
+          (p.salesHistory || []).map(s => ({
+              date: toLocalISO(s.date), 
+              total: Number(s.quantity) * Number(s.unitPrice)
+          }))
+      );
+
+      // 2. Extrair vendas online (Orders)
+      // IGNORA APENAS O ESTADO 'CANCELADO'
+      const onlineOrders = allOrders
+          .filter(o => o.status !== 'Cancelado')
+          .map(o => ({
+              date: toLocalISO(o.date),
+              total: Number(o.total)
+          }));
+      
+      const allSales = [...manualSales, ...onlineOrders];
+      const days = [];
+      const today = new Date();
+      let totalPeriod = 0;
+
+      // Loop últimos 7 dias
       for (let i = 6; i >= 0; i--) {
           const d = new Date();
           d.setDate(today.getDate() - i);
           
-          // Construir string YYYY-MM-DD baseada na data LOCAL
+          // Gerar label YYYY-MM-DD baseada na data local do loop
           const year = d.getFullYear();
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const day = String(d.getDate()).padStart(2, '0');
           const dateLabel = `${year}-${month}-${day}`;
 
-          const totalForDay = allOrders
-            .filter(o => {
-                if (o.status === 'Cancelado') return false;
-                
-                try {
-                    // Converter a data da encomenda para objeto Date
-                    const orderDate = new Date(o.date);
-                    
-                    // Extrair componentes locais da data da encomenda
-                    const oYear = orderDate.getFullYear();
-                    const oMonth = String(orderDate.getMonth() + 1).padStart(2, '0');
-                    const oDay = String(orderDate.getDate()).padStart(2, '0');
-                    const orderDateStr = `${oYear}-${oMonth}-${oDay}`;
-                    
-                    return orderDateStr === dateLabel;
-                } catch (e) {
-                    return false;
-                }
-            })
-            .reduce((acc, o) => acc + o.total, 0);
+          const totalForDay = allSales.reduce((acc, sale) => {
+              return sale.date === dateLabel ? acc + sale.total : acc;
+          }, 0);
+
+          totalPeriod += totalForDay;
 
           days.push({ 
               label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), 
@@ -268,9 +285,10 @@ const Dashboard: React.FC = () => {
               value: totalForDay 
           });
       }
+      
       const maxValue = Math.max(...days.map(d => d.value), 1);
-      return { days, maxValue };
-  }, [allOrders]);
+      return { days, maxValue, totalPeriod };
+  }, [allOrders, products]);
 
   // --- KPI CALCULATIONS ---
   const stats = useMemo(() => {
@@ -383,8 +401,8 @@ const Dashboard: React.FC = () => {
       publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null,
       variant: formData.variant || null,
       purchaseDate: formData.purchaseDate,
-      supplierName: formData.supplierName, // NOVO
-      supplierOrderId: formData.supplierOrderId, // NOVO
+      supplierName: formData.supplierName, 
+      supplierOrderId: formData.supplierOrderId, 
       quantityBought: qBought,
       quantitySold: currentSold, 
       salesHistory: safeSalesHistory,
@@ -734,12 +752,25 @@ const Dashboard: React.FC = () => {
         {activeTab === 'orders' && (
             <div className="space-y-6">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
-                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação (7 Dias)</h3>
+                    <div className="flex justify-between items-center mb-6">
+                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação (7 Dias)</h3>
+                         <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span>
+                    </div>
+                    
                     <div className="flex items-end justify-between h-48 gap-2">
                         {chartData.days.map((day, idx) => (
                             <div key={idx} className="flex-1 flex flex-col items-center group">
                                 <div className="w-full bg-gray-100 rounded-t-lg relative flex items-end justify-center h-full hover:bg-gray-200">
-                                    <div className="w-full mx-1 bg-indigo-500 rounded-t-lg transition-all" style={{ height: `${(day.value / chartData.maxValue) * 100}%` }}></div>
+                                    <div 
+                                        className="w-full mx-1 bg-indigo-500 rounded-t-lg transition-all relative group/bar" 
+                                        style={{ height: `${Math.max((day.value / chartData.maxValue) * 100, day.value > 0 ? 5 : 0)}%` }}
+                                    >
+                                         {day.value > 0 && (
+                                             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                 {formatCurrency(day.value)}
+                                             </div>
+                                         )}
+                                    </div>
                                 </div>
                                 <span className="text-xs text-gray-500 font-medium mt-2">{day.label}</span>
                             </div>
