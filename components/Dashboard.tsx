@@ -229,16 +229,44 @@ const Dashboard: React.FC = () => {
   // --- CHART DATA ---
   const chartData = useMemo(() => {
       const days = [];
-      const today = new Date();
+      const today = new Date(); // Data local
+
       for (let i = 6; i >= 0; i--) {
-          const d = new Date(today);
+          const d = new Date();
           d.setDate(today.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          // Filter out cancelled orders from chart
+          
+          // Construir string YYYY-MM-DD baseada na data LOCAL
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const dateLabel = `${year}-${month}-${day}`;
+
           const totalForDay = allOrders
-            .filter(o => o.date.startsWith(dateStr) && o.status !== 'Cancelado')
+            .filter(o => {
+                if (o.status === 'Cancelado') return false;
+                
+                try {
+                    // Converter a data da encomenda para objeto Date
+                    const orderDate = new Date(o.date);
+                    
+                    // Extrair componentes locais da data da encomenda
+                    const oYear = orderDate.getFullYear();
+                    const oMonth = String(orderDate.getMonth() + 1).padStart(2, '0');
+                    const oDay = String(orderDate.getDate()).padStart(2, '0');
+                    const orderDateStr = `${oYear}-${oMonth}-${oDay}`;
+                    
+                    return orderDateStr === dateLabel;
+                } catch (e) {
+                    return false;
+                }
+            })
             .reduce((acc, o) => acc + o.total, 0);
-          days.push({ label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), date: dateStr, value: totalForDay });
+
+          days.push({ 
+              label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), 
+              date: dateLabel, 
+              value: totalForDay 
+          });
       }
       const maxValue = Math.max(...days.map(d => d.value), 1);
       return { days, maxValue };
