@@ -69,7 +69,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração)",
-    price: 50.00,
+    price: 45.00,
     description: "Transforme a sua TV numa Smart TV completa. Acesso à Netflix, YouTube e milhares de apps com qualidade 4K e Google TV.",
     category: "TV & Streaming",
     image: "https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif",
