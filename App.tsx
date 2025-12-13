@@ -440,7 +440,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <main className="flex-grow">
+      <main className="flex-grow flex flex-col">
         {renderContent()}
       </main>
 
