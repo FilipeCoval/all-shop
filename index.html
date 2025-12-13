@@ -11,7 +11,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://i.imgur.com/nSiZKBf.png">
 
-    <!-- Tailwind CSS (CDN para garantir estilo sem build complexo) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -21,7 +21,7 @@
             fontFamily: { sans: ['Inter', 'sans-serif'] },
             animation: { 
                 'fade-in': 'fadeIn 0.5s ease-out', 
-                'fade-in-up': 'fadeInUp 0.3s ease-out',
+                'fade-in-up': 'fadeInUp 0.3s ease-out', 
                 'fade-in-down': 'fadeInDown 0.3s ease-out'
             },
             keyframes: {
@@ -36,7 +36,7 @@
     <style>
         html, body { height: 100%; margin: 0; padding: 0; }
         body { background-color: #f8fafc; scroll-behavior: smooth; }
-        #root { display: flex; flex-col; min-height: 100%; }
+        #root { display: flex; flex-direction: column; min-height: 100%; }
     </style>
 <script type="importmap">
 {
