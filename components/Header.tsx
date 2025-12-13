@@ -1,6 +1,4 @@
-
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut } from 'lucide-react';
 import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X } from 'lucide-react';
 import { STORE_NAME, LOGO_URL } from '../constants';
 import { User } from '../types';
@@ -22,21 +20,32 @@ const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu, 
   user, 
   onOpenLogin, 
-  onLogout 
   onLogout,
   searchTerm,
   onSearchChange
 }) => {
+  
+  // Função de navegação segura
   const handleNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
-    window.location.hash = path;
+    // Garante que o path começa com # se não for raiz
+    if (path === '/') {
+        window.location.hash = '/';
+    } else if (path.startsWith('#')) {
+        window.location.hash = path;
+    } else {
+        window.location.hash = `#${path}`;
+    }
+  };
+
+  // Safe User Name Extraction
+  const getFirstName = () => {
+      if (!user || !user.name) return 'Cliente';
+      return user.name.split(' ')[0];
   };
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-lg bg-white/95 border-b border-gray-200 shadow-sm transition-all">
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between">
-        {/* Logo Section - Maximized Size */}
-        <div className="flex items-center gap-4 h-full py-1">
       <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-4">
         {/* Logo Section */}
         <div className="flex items-center gap-4 h-full py-1 shrink-0">
@@ -89,7 +98,6 @@ const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3">
         <div className="flex items-center gap-3 shrink-0">
           {/* User/Login Button */}
           {user ? (
@@ -101,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({
                 <div className="w-8 h-8 bg-blue-100 text-primary rounded-full flex items-center justify-center border border-blue-200">
                   <UserIcon size={18} />
                 </div>
-                <span className="max-w-[100px] truncate">{user.name.split(' ')[0]}</span>
+                <span className="max-w-[100px] truncate">{getFirstName()}</span>
               </button>
               {/* Dropdown hint */}
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0">
@@ -140,5 +148,4 @@ const Header: React.FC<HeaderProps> = ({
   );
 };
 
-export default Header;
 export default Header;
