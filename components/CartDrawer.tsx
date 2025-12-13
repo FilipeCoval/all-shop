@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper, Lock } from 'lucide-react';
-import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
-import { db } from '../services/firebaseConfig'; // Importar DB
+import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper, Lock, LogIn, ChevronLeft } from 'lucide-react';
+import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
+import { db } from '../services/firebaseConfig';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -33,13 +34,21 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
 
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
-    name: '', address: '', paymentMethod: 'MB Way'
+    name: '', address: '', paymentMethod: 'MB Way', phone: ''
   });
 
-  // FREE SHIPPING LOGIC
+  // CONSTANTS & COSTS
   const FREE_SHIPPING_THRESHOLD = 50;
+  const SHIPPING_COST = 4.99;
+  const COD_FEE = 2.00; // Taxa de Cobrança
+
+  // Logic: Shipping is based on subtotal (products only)
   const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - total);
   const progressPercent = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
+
+  // Logic: Costs Calculation
+  const shippingValue = total > 0 && total < FREE_SHIPPING_THRESHOLD ? SHIPPING_COST : 0;
+  const paymentFee = userInfo.paymentMethod === 'Cobrança (+2€)' ? COD_FEE : 0;
 
   useEffect(() => {
     if (!isOpen) {
@@ -64,7 +73,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               // Tenta usar a primeira morada se existir, senão deixa vazio
               address: user.addresses && user.addresses.length > 0 
                   ? `${user.addresses[0].street}, ${user.addresses[0].zip} ${user.addresses[0].city}` 
-                  : prev.address
+                  : prev.address,
+              phone: user.phone || prev.phone
           }));
       }
   }, [user]);
@@ -148,7 +158,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       setCouponError('');
   };
 
-  const finalTotal = Math.max(0, total - discount);
+  // FINAL TOTAL FORMULA: Subtotal - Discount + Shipping + PaymentFee
+  const finalTotal = Math.max(0, total - discount + shippingValue + paymentFee);
 
   const generateOrderId = () => `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -158,207 +169,416 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     // SEGURANÇA: Verificar login antes de avançar
     if (!user) {
         onOpenLogin();
-        // Não fechamos o carrinho para o utilizador perceber o contexto, 
-        // mas o modal de login vai aparecer por cima (devido ao z-index).
+        // Não fechamos o carrinho para o utilizador perceber o contexto
         return;
     }
 
     setCheckoutStep('info');
   };
 
-  const handleInfoSubmit = () => {
+  const handleInfoSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
       if (!currentOrderId) setCurrentOrderId(generateOrderId());
       setCheckoutStep('platform');
   };
 
-  const generateOrderMessage = (orderId: string) => {
-    const itemsList = cartItems.map(item => {
-        const variantText = item.selectedVariant ? ` [${item.selectedVariant}]` : '';
-        return `- ${item.quantity}x ${item.name}${variantText} (${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)})`;
-    }).join('\n');
+  const handleFinalizeOrder = () => {
+      // 1. Criar Objeto de Encomenda
+      const newOrder: Order = {
+          id: currentOrderId,
+          date: new Date().toISOString(),
+          total: finalTotal,
+          status: 'Processamento',
+          items: cartItems.map(item => `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`),
+          userId: user?.uid,
+          shippingInfo: userInfo
+      };
+
+      // 2. Chamar prop para guardar na DB
+      onCheckout(newOrder);
+
+      // 3. Gerar Mensagem
+      const itemsList = cartItems.map(item => 
+          `• ${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''} - ${item.price}€`
+      ).join('\n');
+
+      const couponText = appliedCoupon ? `\n🏷️ Desconto (${appliedCoupon.code}): -${discount.toFixed(2)}€` : '';
+      const shippingText = shippingValue === 0 ? 'Grátis' : `${shippingValue.toFixed(2)}€`;
+      const feeText = paymentFee > 0 ? `\n💸 Taxa de Cobrança: +${paymentFee.toFixed(2)}€` : '';
+
+      const message = `
+Olá! Gostaria de finalizar a minha encomenda na *${STORE_NAME}*.
+
+🆔 *Pedido:* ${currentOrderId}
+👤 *Nome:* ${userInfo.name}
+📍 *Morada:* ${userInfo.address}
+📱 *Contacto:* ${userInfo.phone}
+💳 *Pagamento:* ${userInfo.paymentMethod}
+
+🛒 *Carrinho:*
+${itemsList}
+${couponText}
+
+🚚 *Portes:* ${shippingText}${feeText}
+
+💰 *Total a Pagar:* ${finalTotal.toFixed(2)}€
+`.trim();
+
+      // 4. Redirecionar
+      const encodedMessage = encodeURIComponent(message);
+      if (platform === 'whatsapp') {
+          window.open(`https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`, '_blank');
+      } else {
+          window.open(TELEGRAM_LINK, '_blank');
+          
+          // Copy to clipboard fallback for Telegram
+          navigator.clipboard.writeText(message);
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000);
+          alert("Mensagem copiada! Cole no chat do Telegram.");
+      }
+
+      // 5. Fechar
+      onClose();
+  };
   
-      const discountFormatted = discount > 0 ? `\nDesconto (${appliedCoupon?.code}): -${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)}` : '';
-      const finalFormatted = discount > 0 ? `\n\n*TOTAL FINAL: ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(finalTotal)}*` : `\n\n*TOTAL: ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total)}*`;
-
-      return `Olá! Quero finalizar a minha encomenda na Allshop.\n\n*Pedido:* ${orderId}\n\n*Cliente:* ${userInfo.name}\n*Morada:* ${userInfo.address}\n*Pagamento:* ${userInfo.paymentMethod}\n\n*Itens:*\n${itemsList}\n${discountFormatted}${finalFormatted}`;
-  };
-
-  const handleFinalize = () => {
-    const orderIdToUse = currentOrderId || generateOrderId();
-    const message = generateOrderMessage(orderIdToUse);
-    const encodedMessage = encodeURIComponent(message);
-    
-    const newOrder: Order = {
-      id: orderIdToUse,
-      date: new Date().toISOString(),
-      total: finalTotal,
-      status: 'Processamento',
-      items: cartItems.map(i => `${i.quantity}x ${i.name}${i.selectedVariant ? ` (${i.selectedVariant})` : ''}`),
-      shippingInfo: { ...userInfo },
-      userId: user?.uid // Associa ID do user logado
-    };
-
-    onCheckout(newOrder);
-
-    if (platform === 'whatsapp') {
-      window.open(`https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`, '_blank');
-    } else {
-      navigator.clipboard.writeText(message);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      window.open(TELEGRAM_LINK, '_blank');
-    }
-    onClose();
-  };
-
   return (
     <>
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity z-50 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
-      <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-          <h2 className="text-xl font-bold text-gray-800">Seu Carrinho</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X size={24} /></button>
+      {/* Overlay */}
+      <div 
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      
+      {/* Drawer */}
+      <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        
+        {/* Header */}
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+          <div className="flex items-center gap-2">
+              {checkoutStep !== 'cart' && (
+                  <button onClick={() => setCheckoutStep(checkoutStep === 'platform' ? 'info' : 'cart')} className="p-1 hover:bg-gray-100 rounded-full mr-1">
+                      <ChevronLeft size={20} />
+                  </button>
+              )}
+              <h2 className="text-xl font-bold text-gray-900">
+                  {checkoutStep === 'cart' && 'O seu Carrinho'}
+                  {checkoutStep === 'info' && 'Dados de Envio'}
+                  {checkoutStep === 'platform' && 'Confirmar Pedido'}
+              </h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500">
+            <X size={24} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          
-          {/* --- GAMIFICATION BAR (FREE SHIPPING) --- */}
-          {checkoutStep === 'cart' && cartItems.length > 0 && (
-             <div className="mb-6 bg-blue-50/50 p-4 rounded-xl border border-blue-100 animate-fade-in-down">
-                 {remainingForFreeShipping > 0 ? (
-                     <p className="text-sm text-gray-700 mb-2 flex items-center gap-2">
-                         <Truck size={18} className="text-primary" />
-                         Faltam <span className="font-bold text-primary">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(remainingForFreeShipping)}</span> para ter <span className="font-bold">Portes Grátis!</span>
-                     </p>
-                 ) : (
-                     <p className="text-sm text-green-700 mb-2 flex items-center gap-2 font-bold">
-                         <PartyPopper size={18} />
-                         Parabéns! Tem Portes Grátis.
-                     </p>
-                 )}
-                 <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                     <div 
-                        className={`h-full rounded-full transition-all duration-1000 ease-out ${remainingForFreeShipping > 0 ? 'bg-primary' : 'bg-gradient-to-r from-green-400 to-green-600'}`}
-                        style={{ width: `${progressPercent}%` }}
-                     ></div>
-                 </div>
-             </div>
-          )}
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            {/* STEP 1: CART */}
+            {checkoutStep === 'cart' && (
+                <>
+                    {/* Free Shipping Progress */}
+                    {total > 0 && (
+                        <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2 text-sm font-medium">
+                                <Truck size={18} className={remainingForFreeShipping === 0 ? "text-green-500" : "text-blue-500"} />
+                                {remainingForFreeShipping > 0 ? (
+                                    <span>Faltam <span className="text-blue-600 font-bold">{remainingForFreeShipping.toFixed(2)}€</span> para portes grátis!</span>
+                                ) : (
+                                    <span className="text-green-600 font-bold">Parabéns! Tem portes grátis.</span>
+                                )}
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div 
+                                    className={`h-full transition-all duration-500 ${remainingForFreeShipping === 0 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                                    style={{ width: `${progressPercent}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    )}
 
-          {checkoutStep === 'cart' ? (
-            cartItems.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
-                <Smartphone size={48} className="opacity-20" />
-                <p>O seu carrinho está vazio.</p>
-                <button onClick={onClose} className="text-primary font-bold hover:underline">Começar a comprar</button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {cartItems.map((item) => (
-                  <div key={item.cartItemId} className="flex gap-4 p-3 bg-white border border-gray-100 rounded-xl shadow-sm animate-fade-in">
-                    <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
-                    <div className="flex-1">
-                        <h3 className="font-bold text-gray-800 text-sm line-clamp-2">{item.name}</h3>
-                        {item.selectedVariant && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded mt-1 inline-block">{item.selectedVariant}</span>}
-                        <div className="flex items-center justify-between mt-2">
-                            <span className="font-bold text-primary">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(item.price)}</span>
-                            <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-2">
-                                <button onClick={() => onUpdateQuantity(item.cartItemId, -1)} className="text-gray-500 hover:text-red-500 px-1 font-bold text-lg disabled:opacity-30" disabled={item.quantity <= 1}>-</button>
-                                <span className="text-sm font-medium w-4 text-center">{item.quantity}</span>
-                                <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="text-gray-500 hover:text-green-500 px-1 font-bold text-lg">+</button>
+                    {cartItems.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+                            <div className="bg-gray-200 p-6 rounded-full mb-4">
+                                <Smartphone size={48} className="text-gray-400" />
+                            </div>
+                            <p className="text-lg font-medium text-gray-900">O carrinho está vazio</p>
+                            <p className="text-sm text-gray-500 mt-1">Adicione produtos para começar</p>
+                            <button onClick={onClose} className="mt-6 text-primary font-bold hover:underline">
+                                Continuar a comprar
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {cartItems.map((item) => (
+                                <div key={item.cartItemId} className="bg-white p-3 rounded-xl border border-gray-100 flex gap-3 shadow-sm animate-slide-in">
+                                    <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="font-bold text-gray-900 text-sm truncate pr-2">{item.name}</h3>
+                                                {item.selectedVariant && (
+                                                    <p className="text-xs text-gray-500 mt-0.5">{item.selectedVariant}</p>
+                                                )}
+                                            </div>
+                                            <button 
+                                                onClick={() => onRemoveItem(item.cartItemId)}
+                                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                        <div className="flex justify-between items-end mt-2">
+                                            <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
+                                                <button 
+                                                    onClick={() => onUpdateQuantity(item.cartItemId, -1)}
+                                                    className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-primary disabled:opacity-50"
+                                                    disabled={item.quantity <= 1}
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
+                                                <button 
+                                                    onClick={() => onUpdateQuantity(item.cartItemId, 1)}
+                                                    className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-primary"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                            <span className="font-bold text-gray-900">
+                                                {(item.price * item.quantity).toFixed(2)}€
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* STEP 2: INFO */}
+            {checkoutStep === 'info' && (
+                <form id="infoForm" onSubmit={handleInfoSubmit} className="space-y-6 animate-fade-in">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    value={userInfo.name}
+                                    onChange={e => setUserInfo({...userInfo, name: e.target.value})}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    placeholder="Ex: João Silva"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Morada de Entrega</label>
+                                <textarea 
+                                    required
+                                    rows={3}
+                                    value={userInfo.address}
+                                    onChange={e => setUserInfo({...userInfo, address: e.target.value})}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
+                                    placeholder="Rua, Número, Código Postal, Cidade"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Telemóvel</label>
+                                <input 
+                                    type="tel" 
+                                    required
+                                    value={userInfo.phone}
+                                    onChange={e => setUserInfo({...userInfo, phone: e.target.value})}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    placeholder="Ex: 912 345 678"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Pagamento Preferido</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {['MB Way', 'Transf. Bancária', 'Cobrança (+2€)'].map(method => (
+                                        <button
+                                            key={method}
+                                            type="button"
+                                            onClick={() => setUserInfo({...userInfo, paymentMethod: method})}
+                                            className={`p-3 rounded-xl border text-sm font-medium transition-all
+                                                ${userInfo.paymentMethod === method 
+                                                    ? 'bg-blue-50 border-primary text-primary shadow-sm' 
+                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            {method}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <button onClick={() => onRemoveItem(item.cartItemId)} className="text-gray-300 hover:text-red-500 self-start p-1"><Trash2 size={18} /></button>
-                  </div>
-                ))}
+                </form>
+            )}
 
-                {/* --- COUPON SECTION --- */}
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-2">
-                        <TicketPercent size={14} /> Código Promocional
-                    </label>
-                    {appliedCoupon ? (
-                        <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg">
-                            <div className="flex items-center gap-2">
-                                <Check size={16} className="text-green-600" />
-                                <div>
-                                    <p className="text-sm font-bold text-green-700">Cupão {appliedCoupon.code}</p>
-                                    <p className="text-xs text-green-600">-{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)} aplicado</p>
-                                </div>
-                            </div>
-                            <button onClick={removeCoupon} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+            {/* STEP 3: PLATFORM */}
+            {checkoutStep === 'platform' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 text-center">
+                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce-slow">
+                            <Check size={32} />
                         </div>
-                    ) : (
-                        <div>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    value={couponCode}
-                                    onChange={(e) => setCouponCode(e.target.value)}
-                                    placeholder="NATAL20"
-                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none uppercase"
-                                    disabled={isCheckingCoupon}
-                                />
-                                <button 
-                                    onClick={handleApplyCoupon}
-                                    disabled={isCheckingCoupon || !couponCode}
-                                    className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-black transition-colors disabled:opacity-50"
-                                >
-                                    {isCheckingCoupon ? <Loader2 className="animate-spin" size={16} /> : 'Aplicar'}
-                                </button>
-                            </div>
-                            {couponError && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><X size={12} /> {couponError}</p>}
+                        <h3 className="text-xl font-bold text-gray-900">Quase lá!</h3>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            Para confirmar a encomenda com segurança, finalizamos o processo com um humano no WhatsApp ou Telegram.
+                        </p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <h4 className="font-bold text-gray-900 mb-4">Escolha onde finalizar:</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button 
+                                onClick={() => setPlatform('whatsapp')}
+                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2
+                                    ${platform === 'whatsapp' 
+                                        ? 'border-green-500 bg-green-50 text-green-700' 
+                                        : 'border-gray-100 hover:border-green-200 bg-white'
+                                    }`}
+                            >
+                                <Smartphone size={32} className={platform === 'whatsapp' ? 'text-green-600' : 'text-gray-400'} />
+                                <span className="font-bold">WhatsApp</span>
+                            </button>
+                            <button 
+                                onClick={() => setPlatform('telegram')}
+                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2
+                                    ${platform === 'telegram' 
+                                        ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                                        : 'border-gray-100 hover:border-blue-200 bg-white'
+                                    }`}
+                            >
+                                <Send size={32} className={platform === 'telegram' ? 'text-blue-600' : 'text-gray-400'} />
+                                <span className="font-bold">Telegram</span>
+                            </button>
                         </div>
-                    )}
+                    </div>
+
+                    <div className="bg-gray-100 p-4 rounded-xl text-xs text-gray-500 flex gap-2">
+                        <Lock size={16} className="shrink-0" />
+                        <p>Os seus dados são enviados de forma encriptada diretamente para o nosso suporte oficial.</p>
+                    </div>
                 </div>
-              </div>
-            )
-          ) : checkoutStep === 'info' ? (
-            <div className="space-y-6 animate-fade-in-right">
-                <div className="text-center mb-6"><h3 className="font-bold text-xl">Dados de Envio</h3></div>
-                <div className="space-y-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label><input type="text" required className="w-full border border-gray-300 rounded-lg px-4 py-3" placeholder="Ex: João Silva" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Morada Completa</label><textarea required className="w-full border border-gray-300 rounded-lg px-4 py-3 h-24 resize-none" placeholder="Rua, Nº, Andar, Código Postal, Cidade" value={userInfo.address} onChange={e => setUserInfo({...userInfo, address: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Método de Pagamento</label><div className="grid grid-cols-2 gap-3">{['MB Way', 'Transferência', 'Cobrança (+2€)'].map(method => (<button key={method} className={`py-3 px-2 rounded-lg text-sm font-medium border transition-all ${userInfo.paymentMethod === method ? 'bg-blue-50 border-primary text-primary' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`} onClick={() => setUserInfo({...userInfo, paymentMethod: method})}>{method}</button>))}</div></div>
-                </div>
-            </div>
-          ) : (
-            <div className="space-y-6 animate-fade-in-right text-center pt-8">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 mb-4"><Check size={40} /></div>
-                <h3 className="font-bold text-2xl text-gray-900">Quase lá!</h3>
-                <p className="text-gray-600">Escolha onde quer finalizar o pedido.</p>
-                <div className="grid grid-cols-1 gap-4 mt-8">
-                    <button onClick={() => setPlatform('whatsapp')} className={`p-4 rounded-xl border-2 flex items-center gap-4 ${platform === 'whatsapp' ? 'border-green-500 bg-green-50' : 'border-gray-100'}`}><div className="bg-green-500 text-white p-3 rounded-full"><Smartphone size={24} /></div><div className="text-left"><h4 className="font-bold text-gray-900">WhatsApp</h4></div></button>
-                    <button onClick={() => setPlatform('telegram')} className={`p-4 rounded-xl border-2 flex items-center gap-4 ${platform === 'telegram' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}><div className="bg-blue-500 text-white p-3 rounded-full"><MessageCircle size={24} /></div><div className="text-left"><h4 className="font-bold text-gray-900">Telegram</h4></div></button>
-                </div>
-            </div>
-          )}
+            )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50">
-          {checkoutStep === 'cart' ? (
-            <>
-              <div className="flex justify-between mb-2 text-gray-600 text-sm"><span>Subtotal</span><span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(total)}</span></div>
-              {discount > 0 && (<div className="flex justify-between mb-2 text-green-600 font-medium text-sm"><span>Desconto ({appliedCoupon?.code})</span><span>-{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(discount)}</span></div>)}
-              <div className="flex justify-between mb-4 text-xl font-bold text-gray-900"><span>Total</span><span>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(finalTotal)}</span></div>
-              
-              {/* LOGIN PROTECTION MESSAGE */}
-              {!user && cartItems.length > 0 && (
-                  <div className="mb-3 text-xs bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-200 flex items-center gap-2">
-                      <Lock size={12} /> Login necessário para finalizar compra.
-                  </div>
-              )}
+        {/* Footer */}
+        <div className="p-4 bg-white border-t border-gray-100 shrink-0 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
+            
+            {/* Coupon Input Area (Only in Cart Step) */}
+            {checkoutStep === 'cart' && cartItems.length > 0 && (
+                <div className="mb-4">
+                    {appliedCoupon ? (
+                        <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg mb-2 animate-fade-in">
+                             <div className="flex items-center gap-2">
+                                <TicketPercent className="text-green-600" size={18} />
+                                <span className="text-green-800 font-bold text-sm">
+                                    Cupão {appliedCoupon.code} aplicado!
+                                </span>
+                             </div>
+                             <button onClick={removeCoupon} className="text-green-600 hover:text-green-800 p-1"><X size={16} /></button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input 
+                                    type="text" 
+                                    placeholder="Tem um cupão?"
+                                    value={couponCode}
+                                    onChange={(e) => setCouponCode(e.target.value)}
+                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none uppercase"
+                                />
+                                <TicketPercent className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            </div>
+                            <button 
+                                onClick={handleApplyCoupon}
+                                disabled={!couponCode || isCheckingCoupon}
+                                className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                            >
+                                {isCheckingCoupon ? <Loader2 className="animate-spin" size={16} /> : 'Aplicar'}
+                            </button>
+                        </div>
+                    )}
+                    {couponError && <p className="text-red-500 text-xs mt-1 ml-1">{couponError}</p>}
+                </div>
+            )}
 
-              <button className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg transition-all disabled:opacity-50" disabled={cartItems.length === 0} onClick={handleCheckoutStart}>
-                  {user ? 'Finalizar Compra' : 'Entrar para Comprar'}
-              </button>
-            </>
-          ) : checkoutStep === 'info' ? (
-            <div className="flex gap-3"><button onClick={() => setCheckoutStep('cart')} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold">Voltar</button><button onClick={handleInfoSubmit} disabled={!userInfo.name || !userInfo.address} className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Continuar</button></div>
-          ) : (
-            <div className="flex gap-3"><button onClick={() => setCheckoutStep('info')} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold">Voltar</button><button onClick={handleFinalize} className={`flex-[2] py-3 rounded-xl font-bold shadow-lg text-white flex items-center justify-center gap-2 ${platform === 'whatsapp' ? 'bg-green-600' : 'bg-blue-500'}`}>{isCopied ? <Check size={20} /> : <Send size={20} />} {platform === 'whatsapp' ? 'Enviar Pedido' : 'Abrir Telegram'}</button></div>
-          )}
+            {/* Totals */}
+            <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-gray-500 text-sm">
+                    <span>Subtotal</span>
+                    <span>{total.toFixed(2)}€</span>
+                </div>
+                
+                {/* Portes de Envio */}
+                <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Portes de Envio</span>
+                    {shippingValue === 0 ? (
+                        <span className="text-green-600 font-bold">Grátis</span>
+                    ) : (
+                        <span className="text-gray-900">{shippingValue.toFixed(2)}€</span>
+                    )}
+                </div>
+
+                {/* Taxa de Cobrança */}
+                {paymentFee > 0 && (
+                    <div className="flex justify-between text-sm animate-fade-in">
+                        <span className="text-gray-500">Taxa de Cobrança</span>
+                        <span className="text-gray-900">+{paymentFee.toFixed(2)}€</span>
+                    </div>
+                )}
+
+                {discount > 0 && (
+                    <div className="flex justify-between text-green-600 text-sm font-medium animate-fade-in">
+                        <span>Desconto</span>
+                        <span>-{discount.toFixed(2)}€</span>
+                    </div>
+                )}
+                
+                <div className="flex justify-between text-gray-900 font-bold text-xl pt-2 border-t border-gray-100">
+                    <span>Total</span>
+                    <span>{finalTotal.toFixed(2)}€</span>
+                </div>
+            </div>
+
+            {/* Main Action Button */}
+            {checkoutStep === 'cart' ? (
+                <button 
+                    onClick={handleCheckoutStart}
+                    disabled={cartItems.length === 0}
+                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                    {user ? 'Continuar Compra' : 'Entrar para Comprar'} <PartyPopper size={20} />
+                </button>
+            ) : checkoutStep === 'info' ? (
+                <button 
+                    type="submit"
+                    form="infoForm"
+                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    Confirmar Dados
+                </button>
+            ) : (
+                <button 
+                    onClick={handleFinalizeOrder}
+                    className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 text-white
+                        ${platform === 'whatsapp' 
+                            ? 'bg-green-600 hover:bg-green-700 shadow-green-500/25' 
+                            : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/25'
+                        }`}
+                >
+                    {isCopied ? 'Copiado!' : `Enviar Pedido via ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}`} 
+                    {isCopied ? <Check size={20} /> : <Send size={20} />}
+                </button>
+            )}
         </div>
       </div>
     </>
