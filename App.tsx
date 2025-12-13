@@ -483,7 +483,7 @@ const App: React.FC = () => {
             </div>
         </div>
         <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs">
-            <span>&copy; 2024 Allshop Store. Todos os direitos reservados.</span>
+            <span>&copy; 2025 Allshop Store. Todos os direitos reservados.</span>
             {isAdmin && (
               <a 
                 href="#dashboard" 
