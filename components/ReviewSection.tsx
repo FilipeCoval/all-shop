@@ -10,7 +10,7 @@ interface ReviewSectionProps {
   currentUser: User | null;
 }
 
-const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAddReview, currentUser }) => {
+const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], onAddReview, currentUser }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
@@ -21,7 +21,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAdd
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filtra reviews apenas deste produto
-  const productReviews = reviews.filter(r => r.productId === productId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const productReviews = (reviews || []).filter(r => r.productId === productId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   const averageRating = productReviews.length 
     ? (productReviews.reduce((acc, r) => acc + r.rating, 0) / productReviews.length).toFixed(1) 
@@ -311,4 +311,3 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews, onAdd
 };
 
 export default ReviewSection;
-
