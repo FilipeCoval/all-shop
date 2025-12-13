@@ -41,10 +41,10 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// SOLUÇÃO NUCLEAR PARA DUPLICAÇÃO:
-// Limpa qualquer conteúdo HTML que já exista no root antes de montar o React.
-// Isto remove o "site fantasma" ou duplicado caso o script corra duas vezes.
-rootElement.innerHTML = '';
+// --- LIMPEZA DE SEGURANÇA ---
+// Garante que o container está vazio antes de iniciar o React.
+// Essencial para evitar duplicação em ambientes como Vercel/Netlify.
+rootElement.innerHTML = ''; 
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
