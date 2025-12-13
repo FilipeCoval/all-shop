@@ -12,7 +12,7 @@ interface ProductListProps {
   searchTerm: string;
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist, searchTerm }) => {
+const ProductList: React.FC<ProductListProps> = ({ products = [], onAddToCart, getStock, wishlist = [], onToggleWishlist, searchTerm = '' }) => {
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
   
@@ -32,11 +32,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
   }, [searchTerm, selectedCategory, sortOption]);
 
   const categories = useMemo(() => {
+    if (!products) return ['Todas'];
     const cats = products.map(p => p.category);
     return ['Todas', ...new Set(cats)];
   }, [products]);
 
   const filteredAndSortedProducts = useMemo(() => {
+      if (!products) return [];
       let result = products.filter(product => {
         const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               product.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -298,3 +300,4 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, getSto
 };
 
 export default ProductList;
+
