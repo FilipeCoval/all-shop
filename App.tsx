@@ -226,15 +226,6 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleLoginSuccess = (incomingUser: User) => {
-    setUser(incomingUser);
-    if (incomingUser.wishlist) {
-        setWishlist(incomingUser.wishlist);
-        localStorage.setItem('wishlist', JSON.stringify(incomingUser.wishlist));
-    }
-    setIsLoginOpen(false);
-  };
-
   const handleUpdateUser = async (updatedUser: User) => {
     setUser(updatedUser);
     if (updatedUser.uid) {
@@ -397,7 +388,7 @@ const App: React.FC = () => {
 
   // Renderização Padrão
   return (
-    <div className="min-h-screen flex flex-col font-sans text-gray-900 bg-gray-50">
+    <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
       <Header 
         cartCount={cartCount} 
         onOpenCart={() => setIsCartOpen(true)} 
@@ -440,11 +431,12 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <main className="flex-grow flex flex-col">
+      {/* Main Content Grows to fill space */}
+      <main className="flex-grow w-full flex flex-col">
         {renderContent()}
       </main>
 
-      <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800">
+      <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
                 <h4 className="text-white font-bold text-lg mb-4">Allshop</h4>
@@ -519,7 +511,7 @@ const App: React.FC = () => {
       <LoginModal 
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
-        onLogin={handleLoginSuccess}
+        onLogin={(u) => { setUser(u); setIsLoginOpen(false); }}
       />
 
       <AIChat />
