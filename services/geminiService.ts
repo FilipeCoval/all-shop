@@ -5,13 +5,13 @@ import { InventoryProduct } from '../types';
 
 let chatSession: Chat | null = null;
 
-const formatProductContext = (): string => {
-  return PRODUCTS.map(p => 
+// Função lazy para formatar contexto apenas quando necessário, evitando erros de inicialização
+const getSystemInstruction = (): string => {
+  const productsList = PRODUCTS.map(p => 
     `- **${p.name}** (€ ${p.price.toFixed(2)})\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
   ).join('\n\n');
-};
 
-const SYSTEM_INSTRUCTION = `
+  return `
 Atue como o **Especialista de Tecnologia e Vendas** da loja **${STORE_NAME}**.
 A sua missão é ajudar o cliente a escolher o produto perfeito, com foco especial em TV Boxes, e fechar a venda.
 
@@ -57,10 +57,11 @@ A sua missão é ajudar o cliente a escolher o produto perfeito, com foco especi
     *   Depois de explicar, diga: "Posso adicionar a [Box Escolhida] ao seu carrinho?"
 
 **📦 CATÁLOGO COMPLETO:**
-${formatProductContext()}
+${productsList}
 
 **Tom de voz:** Profissional, Seguro, Útil e Respeitador das Leis. Responda SEMPRE em Português de Portugal.
 `;
+}
 
 export const initializeChat = async (): Promise<Chat> => {
   // Acesso seguro a import.meta.env
@@ -81,7 +82,7 @@ export const initializeChat = async (): Promise<Chat> => {
   chatSession = ai.chats.create({
     model: 'gemini-2.5-flash',
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: getSystemInstruction(), // Chamada Lazy
       temperature: 0.3, // Baixa temperatura para seguir as regras estritamente
       maxOutputTokens: 600,
     },
@@ -175,4 +176,3 @@ export const getInventoryAnalysis = async (products: InventoryProduct[], userPro
         return "Não foi possível gerar análise no momento.";
     }
 };
-
