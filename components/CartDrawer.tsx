@@ -67,13 +67,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   // AUTO-FILL USER DATA
   useEffect(() => {
       if (user) {
+          // Safe check to prevent crashes if address data is partial
+          const hasAddress = user.addresses && user.addresses.length > 0 && user.addresses[0];
+          const formattedAddress = hasAddress 
+              ? `${user.addresses[0].street || ''}, ${user.addresses[0].zip || ''} ${user.addresses[0].city || ''}` 
+              : '';
+
           setUserInfo(prev => ({
               ...prev,
-              name: user.name,
-              // Tenta usar a primeira morada se existir, senão deixa vazio
-              address: user.addresses && user.addresses.length > 0 
-                  ? `${user.addresses[0].street}, ${user.addresses[0].zip} ${user.addresses[0].city}` 
-                  : prev.address,
+              name: user.name || '',
+              address: formattedAddress || prev.address,
               phone: user.phone || prev.phone
           }));
       }
