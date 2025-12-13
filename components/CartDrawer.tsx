@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Smartphone, Send, MessageCircle, Copy, Check, TicketPercent, Loader2, Truck, PartyPopper, Lock, LogIn, ChevronLeft } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, Lock, ChevronLeft, Truck, Coins } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -37,18 +36,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     name: '', address: '', paymentMethod: 'MB Way', phone: ''
   });
 
-  // CONSTANTS & COSTS
-  const FREE_SHIPPING_THRESHOLD = 50;
+  // CONSTANTES DE CUSTOS
+  const SHIPPING_THRESHOLD = 50;
   const SHIPPING_COST = 4.99;
   const COD_FEE = 2.00; // Taxa de Cobrança
-
-  // Logic: Shipping is based on subtotal (products only)
-  const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - total);
-  const progressPercent = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
-
-  // Logic: Costs Calculation
-  const shippingValue = total > 0 && total < FREE_SHIPPING_THRESHOLD ? SHIPPING_COST : 0;
-  const paymentFee = userInfo.paymentMethod === 'Cobrança (+2€)' ? COD_FEE : 0;
 
   useEffect(() => {
     if (!isOpen) {
@@ -67,7 +58,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   // AUTO-FILL USER DATA
   useEffect(() => {
       if (user) {
-          // Safe check to prevent crashes if address data is partial
           const hasAddress = user.addresses && user.addresses.length > 0 && user.addresses[0];
           const formattedAddress = hasAddress 
               ? `${user.addresses[0].street || ''}, ${user.addresses[0].zip || ''} ${user.addresses[0].city || ''}` 
@@ -142,7 +132,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           }
           setCouponCode('');
           
-          // Incrementar uso (opcional, mas bom para stats)
+          // Incrementar uso
           if(couponData.id) {
              db.collection('coupons').doc(couponData.id).update({ usageCount: (couponData.usageCount || 0) + 1 });
           }
@@ -161,18 +151,19 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       setCouponError('');
   };
 
-  // FINAL TOTAL FORMULA: Subtotal - Discount + Shipping + PaymentFee
-  const finalTotal = Math.max(0, total - discount + shippingValue + paymentFee);
+  // --- CÁLCULOS FINAIS ---
+  const shippingCost = total >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
+  const paymentFee = userInfo.paymentMethod === 'Cobrança' ? COD_FEE : 0;
+  
+  const finalTotal = Math.max(0, total + shippingCost + paymentFee - discount);
 
   const generateOrderId = () => `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const handleCheckoutStart = () => {
     if (cartItems.length === 0) return;
 
-    // SEGURANÇA: Verificar login antes de avançar
     if (!user) {
         onOpenLogin();
-        // Não fechamos o carrinho para o utilizador perceber o contexto
         return;
     }
 
@@ -186,7 +177,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const handleFinalizeOrder = () => {
-      // 1. Criar Objeto de Encomenda
       const newOrder: Order = {
           id: currentOrderId,
           date: new Date().toISOString(),
@@ -197,17 +187,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           shippingInfo: userInfo
       };
 
-      // 2. Chamar prop para guardar na DB
       onCheckout(newOrder);
 
-      // 3. Gerar Mensagem
       const itemsList = cartItems.map(item => 
           `• ${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''} - ${item.price}€`
       ).join('\n');
 
       const couponText = appliedCoupon ? `\n🏷️ Desconto (${appliedCoupon.code}): -${discount.toFixed(2)}€` : '';
-      const shippingText = shippingValue === 0 ? 'Grátis' : `${shippingValue.toFixed(2)}€`;
-      const feeText = paymentFee > 0 ? `\n💸 Taxa de Cobrança: +${paymentFee.toFixed(2)}€` : '';
+      
+      const shippingText = shippingCost > 0 ? `\n🚚 Portes: +${shippingCost.toFixed(2)}€` : '\n🚚 Portes: Grátis';
+      const feeText = paymentFee > 0 ? `\n💵 Taxa Cobrança: +${paymentFee.toFixed(2)}€` : '';
 
       const message = `
 Olá! Gostaria de finalizar a minha encomenda na *${STORE_NAME}*.
@@ -220,40 +209,33 @@ Olá! Gostaria de finalizar a minha encomenda na *${STORE_NAME}*.
 
 🛒 *Carrinho:*
 ${itemsList}
-${couponText}
-
-🚚 *Portes:* ${shippingText}${feeText}
+${couponText}${shippingText}${feeText}
 
 💰 *Total a Pagar:* ${finalTotal.toFixed(2)}€
 `.trim();
 
-      // 4. Redirecionar
       const encodedMessage = encodeURIComponent(message);
       if (platform === 'whatsapp') {
           window.open(`https://wa.me/${SELLER_PHONE}?text=${encodedMessage}`, '_blank');
       } else {
           window.open(TELEGRAM_LINK, '_blank');
           
-          // Copy to clipboard fallback for Telegram
           navigator.clipboard.writeText(message);
           setIsCopied(true);
           setTimeout(() => setIsCopied(false), 2000);
           alert("Mensagem copiada! Cole no chat do Telegram.");
       }
 
-      // 5. Fechar
       onClose();
   };
   
   return (
     <>
-      {/* Overlay */}
       <div 
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
       
-      {/* Drawer */}
       <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
         {/* Header */}
@@ -280,26 +262,6 @@ ${couponText}
             {/* STEP 1: CART */}
             {checkoutStep === 'cart' && (
                 <>
-                    {/* Free Shipping Progress */}
-                    {total > 0 && (
-                        <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex items-center gap-2 mb-2 text-sm font-medium">
-                                <Truck size={18} className={remainingForFreeShipping === 0 ? "text-green-500" : "text-blue-500"} />
-                                {remainingForFreeShipping > 0 ? (
-                                    <span>Faltam <span className="text-blue-600 font-bold">{remainingForFreeShipping.toFixed(2)}€</span> para portes grátis!</span>
-                                ) : (
-                                    <span className="text-green-600 font-bold">Parabéns! Tem portes grátis.</span>
-                                )}
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                                <div 
-                                    className={`h-full transition-all duration-500 ${remainingForFreeShipping === 0 ? 'bg-green-500' : 'bg-blue-500'}`} 
-                                    style={{ width: `${progressPercent}%` }}
-                                ></div>
-                            </div>
-                        </div>
-                    )}
-
                     {cartItems.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
                             <div className="bg-gray-200 p-6 rounded-full mb-4">
@@ -387,10 +349,10 @@ ${couponText}
                                     onChange={e => setUserInfo({...userInfo, address: e.target.value})}
                                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
                                     placeholder="Rua, Número, Código Postal, Cidade"
-                                />
+                                ></textarea>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Telemóvel</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Telemóvel (WhatsApp)</label>
                                 <input 
                                     type="tel" 
                                     required
@@ -400,22 +362,40 @@ ${couponText}
                                     placeholder="Ex: 912 345 678"
                                 />
                             </div>
+                            
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Pagamento Preferido</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {['MB Way', 'Transf. Bancária', 'Cobrança (+2€)'].map(method => (
-                                        <button
+                                <label className="block text-sm font-bold text-gray-700 mb-3">Método de Pagamento</label>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {['MB Way', 'Transferência Bancária', 'Cobrança'].map((method) => (
+                                        <label 
                                             key={method}
-                                            type="button"
-                                            onClick={() => setUserInfo({...userInfo, paymentMethod: method})}
-                                            className={`p-3 rounded-xl border text-sm font-medium transition-all
+                                            className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
                                                 ${userInfo.paymentMethod === method 
-                                                    ? 'bg-blue-50 border-primary text-primary shadow-sm' 
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                                                }`}
+                                                    ? 'border-primary bg-blue-50 text-primary' 
+                                                    : 'border-gray-100 hover:border-gray-200 text-gray-600 bg-white'
+                                                }
+                                            `}
                                         >
-                                            {method}
-                                        </button>
+                                            <input 
+                                                type="radio" 
+                                                name="payment" 
+                                                value={method}
+                                                checked={userInfo.paymentMethod === method}
+                                                onChange={e => setUserInfo({...userInfo, paymentMethod: e.target.value})}
+                                                className="hidden"
+                                            />
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
+                                                ${userInfo.paymentMethod === method ? 'border-primary' : 'border-gray-300'}
+                                            `}>
+                                                {userInfo.paymentMethod === method && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="font-bold block">{method}</span>
+                                                {method === 'Cobrança' && (
+                                                    <span className="text-xs text-orange-600 font-medium">+2.00€ Taxa</span>
+                                                )}
+                                            </div>
+                                        </label>
                                     ))}
                                 </div>
                             </div>
@@ -424,89 +404,76 @@ ${couponText}
                 </form>
             )}
 
-            {/* STEP 3: PLATFORM */}
+            {/* STEP 3: PLATFORM & SUMMARY */}
             {checkoutStep === 'platform' && (
                 <div className="space-y-6 animate-fade-in">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 text-center">
-                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce-slow">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600 animate-bounce">
                             <Check size={32} />
                         </div>
                         <h3 className="text-xl font-bold text-gray-900">Quase lá!</h3>
-                        <p className="text-gray-500 mt-2 text-sm">
-                            Para confirmar a encomenda com segurança, finalizamos o processo com um humano no WhatsApp ou Telegram.
-                        </p>
+                        <p className="text-gray-500 text-sm mt-2">Escolha onde quer finalizar o pedido para recebermos os seus dados.</p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                        <h4 className="font-bold text-gray-900 mb-4">Escolha onde finalizar:</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => setPlatform('whatsapp')}
-                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2
-                                    ${platform === 'whatsapp' 
-                                        ? 'border-green-500 bg-green-50 text-green-700' 
-                                        : 'border-gray-100 hover:border-green-200 bg-white'
-                                    }`}
-                            >
-                                <Smartphone size={32} className={platform === 'whatsapp' ? 'text-green-600' : 'text-gray-400'} />
-                                <span className="font-bold">WhatsApp</span>
-                            </button>
-                            <button 
-                                onClick={() => setPlatform('telegram')}
-                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2
-                                    ${platform === 'telegram' 
-                                        ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                                        : 'border-gray-100 hover:border-blue-200 bg-white'
-                                    }`}
-                            >
-                                <Send size={32} className={platform === 'telegram' ? 'text-blue-600' : 'text-gray-400'} />
-                                <span className="font-bold">Telegram</span>
-                            </button>
-                        </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button 
+                            onClick={() => setPlatform('whatsapp')}
+                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-2 transition-all
+                                ${platform === 'whatsapp' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-100 bg-white text-gray-600 hover:border-green-200'}
+                            `}
+                        >
+                            <Smartphone size={32} className={platform === 'whatsapp' ? 'text-green-600' : 'text-gray-400'} />
+                            <span className="font-bold">WhatsApp</span>
+                        </button>
+                        <button 
+                            onClick={() => setPlatform('telegram')}
+                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-2 transition-all
+                                ${platform === 'telegram' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-100 bg-white text-gray-600 hover:border-blue-200'}
+                            `}
+                        >
+                            <Send size={32} className={platform === 'telegram' ? 'text-blue-500' : 'text-gray-400'} />
+                            <span className="font-bold">Telegram</span>
+                        </button>
                     </div>
 
-                    <div className="bg-gray-100 p-4 rounded-xl text-xs text-gray-500 flex gap-2">
-                        <Lock size={16} className="shrink-0" />
-                        <p>Os seus dados são enviados de forma encriptada diretamente para o nosso suporte oficial.</p>
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-sm text-gray-600 flex items-start gap-3">
+                        <Lock size={16} className="mt-0.5 shrink-0" />
+                        <p>Ao clicar em finalizar, será redirecionado para a aplicação escolhida com os detalhes da sua encomenda preenchidos.</p>
                     </div>
                 </div>
             )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-white border-t border-gray-100 shrink-0 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
-            
-            {/* Coupon Input Area (Only in Cart Step) */}
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-gray-100 bg-white shrink-0 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
+            {/* Coupon Input */}
             {checkoutStep === 'cart' && cartItems.length > 0 && (
                 <div className="mb-4">
                     {appliedCoupon ? (
-                        <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg mb-2 animate-fade-in">
-                             <div className="flex items-center gap-2">
-                                <TicketPercent className="text-green-600" size={18} />
-                                <span className="text-green-800 font-bold text-sm">
-                                    Cupão {appliedCoupon.code} aplicado!
-                                </span>
-                             </div>
-                             <button onClick={removeCoupon} className="text-green-600 hover:text-green-800 p-1"><X size={16} /></button>
+                        <div className="flex justify-between items-center bg-green-50 border border-green-200 p-3 rounded-lg text-sm">
+                            <span className="text-green-700 font-bold flex items-center gap-2">
+                                <TicketPercent size={16} /> {appliedCoupon.code} aplicado
+                            </span>
+                            <button onClick={removeCoupon} className="text-red-500 hover:text-red-700 p-1">
+                                <X size={16} />
+                            </button>
                         </div>
                     ) : (
                         <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <input 
-                                    type="text" 
-                                    placeholder="Tem um cupão?"
-                                    value={couponCode}
-                                    onChange={(e) => setCouponCode(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none uppercase"
-                                />
-                                <TicketPercent className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Código de Cupão"
+                                value={couponCode}
+                                onChange={(e) => setCouponCode(e.target.value)}
+                                className="flex-1 p-2 border border-gray-300 rounded-lg text-sm uppercase outline-none focus:border-primary"
+                                onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                            />
                             <button 
                                 onClick={handleApplyCoupon}
-                                disabled={!couponCode || isCheckingCoupon}
-                                className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                                disabled={isCheckingCoupon || !couponCode}
+                                className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 disabled:opacity-50"
                             >
-                                {isCheckingCoupon ? <Loader2 className="animate-spin" size={16} /> : 'Aplicar'}
+                                {isCheckingCoupon ? <Loader2 size={16} className="animate-spin" /> : 'Aplicar'}
                             </button>
                         </div>
                     )}
@@ -514,39 +481,37 @@ ${couponText}
                 </div>
             )}
 
-            {/* Totals */}
+            {/* Summary Lines */}
             <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-gray-500 text-sm">
                     <span>Subtotal</span>
                     <span>{total.toFixed(2)}€</span>
                 </div>
                 
-                {/* Portes de Envio */}
-                <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Portes de Envio</span>
-                    {shippingValue === 0 ? (
-                        <span className="text-green-600 font-bold">Grátis</span>
-                    ) : (
-                        <span className="text-gray-900">{shippingValue.toFixed(2)}€</span>
-                    )}
+                {/* Shipping Line */}
+                <div className={`flex justify-between text-sm ${shippingCost === 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                    <span className="flex items-center gap-1">
+                        <Truck size={14} /> Portes {total >= SHIPPING_THRESHOLD && '(>50€)'}
+                    </span>
+                    <span>{shippingCost === 0 ? 'Grátis' : `+${shippingCost.toFixed(2)}€`}</span>
                 </div>
 
-                {/* Taxa de Cobrança */}
+                {/* COD Fee Line */}
                 {paymentFee > 0 && (
-                    <div className="flex justify-between text-sm animate-fade-in">
-                        <span className="text-gray-500">Taxa de Cobrança</span>
-                        <span className="text-gray-900">+{paymentFee.toFixed(2)}€</span>
+                    <div className="flex justify-between text-sm text-orange-600">
+                        <span className="flex items-center gap-1"><Coins size={14} /> Taxa Cobrança</span>
+                        <span>+{paymentFee.toFixed(2)}€</span>
                     </div>
                 )}
 
                 {discount > 0 && (
-                    <div className="flex justify-between text-green-600 text-sm font-medium animate-fade-in">
+                    <div className="flex justify-between text-green-600 text-sm font-medium">
                         <span>Desconto</span>
                         <span>-{discount.toFixed(2)}€</span>
                     </div>
                 )}
                 
-                <div className="flex justify-between text-gray-900 font-bold text-xl pt-2 border-t border-gray-100">
+                <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t border-gray-100 mt-2">
                     <span>Total</span>
                     <span>{finalTotal.toFixed(2)}€</span>
                 </div>
@@ -557,29 +522,27 @@ ${couponText}
                 <button 
                     onClick={handleCheckoutStart}
                     disabled={cartItems.length === 0}
-                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:shadow-none"
                 >
-                    {user ? 'Continuar Compra' : 'Entrar para Comprar'} <PartyPopper size={20} />
+                    Continuar Compra
                 </button>
             ) : checkoutStep === 'info' ? (
                 <button 
-                    type="submit"
                     form="infoForm"
-                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    type="submit"
+                    className="w-full bg-primary hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 transition-all"
                 >
-                    Confirmar Dados
+                    Seguinte
                 </button>
             ) : (
                 <button 
                     onClick={handleFinalizeOrder}
-                    className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 text-white
-                        ${platform === 'whatsapp' 
-                            ? 'bg-green-600 hover:bg-green-700 shadow-green-500/25' 
-                            : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/25'
-                        }`}
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 text-white
+                        ${platform === 'whatsapp' ? 'bg-green-600 hover:bg-green-700 shadow-green-500/30' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30'}
+                    `}
                 >
-                    {isCopied ? 'Copiado!' : `Enviar Pedido via ${platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}`} 
-                    {isCopied ? <Check size={20} /> : <Send size={20} />}
+                    {isCopied ? <Check size={24} /> : <Send size={24} />}
+                    Finalizar no {platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
                 </button>
             )}
         </div>
