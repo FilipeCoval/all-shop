@@ -22,13 +22,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
       return (
         <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'sans-serif', marginTop: '50px' }}>
           <h1 style={{ color: '#e11d48' }}>Algo correu mal 😔</h1>
-          <p>Ocorreu um erro ao carregar a aplicação.</p>
-          <pre style={{ background: '#f1f5f9', padding: '15px', borderRadius: '8px', textAlign: 'left', overflow: 'auto', maxWidth: '600px', margin: '20px auto', fontSize: '12px' }}>
-            {this.state.error?.toString()}
-          </pre>
           <button 
             onClick={() => window.location.reload()}
-            style={{ padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+            style={{ marginTop: '20px', padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
           >
             Tentar Novamente
           </button>
@@ -44,6 +40,11 @@ const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
+
+// SOLUÇÃO NUCLEAR PARA DUPLICAÇÃO:
+// Limpa qualquer conteúdo HTML que já exista no root antes de montar o React.
+// Isto remove o "site fantasma" ou duplicado caso o script corra duas vezes.
+rootElement.innerHTML = '';
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
