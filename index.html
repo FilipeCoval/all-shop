@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-PT" class="h-full">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,37 +7,25 @@
     <!-- SEO & Metadata -->
     <title>Allshop Store | Eletrónica e Gadgets</title>
     <meta name="description" content="A sua loja virtual de confiança. Smartphones, TV Boxes e Cabos. Portes grátis em compras acima de 50€." />
-    <meta property="og:title" content="Allshop Store - Tecnologia do Futuro Hoje" />
-    <meta property="og:description" content="Descubra as melhores ofertas em tecnologia. Encomende via WhatsApp ou Telegram." />
-    <meta property="og:image" content="https://i.imgur.com/nSiZKBf.png" />
     
     <!-- Favicon -->
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/nSiZKBf.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/nSiZKBf.png">
-    <link rel="icon" type="image/png" sizes="48x48" href="https://i.imgur.com/nSiZKBf.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="https://i.imgur.com/nSiZKBf.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/nSiZKBf.png">
-    <link rel="shortcut icon" href="https://i.imgur.com/nSiZKBf.png">
+    <link rel="icon" type="image/png" href="https://i.imgur.com/nSiZKBf.png">
 
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (CDN para garantir estilo sem build complexo) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: { primary: '#3b82f6', secondary: '#1e293b', accent: '#f59e0b' },
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
             animation: { 
                 'fade-in': 'fadeIn 0.5s ease-out', 
-                'slide-in': 'slideIn 0.3s ease-out', 
-                'slide-in-right': 'slideInRight 0.3s ease-out',
                 'fade-in-up': 'fadeInUp 0.3s ease-out',
-                'fade-in-down': 'fadeInDown 0.3s ease-out',
-                'bounce-slow': 'bounce 3s infinite'
+                'fade-in-down': 'fadeInDown 0.3s ease-out'
             },
             keyframes: {
               fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-              slideIn: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(0)' } },
-              slideInRight: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(0)' } },
               fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
               fadeInDown: { '0%': { opacity: '0', transform: 'translateY(-20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
             }
@@ -46,11 +34,9 @@
       }
     </script>
     <style>
+        html, body { height: 100%; margin: 0; padding: 0; }
         body { background-color: #f8fafc; scroll-behavior: smooth; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        #root { display: flex; flex-col; min-height: 100%; }
     </style>
 <script type="importmap">
 {
@@ -67,8 +53,8 @@
 }
 </script>
 </head>
-<body>
-    <div id="root"></div>
+<body class="h-full antialiased text-gray-900">
+    <div id="root" class="h-full flex flex-col"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
