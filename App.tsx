@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
@@ -30,8 +31,12 @@ const App: React.FC = () => {
 
   // Wishlist State (Local + DB)
   const [wishlist, setWishlist] = useState<number[]>(() => {
-    const saved = localStorage.getItem('wishlist');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('wishlist');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   // Login and User State
@@ -146,7 +151,6 @@ const App: React.FC = () => {
             // Utilizador saiu
             setUser(null);
             setOrders([]); 
-            // Opcional: Limpar wishlist ao sair ou manter a local? Mantemos local por UX.
         }
     });
 
@@ -229,8 +233,6 @@ const App: React.FC = () => {
         localStorage.setItem('wishlist', JSON.stringify(incomingUser.wishlist));
     }
     setIsLoginOpen(false);
-    // Não redirecionar se o modal estava aberto (para continuar compra)
-    // window.location.hash = 'account';
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -250,7 +252,6 @@ const App: React.FC = () => {
         await auth.signOut();
         setUser(null);
         window.location.hash = '/';
-        // Limpar wishlist local ao sair, se desejar segurança, ou manter.
     } catch (error) {
         console.error("Erro ao sair:", error);
     }
@@ -312,6 +313,7 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // DASHBOARD ADMIN
     if (route === '#dashboard') {
         if (isAdmin) {
             return <Dashboard />;
@@ -321,6 +323,7 @@ const App: React.FC = () => {
         }
     }
 
+    // ÁREA DE CLIENTE
     if (route === '#account') {
       if (!user) {
         setTimeout(() => {
@@ -342,6 +345,7 @@ const App: React.FC = () => {
       );
     }
 
+    // DETALHE DO PRODUTO
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = PRODUCTS.find(p => p.id === id);
@@ -361,19 +365,15 @@ const App: React.FC = () => {
         }
     }
 
+    // PÁGINAS ESTÁTICAS
     switch (route) {
-        case '#about':
-            return <About />;
-        case '#contact':
-            return <Contact />;
-        case '#terms':
-            return <Terms />;
-        case '#privacy':
-            return <Privacy />;
-        case '#faq':
-            return <FAQ />;
-        case '#returns':
-            return <Returns />;
+        case '#about': return <About />;
+        case '#contact': return <Contact />;
+        case '#terms': return <Terms />;
+        case '#privacy': return <Privacy />;
+        case '#faq': return <FAQ />;
+        case '#returns': return <Returns />;
+        // HOME (DEFAULT)
         case '#/':
         default:
             return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />;
@@ -386,6 +386,7 @@ const App: React.FC = () => {
     setIsMobileMenuOpen(false);
   };
 
+  // Se estiver no Dashboard, renderiza sem header/footer para ocupar o ecrã todo
   if (route === '#dashboard' && isAdmin) {
       return (
           <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
@@ -394,6 +395,7 @@ const App: React.FC = () => {
       );
   }
 
+  // Renderização Padrão
   return (
     <div className="min-h-screen flex flex-col font-sans text-gray-900 bg-gray-50">
       <Header 
@@ -409,8 +411,6 @@ const App: React.FC = () => {
 
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
-          
-          {/* Mobile Search Input */}
           <div className="relative">
              <input 
                 type="text" 
