@@ -105,7 +105,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
                   </div>
                   <div>
                       <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight">Envio Grátis</h3>
-                      <p className="text-[10px] md:text-xs text-gray-500 block">acima de 50€</p>
+                      <p className="text-[10px] md:text-xs text-gray-500 block">Acima de 50€</p>
                   </div>
               </div>
 
