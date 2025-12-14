@@ -61,7 +61,7 @@ const Header: React.FC<HeaderProps> = ({
                     <img 
                       src={LOGO_URL} 
                       alt={STORE_NAME} 
-                      className="h-[50px] w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+                      className="h-[65px] w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
                     />
                 ) : (
                     <div className="flex items-center gap-2 text-gray-900">
@@ -87,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({
                     <img 
                       src={LOGO_URL} 
                       alt={STORE_NAME} 
-                      className="h-[55px] w-auto object-contain" 
+                      className="h-[65px] w-auto object-contain" 
                     />
                 ) : (
                     <span className="text-xl font-bold tracking-tight">{STORE_NAME}</span>
