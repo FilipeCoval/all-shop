@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye } from 'lucide-react';
@@ -283,7 +281,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                <div className="flex flex-col sm:flex-row gap-6 pt-4 border-t border-gray-100 text-sm font-medium">
                    <div className="flex items-center gap-2 text-gray-500">
                        <Truck size={20} className="text-primary" />
-                       Entrega 1-3 dias (Grátis {'>'} 50€)
+                       Entrega 1-3 dias (Grátis acima de 50€)
                    </div>
                    <div className="flex items-center gap-2 text-gray-500">
                        <ShieldCheck size={20} className="text-green-600" />
