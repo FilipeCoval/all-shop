@@ -45,7 +45,7 @@ const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 w-full backdrop-blur-lg bg-white/95 border-b border-gray-200 shadow-sm transition-all">
       <div className="container mx-auto px-4 h-20 flex items-center justify-between relative">
         
-        {/* ESQUERDA: Menu Mobile & Navegação Desktop */}
+        {/* ESQUERDA: Menu (Mobile) + Logo (Desktop) + Nav (Desktop) */}
         <div className="flex items-center gap-4 flex-1 justify-start">
             <button 
                 className="md:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" 
@@ -55,7 +55,23 @@ const Header: React.FC<HeaderProps> = ({
                 <Menu size={24} />
             </button>
 
-            {/* Links Desktop (Agora à Esquerda) */}
+            {/* LOGO DESKTOP (Esquerda - Original) - Oculto em Mobile */}
+            <a href="#/" onClick={handleNav('/')} className="hidden md:block group mr-4">
+                {LOGO_URL ? (
+                    <img 
+                      src={LOGO_URL} 
+                      alt={STORE_NAME} 
+                      className="h-[50px] w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+                    />
+                ) : (
+                    <div className="flex items-center gap-2 text-gray-900">
+                        <ShoppingBag size={28} className="text-primary" />
+                        <span className="text-xl font-bold tracking-tight">{STORE_NAME}</span>
+                    </div>
+                )}
+            </a>
+
+            {/* Links Desktop */}
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
                 <a href="#/" onClick={handleNav('/')} className="hover:text-primary transition-colors">Início</a>
                 <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="hover:text-primary transition-colors">Produtos</a>
@@ -64,20 +80,17 @@ const Header: React.FC<HeaderProps> = ({
             </nav>
         </div>
 
-        {/* CENTRO: Logo (Posicionamento Absoluto para garantir centro exato) */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10">
-            <a href="#/" onClick={handleNav('/')} className="group block">
+        {/* LOGO MOBILE (Centralizado Absoluto) - Oculto em Desktop */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:hidden z-10">
+            <a href="#/" onClick={handleNav('/')} className="block">
                 {LOGO_URL ? (
                     <img 
                       src={LOGO_URL} 
                       alt={STORE_NAME} 
-                      className="h-[40px] md:h-[55px] w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+                      className="h-[40px] w-auto object-contain" 
                     />
                 ) : (
-                    <div className="flex items-center gap-2 text-gray-900">
-                        <ShoppingBag size={28} className="text-primary" />
-                        <span className="text-xl md:text-2xl font-bold tracking-tight">{STORE_NAME}</span>
-                    </div>
+                    <span className="text-xl font-bold tracking-tight">{STORE_NAME}</span>
                 )}
             </a>
         </div>
