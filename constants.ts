@@ -81,7 +81,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2",
-    price: 35.00,
+    price: 29.95,
     description: "Potência pura para entretenimento. Processador rápido ideal para IPTV, streaming e jogos Android na sua televisão.",
     category: "TV & Streaming",
     image: "https://img.kwcdn.com/product/fancy/d53c3efc-59aa-4ac2-bd40-201b43f0cc98.jpg?imageView2/2/w/800/q/70/format/avif",
