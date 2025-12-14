@@ -87,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({
                     <img 
                       src={LOGO_URL} 
                       alt={STORE_NAME} 
-                      className="h-[40px] w-auto object-contain" 
+                      className="h-[55px] w-auto object-contain" 
                     />
                 ) : (
                     <span className="text-xl font-bold tracking-tight">{STORE_NAME}</span>
