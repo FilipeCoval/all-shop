@@ -1,11 +1,9 @@
 
 
-
-
 import React, { useState } from 'react';
-import { User, Order, Address, Product, ProductVariant } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle } from 'lucide-react';
-import { STORE_NAME, LOGO_URL, PRODUCTS } from '../constants';
+import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon } from '../types';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight } from 'lucide-react';
+import { STORE_NAME, LOGO_URL, PRODUCTS, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
@@ -18,7 +16,7 @@ interface ClientAreaProps {
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
 }
 
-type ActiveTab = 'orders' | 'profile' | 'addresses' | 'wishlist';
+type ActiveTab = 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
 
 const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('orders');
@@ -37,6 +35,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [newAddress, setNewAddress] = useState<Address>({
     id: '', alias: '', street: '', city: '', zip: ''
   });
+
+  // State for Rewards
+  const [isRedeeming, setIsRedeeming] = useState<string | null>(null);
 
   // Handlers
   const handleProfileSubmit = (e: React.FormEvent) => {
@@ -72,6 +73,91 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           alert("Não foi possível cancelar. Tente novamente ou contacte o suporte.");
       }
   };
+
+  // --- LOYALTY LOGIC ---
+  const handleRedeemReward = async (reward: typeof LOYALTY_REWARDS[0]) => {
+      const currentPoints = user.loyaltyPoints || 0;
+      
+      if (currentPoints < reward.cost) {
+          alert("Pontos insuficientes.");
+          return;
+      }
+
+      if (!window.confirm(`Trocar ${reward.cost} pontos por um vale de ${reward.value}€?`)) return;
+
+      setIsRedeeming(reward.id);
+
+      try {
+          // 1. Gerar Código Único
+          const code = `REWARD-${user.uid?.substring(0,4).toUpperCase()}-${Date.now().toString().substring(7)}`;
+          
+          const newCoupon: Coupon = {
+              code,
+              type: 'FIXED',
+              value: reward.value,
+              minPurchase: reward.minPurchase,
+              isActive: true,
+              usageCount: 0
+          };
+
+          // 2. Registar Cupão
+          await db.collection('coupons').add(newCoupon);
+
+          // 3. Atualizar User (Deduzir pontos e adicionar histórico)
+          const newHistoryItem: PointHistory = {
+              id: Date.now().toString(),
+              date: new Date().toISOString(),
+              amount: -reward.cost,
+              reason: `Resgate: ${reward.title}`
+          };
+
+          const updatedPoints = currentPoints - reward.cost;
+          const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
+
+          // Se onUpdateUser atualiza localmente E remotamente, usamos isso.
+          // Mas como ClientArea recebe a prop, assumimos que App.tsx gere a persistência.
+          // Para segurança, aqui fazemos o update direto para garantir atomicidade visual.
+          await db.collection('users').doc(user.uid).update({
+              loyaltyPoints: updatedPoints,
+              pointsHistory: updatedHistory
+          });
+
+          // Atualizar estado local via prop (para refletir na UI instantaneamente)
+          onUpdateUser({
+              ...user,
+              loyaltyPoints: updatedPoints,
+              pointsHistory: updatedHistory
+          });
+
+          alert(`Parabéns! O seu código é: ${code}\n(Pode encontrá-lo no checkout)`);
+
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao resgatar recompensa. Tente novamente.");
+      } finally {
+          setIsRedeeming(null);
+      }
+  };
+
+  // Calcular progresso do Tier
+  const currentTotalSpent = user.totalSpent || 0;
+  const currentTier = user.tier || 'Bronze';
+  
+  let nextTier = null;
+  let progress = 0;
+  let limit = 0;
+
+  if (currentTier === 'Bronze') {
+      nextTier = 'Prata';
+      limit = LOYALTY_TIERS.SILVER.threshold;
+      progress = (currentTotalSpent / limit) * 100;
+  } else if (currentTier === 'Prata') {
+      nextTier = 'Ouro';
+      limit = LOYALTY_TIERS.GOLD.threshold;
+      progress = (currentTotalSpent / limit) * 100;
+  } else {
+      progress = 100; // Ouro é max
+  }
 
   // Stats
   const totalSpent = orders.reduce((acc, order) => acc + (order.status !== 'Cancelado' ? order.total : 0), 0);
@@ -257,11 +343,22 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         {/* Sidebar */}
         <aside className="w-full md:w-1/4 space-y-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-            <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm">
+            <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative">
               {user.name.charAt(0).toUpperCase()}
+              
+              {/* Tier Badge */}
+              <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
+                ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
+              `} title={`Nível ${currentTier}`}>
+                  {currentTier === 'Ouro' ? 'G' : currentTier === 'Prata' ? 'S' : 'B'}
+              </div>
             </div>
+            
             <h2 className="font-bold text-xl text-gray-900">{user.name}</h2>
-            <p className="text-sm text-gray-500 mb-6">{user.email}</p>
+            <div className="inline-block px-3 py-1 rounded-full bg-blue-50 text-primary text-xs font-bold mt-1 mb-4">
+                {user.loyaltyPoints || 0} AllPoints
+            </div>
+            
             <button 
               onClick={onLogout}
               className="w-full py-2 px-4 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
@@ -277,6 +374,13 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 ${activeTab === 'orders' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
             >
               <Package size={20} /> Minhas Encomendas
+            </button>
+            <button 
+                onClick={() => setActiveTab('points')}
+                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
+                ${activeTab === 'points' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
+            >
+              <Award size={20} /> Pontos e Recompensas
             </button>
             <button 
                 onClick={() => setActiveTab('wishlist')}
@@ -399,6 +503,112 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 </div>
                 )}
             </div>
+          )}
+
+          {/* --- POINTS & REWARDS TAB --- */}
+          {activeTab === 'points' && (
+              <div className="animate-fade-in space-y-8">
+                  
+                  {/* PROGRESS HEADER */}
+                  <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 text-white relative overflow-hidden">
+                      <div className="relative z-10">
+                          <div className="flex justify-between items-start mb-6">
+                              <div>
+                                  <p className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-1">Nível Atual</p>
+                                  <h2 className="text-3xl font-bold flex items-center gap-2">
+                                      <Award className={currentTier === 'Ouro' ? 'text-yellow-400' : currentTier === 'Prata' ? 'text-gray-300' : 'text-orange-400'} />
+                                      {currentTier}
+                                  </h2>
+                              </div>
+                              <div className="text-right">
+                                  <p className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-1">Saldo Disponível</p>
+                                  <h2 className="text-3xl font-bold text-blue-400">{user.loyaltyPoints || 0} pts</h2>
+                              </div>
+                          </div>
+
+                          {nextTier && (
+                              <div>
+                                  <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
+                                      <span>Progresso para {nextTier}</span>
+                                      <span>{currentTotalSpent.toFixed(0)}€ / {limit}€</span>
+                                  </div>
+                                  <div className="w-full bg-gray-700 rounded-full h-2.5">
+                                      <div className="bg-blue-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, progress)}%` }}></div>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-2">
+                                      Faltam apenas <strong>{(limit - currentTotalSpent).toFixed(2)}€</strong> para desbloquear <strong>{nextTier === 'Prata' ? '3x' : '5x'} mais pontos</strong> por compra!
+                                  </p>
+                              </div>
+                          )}
+                          {!nextTier && <p className="text-yellow-400 font-bold text-sm">👑 Você é um cliente VIP Ouro! Ganha o máximo de pontos possível.</p>}
+                      </div>
+                      
+                      {/* Decorative Circles */}
+                      <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
+                      <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
+                  </div>
+
+                  {/* REWARDS GRID */}
+                  <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                          <Gift className="text-primary" /> Recompensas Disponíveis
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {LOYALTY_REWARDS.map(reward => {
+                              const canAfford = (user.loyaltyPoints || 0) >= reward.cost;
+                              return (
+                                  <div key={reward.id} className={`bg-white border rounded-xl p-5 flex flex-col justify-between transition-all ${canAfford ? 'border-gray-200 hover:border-blue-300 hover:shadow-md' : 'border-gray-100 opacity-70 grayscale'}`}>
+                                      <div>
+                                          <div className="bg-blue-50 w-12 h-12 rounded-full flex items-center justify-center text-primary font-bold text-lg mb-3">€</div>
+                                          <h4 className="font-bold text-gray-900 text-lg">{reward.title}</h4>
+                                          <p className="text-sm text-gray-500 mb-4">Custo: <strong>{reward.cost} pontos</strong></p>
+                                          <p className="text-xs text-gray-400 mb-4">Min. compra: {reward.minPurchase}€</p>
+                                      </div>
+                                      <button 
+                                          onClick={() => canAfford && handleRedeemReward(reward)}
+                                          disabled={!canAfford || isRedeeming === reward.id}
+                                          className={`w-full py-2 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2
+                                              ${canAfford 
+                                                  ? 'bg-primary hover:bg-blue-600 text-white' 
+                                                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                              }
+                                          `}
+                                      >
+                                          {isRedeeming === reward.id ? 'A processar...' : canAfford ? 'Resgatar' : `Faltam ${reward.cost - (user.loyaltyPoints || 0)}`}
+                                      </button>
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  </div>
+
+                  {/* HISTORY TABLE */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                          <h4 className="font-bold text-gray-800 text-sm">Histórico de Pontos</h4>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                          {user.pointsHistory && user.pointsHistory.length > 0 ? (
+                              <table className="w-full text-left text-sm">
+                                  <tbody className="divide-y divide-gray-100">
+                                      {user.pointsHistory.map((item) => (
+                                          <tr key={item.id} className="hover:bg-gray-50">
+                                              <td className="px-4 py-3 text-gray-600">{new Date(item.date).toLocaleDateString()}</td>
+                                              <td className="px-4 py-3 font-medium text-gray-900">{item.reason}</td>
+                                              <td className={`px-4 py-3 text-right font-bold ${item.amount > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                  {item.amount > 0 ? '+' : ''}{item.amount}
+                                              </td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          ) : (
+                              <p className="p-6 text-center text-gray-500 text-sm">Sem histórico de movimentos.</p>
+                          )}
+                      </div>
+                  </div>
+
+              </div>
           )}
 
           {/* --- WISHLIST TAB --- */}
