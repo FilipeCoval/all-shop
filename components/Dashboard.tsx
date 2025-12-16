@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -94,8 +93,8 @@ const Dashboard: React.FC = () => {
 
   // --- REAL-TIME SALES NOTIFICATIONS ---
   useEffect(() => {
-    // Som de notificação
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    // Som de notificação (Casino / Coins Jackpot)
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
     const mountTime = Date.now();
 
     const unsubscribe = db.collection('orders')
@@ -110,7 +109,10 @@ const Dashboard: React.FC = () => {
                     if (orderTime > (mountTime - 2000)) {
                         setNotifications(prev => [order, ...prev]);
                         setShowToast(order);
-                        if (audioRef.current) audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
+                        if (audioRef.current) {
+                            audioRef.current.volume = 0.6; // Volume confortável
+                            audioRef.current.play().catch(e => console.log("Audio autoplay blocked", e));
+                        }
                         setTimeout(() => setShowToast(null), 5000);
                     }
                 }
