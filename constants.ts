@@ -33,6 +33,26 @@ export const ADMIN_EMAILS = [
   "filipe@teste.com"       // Exemplo
 ];
 
+// --- SISTEMA DE FIDELIZAÇÃO (TIERS) ---
+// Regras:
+// threshold: Valor gasto para atingir o nível
+// multiplier: Quantos pontos ganha por Euro
+export const LOYALTY_TIERS = {
+    BRONZE: { threshold: 0, multiplier: 1, label: 'Bronze' },     // 1% retorno
+    SILVER: { threshold: 250, multiplier: 3, label: 'Prata' },    // 3% retorno
+    GOLD: { threshold: 600, multiplier: 5, label: 'Ouro' }        // 5% retorno
+};
+
+// --- RECOMPENSAS DISPONÍVEIS ---
+// value: Valor do desconto em €
+// cost: Custo em pontos
+export const LOYALTY_REWARDS = [
+    { id: 'vouch_2', title: 'Vale de 2€', value: 2, cost: 200, minPurchase: 10 },
+    { id: 'vouch_5', title: 'Vale de 5€', value: 5, cost: 500, minPurchase: 20 },
+    { id: 'vouch_10', title: 'Vale de 10€', value: 10, cost: 1000, minPurchase: 50 },
+    { id: 'vouch_25', title: 'Vale de 25€', value: 25, cost: 2500, minPurchase: 100 },
+];
+
 /* 
   📝 COMO ADICIONAR NOVO PRODUTO COM VARIANTES:
   
@@ -81,7 +101,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2",
-    price: 29.95,
+    price: 30.00,
     description: "Potência pura para entretenimento. Processador rápido ideal para IPTV, streaming e jogos Android na sua televisão.",
     category: "TV & Streaming",
     image: "https://img.kwcdn.com/product/fancy/d53c3efc-59aa-4ac2-bd40-201b43f0cc98.jpg?imageView2/2/w/800/q/70/format/avif",
