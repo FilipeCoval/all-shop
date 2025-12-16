@@ -5,9 +5,9 @@ import {
   History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
+import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
-import { PRODUCTS } from '../constants';
+import { PRODUCTS, LOYALTY_TIERS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 // Utility para formatação de moeda
@@ -198,9 +198,10 @@ const Dashboard: React.FC = () => {
       } catch(err) { console.error(err); }
   };
 
-  // --- UPDATE ORDER STATUS ---
+  // --- UPDATE ORDER STATUS & AWARD POINTS ---
   const handleOrderStatusChange = async (orderId: string, newStatus: string) => {
       let trackingNumber = undefined;
+      const order = allOrders.find(o => o.id === orderId);
       
       // Se mudar para "Enviado", pedir número de rastreio
       if (newStatus === 'Enviado') {
@@ -217,9 +218,61 @@ const Dashboard: React.FC = () => {
           }
           
           await db.collection('orders').doc(orderId).update(updateData);
+
+          // === LÓGICA DE FIDELIZAÇÃO (GAMIFICAÇÃO) ===
+          // Se status mudou para 'Entregue' E ainda não demos pontos E existe User associado
+          if (newStatus === 'Entregue' && order && !order.pointsAwarded && order.userId) {
+              
+              // 1. Buscar utilizador
+              const userRef = db.collection('users').doc(order.userId);
+              const userSnap = await userRef.get();
+              
+              if (userSnap.exists) {
+                  const userData = userSnap.data() as UserType;
+                  
+                  // 2. Determinar Tier e Multiplicador ATUAIS
+                  const currentTier = userData.tier || 'Bronze';
+                  let multiplier = LOYALTY_TIERS.BRONZE.multiplier;
+                  if (currentTier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier;
+                  if (currentTier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier;
+
+                  // 3. Calcular Pontos
+                  const pointsEarned = Math.floor(order.total * multiplier);
+
+                  // 4. Calcular Novo Total Gasto
+                  const newTotalSpent = (userData.totalSpent || 0) + order.total;
+
+                  // 5. Verificar Subida de Nível
+                  let newTier: UserTier = currentTier;
+                  if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
+                  else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
+
+                  // 6. Atualizar User (Transação Simples)
+                  const newHistoryItem: PointHistory = {
+                      id: Date.now().toString(),
+                      date: new Date().toISOString(),
+                      amount: pointsEarned,
+                      reason: `Compra ${order.id} (${multiplier}x)`,
+                      orderId: order.id
+                  };
+
+                  await userRef.update({
+                      loyaltyPoints: (userData.loyaltyPoints || 0) + pointsEarned,
+                      totalSpent: newTotalSpent,
+                      tier: newTier,
+                      pointsHistory: [newHistoryItem, ...(userData.pointsHistory || [])]
+                  });
+
+                  // 7. Marcar pontos como dados na Encomenda
+                  await db.collection('orders').doc(orderId).update({ pointsAwarded: true });
+
+                  alert(`Pontos atribuídos!\nCliente ganhou ${pointsEarned} pontos.\nNível atual: ${newTier}`);
+              }
+          }
+
       } catch (error) { 
           console.error(error); 
-          alert("Erro ao atualizar."); 
+          alert("Erro ao atualizar (Verifique consola)."); 
       }
   };
   
