@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send
+  History, ShoppingCart, User, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon } from '../types';
@@ -44,6 +44,10 @@ const Dashboard: React.FC = () => {
   const [showToast, setShowToast] = useState<Order | null>(null);
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // --- ONLINE USERS STATE ---
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [isOnlineDetailsOpen, setIsOnlineDetailsOpen] = useState(false);
 
   // --- ORDERS MANAGEMENT STATE ---
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -118,6 +122,24 @@ const Dashboard: React.FC = () => {
                 }
             });
         });
+    return () => unsubscribe();
+  }, []);
+
+  // --- REAL-TIME ONLINE USERS ---
+  useEffect(() => {
+    const unsubscribe = db.collection('online_users').onSnapshot(snapshot => {
+        const now = Date.now();
+        const activeUsers: any[] = [];
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Considera online se o último pulso foi há menos de 30 segundos
+            if (now - data.lastActive < 30000) {
+                activeUsers.push({ id: doc.id, ...data });
+            }
+        });
+        setOnlineUsers(activeUsers);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -620,12 +642,60 @@ const Dashboard: React.FC = () => {
         {/* INVENTORY TAB */}
         {activeTab === 'inventory' && (
             <>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <KpiCard title="Total Investido" value={stats.totalInvested} icon={<Package size={18} />} color="blue" />
                     <KpiCard title="Vendas Reais" value={stats.realizedRevenue} icon={<DollarSign size={18} />} color="indigo" />
                     <KpiCard title="Lucro Líquido" value={stats.realizedProfit} icon={<TrendingUp size={18} />} color={stats.realizedProfit >= 0 ? "green" : "red"} />
                     <KpiCard title="Cashback Pendente" value={stats.pendingCashback} icon={<AlertCircle size={18} />} color="yellow" />
+                    
+                    {/* ONLINE USERS CARD */}
+                    <div 
+                        onClick={() => setIsOnlineDetailsOpen(true)}
+                        className="p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full cursor-pointer hover:border-green-300 transition-colors relative overflow-hidden"
+                    >
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Online Agora</span>
+                            <div className="p-1.5 rounded-lg bg-green-50 text-green-600 relative">
+                                <Users size={18} />
+                                <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
+                            </div>
+                        </div>
+                        <div className="text-2xl font-bold text-green-600 flex items-end gap-2">
+                            {onlineUsers.length}
+                            <span className="text-xs text-gray-400 font-normal mb-1">visitantes</span>
+                        </div>
+                    </div>
                 </div>
+
+                {/* ONLINE USERS DETAILS DRAWER */}
+                {isOnlineDetailsOpen && (
+                    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex justify-end" onClick={() => setIsOnlineDetailsOpen(false)}>
+                        <div className="w-80 h-full bg-white shadow-2xl p-6 overflow-y-auto animate-slide-in-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg flex items-center gap-2 text-gray-900"><Users className="text-green-600" /> Tráfego Real</h3>
+                                <button onClick={() => setIsOnlineDetailsOpen(false)}><X size={20} className="text-gray-400" /></button>
+                            </div>
+                            <div className="space-y-3">
+                                {onlineUsers.map(u => (
+                                    <div key={u.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm">
+                                        <div className="flex justify-between items-start">
+                                            <span className="font-bold text-gray-800">{u.userName}</span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${u.device === 'Mobile' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{u.device}</span>
+                                        </div>
+                                        <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 truncate">
+                                            <Eye size={12} />
+                                            <span className="truncate">{u.page === '#/' ? 'Home' : u.page.replace('#', '')}</span>
+                                        </div>
+                                        <div className="mt-1 text-[10px] text-gray-400 text-right">
+                                            Há {Math.floor((Date.now() - u.lastActive) / 1000)}s
+                                        </div>
+                                    </div>
+                                ))}
+                                {onlineUsers.length === 0 && <p className="text-gray-500 text-center text-sm py-4">Ninguém online agora.</p>}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* AI CONSULTANT SECTION */}
                 <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in">
