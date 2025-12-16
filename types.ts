@@ -49,6 +49,17 @@ export interface Address {
   userId?: string; // Ligação ao ID do Firebase
 }
 
+// --- SISTEMA DE PONTOS ---
+export interface PointHistory {
+  id: string;
+  date: string;
+  amount: number; // Positivo (ganhou) ou Negativo (gastou)
+  reason: string; // Ex: "Encomenda #123", "Resgate Cupão 5€"
+  orderId?: string;
+}
+
+export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
 export interface User {
   uid?: string; // ID único do Firebase
   name: string;
@@ -57,6 +68,12 @@ export interface User {
   nif?: string;
   addresses: Address[];
   wishlist?: number[]; // IDs dos produtos favoritos
+  
+  // Fidelização
+  loyaltyPoints?: number;
+  totalSpent?: number; // Total gasto na vida (para calcular Tier)
+  tier?: UserTier;
+  pointsHistory?: PointHistory[];
 }
 
 export interface Order {
@@ -67,6 +84,10 @@ export interface Order {
   items: string[];
   userId?: string; // Para ligar a encomenda ao utilizador real
   trackingNumber?: string; // Código de Rastreio (CTT/Transportadora)
+  
+  // Controle de Pontos
+  pointsAwarded?: boolean; // Se true, os pontos já foram dados ao cliente
+
   // Dados de Envio guardados na encomenda
   shippingInfo?: {
     name: string;
