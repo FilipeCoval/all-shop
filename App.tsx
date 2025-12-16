@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
@@ -59,6 +58,42 @@ const App: React.FC = () => {
     const userEmail = user.email.trim().toLowerCase();
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
+
+  // --- PRESENÇA ONLINE (Rastreamento para Dashboard) ---
+  useEffect(() => {
+    // Não rastrear se for admin na dashboard
+    if (route.includes('dashboard')) return;
+
+    // Gerar ID de sessão único para esta aba
+    let sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('session_id', sessionId);
+    }
+
+    const updatePresence = () => {
+        if (!sessionId) return;
+        
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        db.collection('online_users').doc(sessionId).set({
+            lastActive: Date.now(),
+            page: route,
+            userName: user ? user.name : 'Visitante',
+            device: isMobile ? 'Mobile' : 'Desktop',
+            userId: user?.uid || null,
+            location: 'Loja Online' 
+        }).catch(err => console.error("Erro presence", err));
+    };
+
+    // Atualizar imediatamente
+    updatePresence();
+
+    // Heartbeat a cada 10 segundos
+    const interval = setInterval(updatePresence, 10000);
+
+    return () => clearInterval(interval);
+  }, [route, user]); // Atualiza quando muda de rota ou loga
 
   // Função para gerir Wishlist (Local + DB)
   const toggleWishlist = async (productId: number) => {
@@ -483,7 +518,7 @@ const App: React.FC = () => {
             </div>
         </div>
         <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-xs">
-            <span>&copy; 2025 Allshop Store. Todos os direitos reservados.</span>
+            <span>&copy; {new Date().getFullYear()} Allshop Store. Todos os direitos reservados.</span>
             {isAdmin && (
               <a 
                 href="#dashboard" 
