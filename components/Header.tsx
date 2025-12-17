@@ -71,8 +71,8 @@ const Header: React.FC<HeaderProps> = ({
                 )}
             </a>
 
-            {/* Links Desktop */}
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
+            {/* Links Desktop - AUMENTADO PARA TEXT-BASE */}
+            <nav className="hidden md:flex items-center gap-6 text-base font-medium text-gray-600">
                 <a href="#/" onClick={handleNav('/')} className="hover:text-primary transition-colors">Início</a>
                 <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="hover:text-primary transition-colors">Produtos</a>
                 <a href="#about" onClick={handleNav('about')} className="hover:text-primary transition-colors">Sobre</a>
@@ -98,14 +98,14 @@ const Header: React.FC<HeaderProps> = ({
         {/* DIREITA: Pesquisa & Ações */}
         <div className="flex items-center justify-end gap-2 md:gap-4 flex-1">
             
-            {/* Barra de Pesquisa (Desktop) */}
+            {/* Barra de Pesquisa (Desktop) - AUMENTADO PARA TEXT-BASE */}
             <div className="hidden md:flex relative w-40 lg:w-64 transition-all focus-within:w-64 lg:focus-within:w-80">
                 <input 
                     type="text"
                     placeholder="Pesquisar..."
                     value={searchTerm}
                     onChange={(e) => onSearchChange(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm"
+                    className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-base"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 {searchTerm && (
@@ -126,7 +126,8 @@ const Header: React.FC<HeaderProps> = ({
                             className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-gray-100 transition-colors text-gray-700 font-medium border border-transparent hover:border-gray-200"
                         >
                             <UserIcon size={20} />
-                            <span className="text-sm max-w-[80px] truncate hidden lg:block">{getFirstName()}</span>
+                            {/* AUMENTADO PARA TEXT-BASE */}
+                            <span className="text-base max-w-[100px] truncate hidden lg:block">{getFirstName()}</span>
                         </button>
                         {/* Dropdown Menu */}
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 p-1 z-50">
@@ -139,7 +140,7 @@ const Header: React.FC<HeaderProps> = ({
                 ) : (
                     <button 
                         onClick={onOpenLogin}
-                        className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full text-gray-700 font-bold hover:bg-gray-100 transition-colors text-sm"
+                        className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full text-gray-700 font-bold hover:bg-gray-100 transition-colors text-base"
                     >
                         Entrar
                     </button>
