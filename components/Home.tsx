@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight } from 'lucide-react';
 import ProductList from './ProductList';
 import { Product, ProductVariant } from '../types';
@@ -31,6 +31,12 @@ const Home: React.FC<HomeProps> = ({
   // Ref para o scroll do carrossel
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Refs para a lógica de Drag-to-Scroll (Arrastar com o rato)
+  const isDown = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+  const isDragging = useRef(false); 
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
@@ -54,26 +60,15 @@ const Home: React.FC<HomeProps> = ({
     }
   };
 
-  // Lógica de Scroll das Setas
-  const scroll = (direction: 'left' | 'right') => {
-      if (scrollContainerRef.current) {
-          const { current } = scrollContainerRef;
-          const scrollAmount = 300; // Quantidade de scroll
-          if (direction === 'left') {
-              current.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-          } else {
-              current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-          }
-      }
-  };
-
   // Gerar dados visuais para as categorias
+  // LÓGICA DE INFINITO: Criamos 3 cópias da lista para permitir o loop
   const categoryVisuals = useMemo(() => {
       const realCats = ['Todas', ...new Set(products.map(p => p.category))];
+      // Categorias de teste para garantir que temos volume suficiente para o scroll funcionar bem
       const testCats = ['Gaming', 'Smart Home', 'Audio', 'Drones'];
-      const allCatsToDisplay = [...realCats, ...testCats];
+      const uniqueCats = [...realCats, ...testCats];
 
-      return allCatsToDisplay.map(cat => {
+      const mapCats = (list: string[]) => list.map(cat => {
           let image = '';
           if (cat === 'Todas') {
               image = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
@@ -91,11 +86,106 @@ const Home: React.FC<HomeProps> = ({
           }
           return { name: cat, image };
       });
+
+      // Retornamos 3 conjuntos: [PREV_SET] [CURRENT_SET] [NEXT_SET]
+      // Isto permite fazer scroll "infinito"
+      return [
+        ...mapCats(uniqueCats), // Set 1 (Cópia Esquerda)
+        ...mapCats(uniqueCats), // Set 2 (Principal/Centro)
+        ...mapCats(uniqueCats)  // Set 3 (Cópia Direita)
+      ];
   }, [products]);
 
+  // Posicionar o scroll no MEIO ao carregar a página
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+        const scrollWidth = scrollContainerRef.current.scrollWidth;
+        // Posiciona no início do Set 2 (o do meio)
+        scrollContainerRef.current.scrollLeft = scrollWidth / 3;
+    }
+  }, [categoryVisuals]);
+
+  // Lógica de Scroll Infinito "Teletransporte"
+  const handleScroll = () => {
+      if (!scrollContainerRef.current) return;
+      
+      const container = scrollContainerRef.current;
+      const scrollWidth = container.scrollWidth;
+      const clientWidth = container.clientWidth;
+      const scrollPos = container.scrollLeft;
+      
+      const oneSetWidth = scrollWidth / 3;
+
+      // Se chegarmos muito perto do início (Set 1), saltamos para o Set 2
+      if (scrollPos < 50) {
+          container.scrollLeft = scrollPos + oneSetWidth;
+      }
+      // Se chegarmos muito perto do fim (Set 3), saltamos para o Set 2
+      else if (scrollPos >= (oneSetWidth * 2) - clientWidth) {
+          container.scrollLeft = scrollPos - oneSetWidth;
+      }
+  };
+
+  // Lógica de Scroll das Setas
+  const scroll = (direction: 'left' | 'right') => {
+      if (scrollContainerRef.current) {
+          const { current } = scrollContainerRef;
+          const scrollAmount = 300; 
+          if (direction === 'left') {
+              current.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+          } else {
+              current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+          }
+      }
+  };
+
+  // --- EVENTOS DO RATO PARA ARRASTAR (DRAG SCROLL) ---
+  const handleMouseDown = (e: React.MouseEvent) => {
+      if (!scrollContainerRef.current) return;
+      isDown.current = true;
+      isDragging.current = false;
+      scrollContainerRef.current.classList.add('cursor-grabbing');
+      scrollContainerRef.current.classList.remove('cursor-grab');
+      startX.current = e.pageX - scrollContainerRef.current.offsetLeft;
+      scrollLeft.current = scrollContainerRef.current.scrollLeft;
+  };
+
+  const handleMouseLeave = () => {
+      if (!scrollContainerRef.current) return;
+      isDown.current = false;
+      scrollContainerRef.current.classList.remove('cursor-grabbing');
+      scrollContainerRef.current.classList.add('cursor-grab');
+  };
+
+  const handleMouseUp = () => {
+      if (!scrollContainerRef.current) return;
+      isDown.current = false;
+      scrollContainerRef.current.classList.remove('cursor-grabbing');
+      scrollContainerRef.current.classList.add('cursor-grab');
+      
+      setTimeout(() => { isDragging.current = false; }, 50);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (!isDown.current || !scrollContainerRef.current) return;
+      e.preventDefault();
+      
+      const x = e.pageX - scrollContainerRef.current.offsetLeft;
+      const walk = (x - startX.current) * 2; 
+      
+      if (Math.abs(x - startX.current) > 5) {
+          isDragging.current = true;
+      }
+      
+      scrollContainerRef.current.scrollLeft = scrollLeft.current - walk;
+  };
+
   const handleCategoryClick = (cat: string) => {
+      if (isDragging.current) {
+          return;
+      }
+
       onCategoryChange(cat);
-      // Scroll suave até à lista de produtos
       setTimeout(() => {
         document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
@@ -103,20 +193,14 @@ const Home: React.FC<HomeProps> = ({
 
   return (
     <>
-      {/* 
-        REMOVIDO HERO BANNER 
-        A página começa agora diretamente com o Carrossel 
-      */}
-
       {/* --- CATEGORY CAROUSEL --- */}
-      {/* Adicionado pt-8 para dar espaço do topo */}
-      <section className="pt-8 pb-4 bg-gray-50 relative group">
-        <div className="container mx-auto px-4 relative">
+      <section className="pt-8 pb-4 bg-gray-50 relative group overflow-hidden select-none">
+        <div className="w-full relative">
             
             {/* Seta Esquerda */}
             <button 
                 onClick={() => scroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm -ml-2 md:ml-0"
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
                 aria-label="Anterior"
             >
                 <ChevronLeft size={24} />
@@ -125,33 +209,47 @@ const Home: React.FC<HomeProps> = ({
             {/* Seta Direita */}
             <button 
                 onClick={() => scroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm -mr-2 md:mr-0"
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
                 aria-label="Próximo"
             >
                 <ChevronRight size={24} />
             </button>
 
-            {/* Contentor com Scrollbar Escondida */}
+            {/* Contentor com Infinite Loop & Drag */}
+            {/* snap-mandatory força o item a centrar-se se o utilizador largar o scroll a meio */}
             <div 
                 ref={scrollContainerRef}
-                className="flex gap-8 overflow-x-auto p-8 snap-x justify-start md:justify-center"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }} 
+                className="flex gap-8 overflow-x-auto py-8 px-4 md:px-12 justify-start w-full cursor-grab active:cursor-grabbing no-scrollbar snap-x snap-mandatory"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                onMouseDown={handleMouseDown}
+                onMouseLeave={handleMouseLeave}
+                onMouseUp={handleMouseUp}
+                onMouseMove={handleMouseMove}
+                onScroll={handleScroll} // Handler do loop infinito
             >
-                {/* CSS Inline para garantir que scrollbar não aparece */}
                 <style>{`
-                    div::-webkit-scrollbar {
+                    .no-scrollbar::-webkit-scrollbar {
                         display: none;
+                    }
+                    .no-scrollbar {
+                        -ms-overflow-style: none;
+                        scrollbar-width: none;
                     }
                 `}</style>
 
                 {categoryVisuals.map((cat, idx) => (
-                    <button 
-                        key={idx}
-                        onClick={() => handleCategoryClick(cat.name)}
-                        className="flex flex-col items-center gap-4 min-w-[120px] md:min-w-[160px] snap-center group/item"
+                    <div 
+                        key={idx} // Usar idx porque temos chaves duplicadas (categorias repetidas)
+                        onClick={(e) => {
+                             e.preventDefault();
+                             handleCategoryClick(cat.name);
+                        }}
+                        draggable={false} 
+                        // snap-center faz com que este item tente ficar no meio do ecrã
+                        className="flex flex-col items-center gap-4 min-w-[120px] md:min-w-[160px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95 snap-center"
                     >
                         <div className={`
-                            w-28 h-28 md:w-40 md:h-40 rounded-full p-1.5 border-4 transition-all duration-300 overflow-hidden relative shadow-lg bg-white
+                            w-28 h-28 md:w-40 md:h-40 rounded-full p-1.5 border-4 transition-all duration-300 overflow-hidden relative shadow-lg bg-white pointer-events-none
                             ${selectedCategory === cat.name 
                                 ? 'border-primary ring-4 ring-primary/20 scale-110 shadow-2xl z-10' 
                                 : 'border-white group-hover/item:border-primary group-hover/item:shadow-xl group-hover/item:scale-105'
@@ -160,25 +258,25 @@ const Home: React.FC<HomeProps> = ({
                             <img 
                                 src={cat.image} 
                                 alt={cat.name} 
-                                className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50"
+                                draggable={false}
+                                className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50 select-none"
                             />
                             {selectedCategory === cat.name && (
                                 <div className="absolute inset-0 bg-primary/10 rounded-full mix-blend-overlay"></div>
                             )}
                         </div>
-                        {/* AUMENTADO: text-base md:text-xl */}
-                        <span className={`text-base md:text-xl font-bold transition-colors text-center leading-tight px-1
+                        <span className={`text-base md:text-xl font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap pointer-events-none select-none
                             ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 group-hover/item:text-primary'}
                         `}>
                             {cat.name}
                         </span>
-                    </button>
+                    </div>
                 ))}
             </div>
         </div>
       </section>
 
-      {/* Benefits Section - AGORA SEM FUNDO, SÓ NO HOVER */}
+      {/* Benefits Section */}
       <section className="py-6 bg-gray-50 border-b border-gray-200/50">
           <div className="container mx-auto px-2 md:px-4 max-w-4xl">
               <div className="grid grid-cols-3 gap-2 md:gap-6">
