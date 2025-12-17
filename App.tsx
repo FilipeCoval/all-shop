@@ -28,6 +28,9 @@ const App: React.FC = () => {
   // Search State (Global)
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Category State (Global - Elevado de Home.tsx para permitir reset no Header)
+  const [selectedCategory, setSelectedCategory] = useState('Todas');
+
   // Wishlist State (Local + DB)
   const [wishlist, setWishlist] = useState<number[]>(() => {
     try {
@@ -338,6 +341,14 @@ const App: React.FC = () => {
       }
   };
 
+  // --- RESET TOTAL AO HOME (LOGO / INICIO) ---
+  const handleResetHome = () => {
+    setSearchTerm('');
+    setSelectedCategory('Todas');
+    window.location.hash = '/';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const renderContent = () => {
     // DASHBOARD ADMIN
     if (route === '#dashboard') {
@@ -356,7 +367,16 @@ const App: React.FC = () => {
             window.location.hash = '/';
             setIsLoginOpen(true);
         }, 0);
-        return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />; 
+        return <Home 
+            products={PRODUCTS} 
+            onAddToCart={addToCart} 
+            getStock={getStockForProduct} 
+            wishlist={wishlist} 
+            onToggleWishlist={toggleWishlist} 
+            searchTerm={searchTerm} 
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+        />; 
       }
       return (
         <ClientArea 
@@ -402,13 +422,28 @@ const App: React.FC = () => {
         // HOME (DEFAULT)
         case '#/':
         default:
-            return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} />;
+            return (
+              <Home 
+                products={PRODUCTS} 
+                onAddToCart={addToCart} 
+                getStock={getStockForProduct} 
+                wishlist={wishlist} 
+                onToggleWishlist={toggleWishlist} 
+                searchTerm={searchTerm}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+              />
+            );
     }
   };
 
   const handleMobileNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
-    window.location.hash = path;
+    if (path === '/') {
+        handleResetHome();
+    } else {
+        window.location.hash = path;
+    }
     setIsMobileMenuOpen(false);
   };
 
@@ -433,6 +468,7 @@ const App: React.FC = () => {
         onLogout={handleLogout}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
+        onResetHome={handleResetHome}
       />
 
       {isMobileMenuOpen && (
