@@ -28,6 +28,46 @@ const Home: React.FC<HomeProps> = ({
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
+  // --- HERO BANNER STATE ---
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const slides = [
+    {
+      id: 1,
+      title: "Nova Xiaomi TV Box S (2ª Gen)",
+      subtitle: "A revolução 8K chegou. Google TV e Processador Rápido.",
+      cta: "Comprar Agora",
+      // Imagem 4K Original
+      image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?q=80&w=2500&auto=format&fit=crop",
+      linkProductId: 1
+    },
+    {
+      id: 2,
+      title: "Envios Grátis > 50€",
+      subtitle: "Entrega rápida em 24h/48h para Portugal Continental.",
+      cta: "Ver Catálogo",
+      // Imagem Original
+      image: "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=2500&auto=format&fit=crop",
+      action: () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
+    },
+    {
+      id: 3,
+      title: "Acessórios Premium",
+      subtitle: "Cabos e Hubs de alta performance para o seu setup.",
+      cta: "Explorar",
+      // Imagem Original
+      image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2500&auto=format&fit=crop",
+      category: "Acessórios"
+    }
+  ];
+
+  // Auto-play do Banner
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+    }, 6000); // 6 segundos por slide
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
   // Ref para o scroll do carrossel
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -191,41 +231,124 @@ const Home: React.FC<HomeProps> = ({
       }, 100);
   };
 
+  // Click do Banner
+  const handleBannerClick = (slide: any) => {
+    if (slide.linkProductId) {
+        window.location.hash = `#product/${slide.linkProductId}`;
+    } else if (slide.category) {
+        onCategoryChange(slide.category);
+        document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+    } else if (slide.action) {
+        slide.action();
+    }
+  };
+
   return (
     <>
+      {/* --- HERO BANNER (IMG TAG REAL - SEM OVERLAY) --- */}
+      {/* Altura: 250px mobile, 450px desktop */}
+      <section className="relative w-full h-[250px] md:h-[450px] overflow-hidden bg-gray-900 group shadow-lg">
+        {slides.map((slide, index) => (
+          <div 
+            key={slide.id}
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+          >
+             {/* IMAGEM REAL - SEM EFEITOS */}
+             <img 
+               src={slide.image} 
+               alt={slide.title}
+               className="absolute inset-0 w-full h-full object-cover transition-transform duration-[12000ms] ease-linear transform"
+               style={{ 
+                   transform: index === currentSlide ? 'scale(1.05)' : 'scale(1)'
+                }} 
+             />
+             
+             {/* Gradient Overlay removido para deixar imagem original. Apenas um gradiente muito subtil em baixo para os dots */}
+             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+             
+             {/* Content */}
+             <div className="relative z-20 container mx-auto px-6 h-full flex flex-col justify-center items-start text-white max-w-6xl">
+                <div className="flex flex-col gap-3 md:gap-4 max-w-xl">
+                    <span className="inline-block px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-[10px] md:text-xs font-bold uppercase tracking-wider w-fit border border-white/20 shadow-sm">
+                        Destaque
+                    </span>
+                    <h1 className="text-3xl md:text-5xl font-extrabold leading-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                        {slide.title}
+                    </h1>
+                    <p className="text-sm md:text-xl text-white font-medium drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] max-w-lg">
+                        {slide.subtitle}
+                    </p>
+                    <div className="mt-4">
+                        <button 
+                            onClick={() => handleBannerClick(slide)}
+                            className="bg-white text-gray-900 hover:bg-gray-100 px-6 py-3 rounded-full font-bold text-sm md:text-base transition-all transform hover:scale-105 shadow-xl flex items-center gap-2 border border-gray-100"
+                        >
+                            {slide.cta} <ArrowRight size={18} />
+                        </button>
+                    </div>
+                </div>
+             </div>
+          </div>
+        ))}
+
+        {/* Indicators */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+            {slides.map((_, idx) => (
+                <button
+                    key={idx}
+                    onClick={() => setCurrentSlide(idx)}
+                    className={`h-1.5 rounded-full transition-all duration-300 shadow-md ${idx === currentSlide ? 'w-8 bg-white' : 'w-2 bg-white/60 hover:bg-white'}`}
+                />
+            ))}
+        </div>
+
+        {/* Navigation Arrows */}
+        <button 
+            onClick={() => setCurrentSlide(curr => curr === 0 ? slides.length - 1 : curr - 1)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/30 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-black/50 backdrop-blur-sm hidden md:block border border-white/10"
+        >
+            <ChevronLeft size={24} />
+        </button>
+        <button 
+            onClick={() => setCurrentSlide(curr => curr === slides.length - 1 ? 0 : curr + 1)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 bg-black/30 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-black/50 backdrop-blur-sm hidden md:block border border-white/10"
+        >
+            <ChevronRight size={24} />
+        </button>
+      </section>
+
       {/* --- CATEGORY CAROUSEL --- */}
-      <section className="pt-8 pb-4 bg-gray-50 relative group overflow-hidden select-none">
+      <section className="pt-6 pb-2 bg-gray-50 relative group overflow-hidden select-none border-b border-gray-100">
         <div className="w-full relative">
             
             {/* Seta Esquerda */}
             <button 
                 onClick={() => scroll('left')}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-2 md:p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
                 aria-label="Anterior"
             >
-                <ChevronLeft size={24} />
+                <ChevronLeft size={20} />
             </button>
 
             {/* Seta Direita */}
             <button 
                 onClick={() => scroll('right')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-2 md:p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm"
                 aria-label="Próximo"
             >
-                <ChevronRight size={24} />
+                <ChevronRight size={20} />
             </button>
 
             {/* Contentor com Infinite Loop & Drag */}
-            {/* snap-mandatory força o item a centrar-se se o utilizador largar o scroll a meio */}
             <div 
                 ref={scrollContainerRef}
-                className="flex gap-8 overflow-x-auto py-8 px-4 md:px-12 justify-start w-full cursor-grab active:cursor-grabbing no-scrollbar snap-x snap-mandatory"
+                className="flex gap-4 md:gap-8 overflow-x-auto py-4 md:py-8 px-4 md:px-12 justify-start w-full cursor-grab active:cursor-grabbing no-scrollbar snap-x snap-mandatory"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 onMouseDown={handleMouseDown}
                 onMouseLeave={handleMouseLeave}
                 onMouseUp={handleMouseUp}
                 onMouseMove={handleMouseMove}
-                onScroll={handleScroll} // Handler do loop infinito
+                onScroll={handleScroll} 
             >
                 <style>{`
                     .no-scrollbar::-webkit-scrollbar {
@@ -239,20 +362,19 @@ const Home: React.FC<HomeProps> = ({
 
                 {categoryVisuals.map((cat, idx) => (
                     <div 
-                        key={idx} // Usar idx porque temos chaves duplicadas (categorias repetidas)
+                        key={idx}
                         onClick={(e) => {
                              e.preventDefault();
                              handleCategoryClick(cat.name);
                         }}
                         draggable={false} 
-                        // snap-center faz com que este item tente ficar no meio do ecrã
-                        className="flex flex-col items-center gap-4 min-w-[120px] md:min-w-[160px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95 snap-center"
+                        className="flex flex-col items-center gap-3 min-w-[100px] md:min-w-[140px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95 snap-center"
                     >
                         <div className={`
-                            w-28 h-28 md:w-40 md:h-40 rounded-full p-1.5 border-4 transition-all duration-300 overflow-hidden relative shadow-lg bg-white pointer-events-none
+                            w-20 h-20 md:w-32 md:h-32 rounded-full p-1 border-4 transition-all duration-300 overflow-hidden relative shadow-md bg-white pointer-events-none
                             ${selectedCategory === cat.name 
-                                ? 'border-primary ring-4 ring-primary/20 scale-110 shadow-2xl z-10' 
-                                : 'border-white group-hover/item:border-primary group-hover/item:shadow-xl group-hover/item:scale-105'
+                                ? 'border-primary ring-4 ring-primary/20 scale-105 shadow-xl z-10' 
+                                : 'border-white group-hover/item:border-primary group-hover/item:shadow-lg group-hover/item:scale-105'
                             }
                         `}>
                             <img 
@@ -265,7 +387,7 @@ const Home: React.FC<HomeProps> = ({
                                 <div className="absolute inset-0 bg-primary/10 rounded-full mix-blend-overlay"></div>
                             )}
                         </div>
-                        <span className={`text-base md:text-xl font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap pointer-events-none select-none
+                        <span className={`text-xs md:text-base font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap pointer-events-none select-none
                             ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 group-hover/item:text-primary'}
                         `}>
                             {cat.name}
@@ -277,39 +399,39 @@ const Home: React.FC<HomeProps> = ({
       </section>
 
       {/* Benefits Section */}
-      <section className="py-6 bg-gray-50 border-b border-gray-200/50">
+      <section className="py-4 bg-gray-50 border-b border-gray-200/50">
           <div className="container mx-auto px-2 md:px-4 max-w-4xl">
               <div className="grid grid-cols-3 gap-2 md:gap-6">
                   {/* Item 1 */}
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-xl hover:-translate-y-1 cursor-default group">
-                      <div className="bg-blue-100 p-2 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform">
-                          <Star fill="currentColor" size={16} className="md:w-5 md:h-5" />
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group">
+                      <div className="bg-blue-100 p-1.5 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform">
+                          <Star fill="currentColor" size={14} className="md:w-5 md:h-5" />
                       </div>
                       <div>
-                          <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight">Qualidade</h3>
-                          <p className="text-[10px] md:text-xs text-gray-500 hidden sm:block md:block">Garantida</p>
+                          <h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Qualidade</h3>
+                          <p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">Garantida</p>
                       </div>
                   </div>
 
                   {/* Item 2 */}
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-xl hover:-translate-y-1 cursor-default group">
-                      <div className="bg-green-100 p-2 md:p-2.5 rounded-full text-green-600 shrink-0 group-hover:scale-110 transition-transform">
-                          <Truck size={16} className="md:w-5 md:h-5" />
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group">
+                      <div className="bg-green-100 p-1.5 md:p-2.5 rounded-full text-green-600 shrink-0 group-hover:scale-110 transition-transform">
+                          <Truck size={14} className="md:w-5 md:h-5" />
                       </div>
                       <div>
-                          <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight">Envio Grátis</h3>
-                          <p className="text-[10px] md:text-xs text-gray-500 block">acima de 50€</p>
+                          <h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Envio Grátis</h3>
+                          <p className="text-[9px] md:text-xs text-gray-500 block">acima de 50€</p>
                       </div>
                   </div>
 
                   {/* Item 3 */}
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-xl hover:-translate-y-1 cursor-default group">
-                      <div className="bg-purple-100 p-2 md:p-2.5 rounded-full text-purple-600 shrink-0 group-hover:scale-110 transition-transform">
-                          <ShieldCheck size={16} className="md:w-5 md:h-5" />
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group">
+                      <div className="bg-purple-100 p-1.5 md:p-2.5 rounded-full text-purple-600 shrink-0 group-hover:scale-110 transition-transform">
+                          <ShieldCheck size={14} className="md:w-5 md:h-5" />
                       </div>
                       <div>
-                          <h3 className="font-bold text-gray-900 text-xs md:text-sm leading-tight">Segurança</h3>
-                          <p className="text-[10px] md:text-xs text-gray-500 hidden sm:block md:block">100% Seguro</p>
+                          <h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Segurança</h3>
+                          <p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">100% Seguro</p>
                       </div>
                   </div>
               </div>
@@ -322,7 +444,7 @@ const Home: React.FC<HomeProps> = ({
         getStock={getStock} 
         wishlist={wishlist} 
         onToggleWishlist={onToggleWishlist}
-        searchTerm={searchTerm}
+        searchTerm={searchTerm} 
         selectedCategory={selectedCategory}
         onCategoryChange={onCategoryChange}
       />
