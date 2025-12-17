@@ -11,14 +11,22 @@ interface HomeProps {
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
   searchTerm: string;
+  selectedCategory: string;
+  onCategoryChange: (category: string) => void;
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, onToggleWishlist, searchTerm }) => {
+const Home: React.FC<HomeProps> = ({ 
+    products, 
+    onAddToCart, 
+    getStock, 
+    wishlist, 
+    onToggleWishlist, 
+    searchTerm,
+    selectedCategory,
+    onCategoryChange
+}) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  
-  // State elevado para controlar a categoria a partir do Home
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
   
   // Ref para o scroll do carrossel
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -86,7 +94,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
   }, [products]);
 
   const handleCategoryClick = (cat: string) => {
-      setSelectedCategory(cat);
+      onCategoryChange(cat);
       // Scroll suave até à lista de produtos
       setTimeout(() => {
         document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -218,7 +226,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, getStock, wishlist, 
         onToggleWishlist={onToggleWishlist}
         searchTerm={searchTerm}
         selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
+        onCategoryChange={onCategoryChange}
       />
 
       {/* Newsletter */}
