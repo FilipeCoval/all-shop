@@ -291,17 +291,6 @@ const Home: React.FC<HomeProps> = ({
           </div>
         ))}
 
-        {/* Indicators */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex gap-2">
-            {slides.map((_, idx) => (
-                <button
-                    key={idx}
-                    onClick={() => setCurrentSlide(idx)}
-                    className={`h-1.5 rounded-full transition-all duration-300 shadow-md ${idx === currentSlide ? 'w-8 bg-white' : 'w-2 bg-white/60 hover:bg-white'}`}
-                />
-            ))}
-        </div>
-
         {/* Navigation Arrows */}
         <button 
             onClick={() => setCurrentSlide(curr => curr === 0 ? slides.length - 1 : curr - 1)}
