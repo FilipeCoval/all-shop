@@ -12,6 +12,7 @@ interface HeaderProps {
   onLogout: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
+  onResetHome: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -22,13 +23,14 @@ const Header: React.FC<HeaderProps> = ({
   onOpenLogin, 
   onLogout,
   searchTerm,
-  onSearchChange
+  onSearchChange,
+  onResetHome
 }) => {
   
   const handleNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     if (path === '/') {
-        window.location.hash = '/';
+        onResetHome();
     } else if (path.startsWith('#')) {
         window.location.hash = path;
     } else {
@@ -56,7 +58,7 @@ const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* LOGO DESKTOP (Esquerda - Original) - Oculto em Mobile */}
-            <a href="#/" onClick={handleNav('/')} className="hidden md:block group mr-4">
+            <a href="#/" onClick={(e) => { e.preventDefault(); onResetHome(); }} className="hidden md:block group mr-4">
                 {LOGO_URL ? (
                     <img 
                       src={LOGO_URL} 
@@ -73,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({
 
             {/* Links Desktop - AUMENTADO PARA TEXT-BASE */}
             <nav className="hidden md:flex items-center gap-6 text-base font-medium text-gray-600">
-                <a href="#/" onClick={handleNav('/')} className="hover:text-primary transition-colors">Início</a>
+                <a href="#/" onClick={(e) => { e.preventDefault(); onResetHome(); }} className="hover:text-primary transition-colors">Início</a>
                 <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="hover:text-primary transition-colors">Produtos</a>
                 <a href="#about" onClick={handleNav('about')} className="hover:text-primary transition-colors">Sobre</a>
                 <a href="#contact" onClick={handleNav('contact')} className="hover:text-primary transition-colors">Contato</a>
@@ -82,7 +84,7 @@ const Header: React.FC<HeaderProps> = ({
 
         {/* LOGO MOBILE (Centralizado Absoluto) - Oculto em Desktop */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:hidden z-10">
-            <a href="#/" onClick={handleNav('/')} className="block">
+            <a href="#/" onClick={(e) => { e.preventDefault(); onResetHome(); }} className="block">
                 {LOGO_URL ? (
                     <img 
                       src={LOGO_URL} 
