@@ -1,51 +1,26 @@
-
-
 import { Product } from './types';
 
 export const STORE_NAME = "Allshop";
 export const CURRENCY = "EUR";
-// Link direto para o logo
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
-// Contactos para Checkout
-export const SELLER_PHONE = "351933865907"; // WhatsApp (sem +)
-
-// Coloque aqui o link do seu Grupo, Canal ou Utilizador do Telegram
-// Exemplo: "https://t.me/+kjsdhfksdf" ou "https://t.me/seunome"
+export const SELLER_PHONE = "351933865907"; 
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
-
-// CREDENCIAIS TELEGRAM BOT (Notificações de Venda)
 export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBYs";
-
-// ==================================================================================
-// ⚠️ ATENÇÃO: TELEGRAM_CHAT_ID (Para onde a mensagem vai)
-// ==================================================================================
-// ID DO GRUPO (SÓCIOS)
-// Nota: IDs de grupos do Telegram começam sempre por um sinal negativo (ex: -100...)
-// ==================================================================================
 export const TELEGRAM_CHAT_ID = "-1003494194252"; 
 
-// LISTA DE ADMINISTRADORES
-// Adicione aqui os emails que podem aceder ao Dashboard / Backoffice
 export const ADMIN_EMAILS = [
-  "filipe_Coval_90@hotmail.com",     // Substitua pelo seu email de login
-  "mcpoleca@gmail.com",     // Substitua pelo email do sócio
-  "filipe@teste.com"       // Exemplo
+  "filipe_Coval_90@hotmail.com",
+  "mcpoleca@gmail.com",
+  "filipe@teste.com"
 ];
 
-// --- SISTEMA DE FIDELIZAÇÃO (TIERS) ---
-// Regras:
-// threshold: Valor gasto para atingir o nível
-// multiplier: Quantos pontos ganha por Euro
 export const LOYALTY_TIERS = {
-    BRONZE: { threshold: 0, multiplier: 1, label: 'Bronze' },     // 1% retorno
-    SILVER: { threshold: 250, multiplier: 3, label: 'Prata' },    // 3% retorno
-    GOLD: { threshold: 600, multiplier: 5, label: 'Ouro' }        // 5% retorno
+    BRONZE: { threshold: 0, multiplier: 1, label: 'Bronze' },
+    SILVER: { threshold: 250, multiplier: 3, label: 'Prata' },
+    GOLD: { threshold: 600, multiplier: 5, label: 'Ouro' }
 };
 
-// --- RECOMPENSAS DISPONÍVEIS ---
-// value: Valor do desconto em €
-// cost: Custo em pontos
 export const LOYALTY_REWARDS = [
     { id: 'vouch_2', title: 'Vale de 2€', value: 2, cost: 200, minPurchase: 10 },
     { id: 'vouch_5', title: 'Vale de 5€', value: 5, cost: 500, minPurchase: 20 },
@@ -53,44 +28,24 @@ export const LOYALTY_REWARDS = [
     { id: 'vouch_25', title: 'Vale de 25€', value: 25, cost: 2500, minPurchase: 100 },
 ];
 
-/* 
-  📝 COMO ADICIONAR NOVO PRODUTO COM VARIANTES:
-  
-  {
-    id: 99,
-    name: "Carregador Xiaomi",
-    price: 15.00, // Preço base (exibido na lista)
-    description: "Carregador rápido...",
-    category: "Acessórios",
-    image: "...",
-    features: ["Turbo Charge", "Cabo incluído"],
-    variantLabel: "Escolha a Potência", // Título da escolha
-    variants: [
-       { name: "33W", price: 15.00 },
-       { name: "67W", price: 25.00 }, // Preço diferente
-       { name: "120W", price: 35.00 }
-    ]
-  },
-*/
-
 export const PRODUCTS: Product[] = [
   {
     id: 6,
-    name: "Xiaomi TV Box S (3ª Geração)",
+    name: "Xiaomi TV Box S (3ª Geração) - 4K Ultra HD",
     price: 55.00,
-    description: "A mais recente inovação da Xiaomi. Processador mais rápido, suporte para 8K e a melhor experiência Google TV para transformar a sua sala num cinema.",
+    description: "A elite do streaming. Salto de 130% em performance gráfica e 32GB de armazenamento. Ideal para quem quer a box mais fluída do mercado com Wi-Fi 6.",
     category: "TV & Streaming",
     image: "https://imiland.ir/wp-content/uploads/2025/05/1748368235_68_Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png",
     images: [
         "https://androidpctv.com/wp-content/uploads/2025/04/Xiaomi-TV-Box-S-3rd-gen-review-p012.jpg"
     ],
-    features: ["Suporte 8K", "Google TV", "Processador Ultra Rápido", "WiFi 6"]
+    features: ["Suporte 8K / 4K", "Google TV", "Processador A55 Ultra", "32GB ROM / WiFi 6"]
   },
   {
     id: 1,
-    name: "Xiaomi TV Box S (2ª Geração)",
+    name: "Xiaomi TV Box S (2ª Geração) - 4K Ultra HD",
     price: 45.00,
-    description: "Transforme a sua TV numa Smart TV completa. Acesso à Netflix, YouTube e milhares de apps com qualidade 4K e Google TV.",
+    description: "A clássica e fiável. Certificada para todos os serviços oficiais com Dolby Vision e HDR10+. Excelente custo-benefício para streaming oficial.",
     category: "TV & Streaming",
     image: "https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif",
     images: [
@@ -100,15 +55,15 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 2,
-    name: "TV Box H96 Max M2",
-    price: 30.00,
-    description: "Potência pura para entretenimento. Processador rápido ideal para IPTV, streaming e jogos Android na sua televisão.",
+    name: "TV Box H96 Max M2 - Android 13",
+    price: 35.00,
+    description: "Liberdade total. Android 13 'puro' com 64GB de espaço. Perfeita para IPTV e aplicações externas (APKs) devido ao seu sistema aberto.",
     category: "TV & Streaming",
     image: "https://img.kwcdn.com/product/fancy/d53c3efc-59aa-4ac2-bd40-201b43f0cc98.jpg?imageView2/2/w/800/q/70/format/avif",
     images: [
         "https://img.kwcdn.com/product/fancy/ac195306-fbbf-4116-8b1a-ff0d85fbdcfd.jpg?imageView2/2/w/800/q/70/format/avif"
     ],
-    features: ["Android 13", "WiFi 6 Rápido", "4GB RAM / 32GB ROM", "Suporte 4K"]
+    features: ["Android 13.0", "4GB RAM + 64GB ROM", "WiFi 6 Rápido", "Instalação Livre APK"]
   },
   {
     id: 3,
@@ -149,7 +104,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 7,
     name: "Carregador Turbo (Kit c/ Cabo)",
-    price: 5.99, // Preço base (da versão mais barata)
+    price: 5.99,
     description: "Carregamento ultra-rápido compatível com Xiaomi. Disponível em várias potências para se adaptar ao seu modelo. Inclui cabo USB-C Turbo de 6A.",
     category: "Acessórios",
     image: "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close",
@@ -180,7 +135,7 @@ export const PRODUCTS: Product[] = [
     id: 8,
     name: "Carregador Xiaomi Turbo Original (Kit)",
     price: 14.99,
-    description: "Carregador original Xiaomi disponível em 33W e 67W. Ideal para carregamento rápido (Turbo Charge) de modelos Redmi Note 10/11, POCO X3/X4 e Mi 10T/11T. Inclui cabo USB-C de 6A robusto.",
+    description: "Carregador original Xiaomi disponível em 33W e 67W. Ideal para carregamento rápido (Turbo Charge) de modelos Redmi Note, POCO e Mi. Inclui cabo USB-C de 6A robusto.",
     category: "Acessórios",
     image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg",
     images: [
@@ -205,7 +160,7 @@ export const PRODUCTS: Product[] = [
     id: 9,
     name: "Cabo Xiaomi Turbo USB-C para USB-C (120W)",
     price: 3.99,
-    description: "Cabo de dados e carregamento rápido com dupla ponta USB-C. Suporta protocolo HyperCharge 120W da Xiaomi e transferência de dados rápida. Ideal para carregar smartphones, tablets e portáteis modernos (Samsung, Xiaomi, Apple).",
+    description: "Cabo de dados e carregamento rápido com dupla ponta USB-C. Suporta protocolo HyperCharge 120W da Xiaomi e transferência de dados rápida. Ideal para carregar smartphones, tablets e portáteis modernos.",
     category: "Cabos",
     image: "https://ae-pic-a1.aliexpress-media.com/kf/Scd9ec99f95dc4efb8b3f82634c835943C.jpg_960x960q75.jpg_.avif",
     images: [
