@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -9,7 +9,6 @@ interface ProductListProps {
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
   searchTerm: string;
-  // Novos Props de Controle
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
 }
@@ -25,8 +24,6 @@ const ProductList: React.FC<ProductListProps> = ({
     onCategoryChange
 }) => {
   const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
-  
-  // NOVOS ESTADOS: Grelha vs Lista e Paginação
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9; 
@@ -36,7 +33,6 @@ const ProductList: React.FC<ProductListProps> = ({
     window.location.hash = `product/${id}`;
   };
 
-  // Reset da página ao mudar filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, sortOption]);
@@ -61,11 +57,9 @@ const ProductList: React.FC<ProductListProps> = ({
       } else if (sortOption === 'price-desc') {
           result.sort((a, b) => b.price - a.price);
       }
-
       return result;
   }, [products, searchTerm, selectedCategory, sortOption]);
 
-  // Lógica Paginação
   const totalPages = Math.ceil(filteredAndSortedProducts.length / itemsPerPage);
   const paginatedProducts = filteredAndSortedProducts.slice(
     (currentPage - 1) * itemsPerPage,
@@ -79,12 +73,23 @@ const ProductList: React.FC<ProductListProps> = ({
       }
   };
 
+  // Helper para decidir qual selo mostrar (TOTALMENTE REFINADO)
+  const getProductBadge = (product: Product) => {
+      // Xiaomi TV Box 3rd Gen
+      if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
+      // Xiaomi TV Box 2nd Gen ou Kits Turbo originais
+      if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
+      // Promoção real (ex: o Kit 7 que é mais barato que o original)
+      if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
+      // Se for cabo ou adaptador (Essenciais)
+      if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
+      return null;
+  };
+
   return (
-    // Alterado py-8 para pt-0 pb-12 para remover espaço em branco no topo e manter fundo contínuo
     <section id="products" className="pt-2 pb-12 bg-gray-50 min-h-[600px]">
       <div className="container mx-auto px-4">
         
-        {/* TOOLBAR (Filtros e Modos de Visualização) */}
         <div className="max-w-6xl mx-auto space-y-6 mb-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex flex-wrap justify-center md:justify-start gap-2">
@@ -118,39 +123,19 @@ const ProductList: React.FC<ProductListProps> = ({
                         </select>
                     </div>
 
-                    {/* Botões Grid / List */}
                     <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200">
-                        <button 
-                            onClick={() => setViewMode('grid')}
-                            className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Grelha"
-                        >
-                            <LayoutGrid size={18} />
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('list')}
-                            className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Lista"
-                        >
-                            <List size={18} />
-                        </button>
+                        <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Grelha"><LayoutGrid size={18} /></button>
+                        <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List size={18} /></button>
                     </div>
                 </div>
             </div>
             
             <div className="flex justify-between items-center px-2 text-sm text-gray-500">
-                <span>
-                    A mostrar <strong>{paginatedProducts.length}</strong> de <strong>{filteredAndSortedProducts.length}</strong>
-                </span>
-                {searchTerm && (
-                    <span className="bg-yellow-50 px-3 py-1 rounded border border-yellow-200">
-                        Pesquisa: "{searchTerm}"
-                    </span>
-                )}
+                <span>A mostrar <strong>{paginatedProducts.length}</strong> de <strong>{filteredAndSortedProducts.length}</strong></span>
+                {searchTerm && <span className="bg-yellow-50 px-3 py-1 rounded border border-yellow-200">Pesquisa: "{searchTerm}"</span>}
             </div>
         </div>
 
-        {/* PRODUCTS AREA */}
         {filteredAndSortedProducts.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm max-w-4xl mx-auto">
                 <Search size={48} className="text-gray-400 mx-auto mb-4" />
@@ -169,20 +154,16 @@ const ProductList: React.FC<ProductListProps> = ({
                 const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
                 const hasVariants = product.variants && product.variants.length > 0;
                 const isFavorite = wishlist.includes(product.id);
+                const badge = getProductBadge(product);
 
-                // --- MODO LISTA ---
                 if (viewMode === 'list') {
                     return (
-                        <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex group animate-fade-in">
+                        <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex group animate-fade-in relative">
                             <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="w-32 sm:w-56 h-32 sm:h-auto bg-gray-50 relative shrink-0 p-4 flex items-center justify-center">
-                                <img 
-                                    src={product.image} 
-                                    alt={product.name} 
-                                    className={`max-w-full max-h-full object-contain ${isOutOfStock ? 'grayscale opacity-70' : ''}`}
-                                />
+                                <img src={product.image} alt={product.name} className={`max-w-full max-h-full object-contain ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
                                 {isOutOfStock && <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded">ESGOTADO</span>}
+                                {badge && !isOutOfStock && <span className={`absolute top-2 left-2 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm`}>{badge.icon}{badge.text}</span>}
                             </a>
-                            
                             <div className="flex-1 p-6 flex flex-col sm:flex-row gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
@@ -195,35 +176,14 @@ const ProductList: React.FC<ProductListProps> = ({
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">{product.name}</h3>
                                     </a>
                                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{product.description}</p>
-                                    
-                                    <div className="flex flex-wrap gap-2">
-                                        {product.features.slice(0, 3).map((feat, idx) => (
-                                            <span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200">{feat}</span>
-                                        ))}
-                                    </div>
+                                    <div className="flex flex-wrap gap-2">{product.features.slice(0, 3).map((feat, idx) => (<span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200">{feat}</span>))}</div>
                                 </div>
-
                                 <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-4 min-w-[140px] sm:border-l border-gray-100 sm:pl-6">
-                                    <div className="text-right">
-                                        <div className="text-2xl font-bold text-gray-900">
-                                            {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}
-                                        </div>
-                                    </div>
-
+                                    <div className="text-right"><div className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</div></div>
                                     {hasVariants ? (
-                                        <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-white border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-bold transition-colors">
-                                            Ver Opções
-                                        </button>
+                                        <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-white border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-bold transition-colors">Ver Opções</button>
                                     ) : (
-                                        <button 
-                                            onClick={() => !isOutOfStock && onAddToCart(product)}
-                                            disabled={isOutOfStock}
-                                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2
-                                                ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}
-                                            `}
-                                        >
-                                            {isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}
-                                        </button>
+                                        <button onClick={() => !isOutOfStock && onAddToCart(product)} disabled={isOutOfStock} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>{isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}</button>
                                     )}
                                 </div>
                             </div>
@@ -231,9 +191,15 @@ const ProductList: React.FC<ProductListProps> = ({
                     );
                 }
 
-                // --- MODO GRELHA ---
                 return (
                 <div key={product.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col group relative animate-fade-in">
+                    {/* Badge Novo/Destaque */}
+                    {badge && !isOutOfStock && (
+                        <div className={`absolute top-4 left-4 z-10 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1.5`}>
+                            {badge.icon} {badge.text}
+                        </div>
+                    )}
+                    
                     <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/90 shadow-sm hover:scale-110 transition-all">
                         <Heart size={20} className={isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
                     </button>
@@ -257,12 +223,8 @@ const ProductList: React.FC<ProductListProps> = ({
                             <span className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</span>
                             {isLowStock && <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle size={10} /> Restam {stock}</span>}
                         </div>
-
-                        <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors mb-2">
-                            <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{product.name}</h3>
-                        </a>
+                        <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors mb-2"><h3 className="text-lg font-bold text-gray-900 line-clamp-1">{product.name}</h3></a>
                         <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-2">{product.description}</p>
-                        
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                             <div>
                                 <span className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</span>
@@ -281,7 +243,6 @@ const ProductList: React.FC<ProductListProps> = ({
             </div>
         )}
 
-        {/* PAGINAÇÃO */}
         {filteredAndSortedProducts.length > itemsPerPage && (
             <div className="flex justify-center items-center gap-2 mt-16 animate-fade-in-up">
                 <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft size={20} /></button>
