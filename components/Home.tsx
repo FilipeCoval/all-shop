@@ -1,7 +1,7 @@
+import { Product, ProductVariant } from '../types';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
 import ProductList from './ProductList';
-import { Product, ProductVariant } from '../types';
 import { db } from '../services/firebaseConfig';
 
 interface HomeProps {
@@ -33,11 +33,11 @@ const Home: React.FC<HomeProps> = ({
   const slides = [
     {
       id: 1,
-      title: "Nova Xiaomi TV Box S (2ª Gen)",
+      title: "Nova Xiaomi TV Box S (3ª Gen)",
       subtitle: "A revolução 8K chegou. Google TV e Processador Rápido.",
       cta: "Comprar Agora",
       image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?q=80&w=2500&auto=format&fit=crop",
-      linkProductId: 1
+      linkProductId: 6
     },
     {
       id: 2,
@@ -90,9 +90,11 @@ const Home: React.FC<HomeProps> = ({
   };
 
   const categoryVisuals = useMemo(() => {
-      const realCats = ['Todas', ...new Set(products.map(p => p.category))];
+      // Fixed unknown[] type issue by explicitly defining realCats as string[]
+      const realCats: string[] = ['Todas', ...Array.from(new Set<string>(products.map(p => p.category)))];
       const testCats = ['Gaming', 'Smart Home', 'Audio', 'Drones'];
-      const uniqueCats = [...realCats, ...testCats];
+      // Fixed uniqueCats type by ensuring it's a string[] to match mapCats parameter
+      const uniqueCats: string[] = [...realCats, ...testCats];
       const mapCats = (list: string[]) => list.map(cat => {
           let image = '';
           if (cat === 'Todas') image = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
@@ -185,7 +187,7 @@ const Home: React.FC<HomeProps> = ({
               <h2 className="text-xl font-bold mb-2">Fique a par das novidades</h2>
               <p className="text-gray-300 mb-4 max-w-xl mx-auto text-xs md:text-sm">Inscreva-se para receber ofertas exclusivas e cupões de desconto.</p>
               {subStatus === 'success' ? (
-                <div className="max-w-md mx-auto bg-green-500/20 border border-green-500/50 rounded-xl p-3 flex flex-col items-center animate-fade-in-up">
+                <div className="max-md mx-auto bg-green-500/20 border border-green-500/50 rounded-xl p-3 flex flex-col items-center animate-fade-in-up">
                     <CheckCircle className="text-green-400 mb-1" size={20} /><h3 className="text-base font-bold text-white mb-0.5">Inscrição Confirmada!</h3><p className="text-green-200 text-xs">Obrigado.</p>
                 </div>
               ) : (
