@@ -1,178 +1,72 @@
-
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { PRODUCTS, STORE_NAME } from '../constants';
 import { InventoryProduct } from '../types';
 
 let chatSession: Chat | null = null;
 
-// Função lazy para formatar contexto apenas quando necessário, evitando erros de inicialização
 const getSystemInstruction = (): string => {
   const productsList = PRODUCTS.map(p => 
-    `- **${p.name}** (€ ${p.price.toFixed(2)})\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
+    `- **${p.name}** (€ ${p.price.toFixed(2)})${p.variants ? ' [Várias Opções de Potência]' : ''}\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
   ).join('\n\n');
 
   return `
 Atue como o **Especialista de Tecnologia e Vendas** da loja **${STORE_NAME}**.
-A sua missão é ajudar o cliente a escolher o produto perfeito, com foco especial em TV Boxes, e fechar a venda.
+Sua missão é converter curiosos em clientes, explicando as diferenças técnicas de forma simples e profissional.
 
-**⚖️ REGRAS DE SEGURANÇA E LEGALIDADE (MUITO IMPORTANTE):**
-1.  **Zero Pirataria:** NUNCA sugira, incentive ou confirme o uso de listas IPTV ilegais, desbloqueio de canais premium ou pirataria.
-2.  **Hardware vs Software:** Nós vendemos o **equipamento**. O que o cliente instala é responsabilidade dele.
-3.  **Definição de IPTV:** Se o cliente mencionar "IPTV" ou "ver canais", assuma SEMPRE que ele se refere a **serviços legais** (MEO Go, NOS TV, Vodafone TV, Pluto TV, RTP Play) ou gestão de média própria (Kodi, Plex).
-4.  **Resposta Padrão:** Se perguntarem por "canais grátis", responda: "A box é um sistema aberto Android. Pode instalar as apps da sua operadora, Youtube, Pluto TV ou os seus próprios media players. Nós fornecemos o hardware de alta qualidade para correr essas apps."
+**🧠 GUIA DE CARREGADORES:**
+- Temos duas gamas de kits:
+  1. **Carregador Turbo (Kit c/ Cabo):** Gama económica com excelente performance para uso diário (33W, 67W, 120W).
+  2. **Carregador Xiaomi Turbo Original (Kit):** Gama oficial da marca, para quem não abre mão da certificação original (33W e 67W).
+- O cabo **USB-C para USB-C (120W)** é ideal para modelos mais recentes e portáteis.
 
-**🧠 CONHECIMENTO DA LOJA:**
-1.  **Pagamentos:** MB Way, Transferência, Em mão (na entrega).
-2.  **Envios:** Grátis e rápidos (1-3 dias).
-3.  **Garantia:** 2 Anos em tudo.
-4.  **Checkout:** O cliente finaliza o pedido no WhatsApp ou Telegram para confirmação humana.
+**🆚 BOXES DE TV:**
+- **Xiaomi 3ª Gen:** Topo de gama, 32GB, Wi-Fi 6, suporte 8K. Destaque o salto de 130% em performance gráfica.
+- **Xiaomi 2ª Gen:** A clássica estável para Netflix e Disney+.
+- **H96 Max:** Potência bruta com 64GB de espaço e Android livre para APKs e IPTV.
 
-**🆚 GUIA DE COMPARAÇÃO DE TV BOXES (Use isto para ajudar a escolher):**
+Responda sempre em Português de Portugal.
 
-**A. Xiaomi TV Box S (2ª ou 3ª Geração) - A Escolha Premium (€45 - €50)**
-*   **Para quem é:** Para quem prioriza **Streaming Oficial** (Netflix, Disney+, Prime Video, HBO) em qualidade máxima 4K.
-*   **Sistema:** Google TV (Interface simples, focada em recomendações).
-*   **Vantagens:** Certificada pela Google e Netflix (4K real), Chromecast integrado, muito fácil de usar.
-*   **Argumento:** "Se quer a melhor qualidade de imagem na Netflix e uma experiência simples tipo Smart TV, esta é a escolha certa."
-
-**B. TV Box H96 Max M2 - A Escolha Liberdade/Android Puro (€35)**
-*   **Para quem é:** Para utilizadores avançados que querem **Liberdade Total**. Ideal para **Apps de Operadoras** (MEO/NOS/Vodafone versões mobile), Media Players (VLC, Kodi) ou navegadores Web.
-*   **Sistema:** Android 13 "Puro" (Semelhante a um tablet/telemóvel gigante na TV).
-*   **Vantagens:** Mais memória (4GB RAM) pelo preço, permite instalar apps que não existem na loja oficial da Google TV (instalação via APK).
-*   **Limitação:** A Netflix e Disney+ funcionam, mas podem não dar em 4K (qualidade móvel), pois não tem a certificação oficial dessas marcas.
-*   **Argumento:** "É a box mais potente pelo preço. Perfeita se gosta de instalar as suas próprias aplicações, usar browser ou apps que precisam de mais memória RAM."
-
-**🎯 ESTRATÉGIA DE VENDAS (Como agir):**
-
-1.  **Faça Perguntas de Diagnóstico:**
-    *   Se o cliente disser "Qual a melhor box?", pergunte:
-        *   "O objetivo principal é ver Netflix/Disney+ em 4K ou prefere um sistema aberto para instalar qualquer aplicação Android?"
-        *   "Qual é o valor que estava a pensar gastar?"
-
-2.  **Recomendação Personalizada:**
-    *   *Cenário 1 (Cliente quer Netflix/Qualidade):* "Recomendo a **Xiaomi TV Box**. É certificada, garantindo a melhor imagem nas apps de streaming."
-    *   *Cenário 2 (Cliente quer Preço/Apps Diversas):* "A **H96 Max M2** é excelente para si. Custa apenas €35, tem muita memória e dá-lhe liberdade para instalar qualquer APK Android."
-
-3.  **Fecho:**
-    *   Depois de explicar, diga: "Posso adicionar a [Box Escolhida] ao seu carrinho?"
-
-**📦 CATÁLOGO COMPLETO:**
+**📦 CATÁLOGO ATUALIZADO:**
 ${productsList}
-
-**Tom de voz:** Profissional, Seguro, Útil e Respeitador das Leis. Responda SEMPRE em Português de Portugal.
 `;
 }
 
 export const initializeChat = async (): Promise<Chat> => {
-  // Acesso seguro a import.meta.env
-  // @ts-ignore
-  const viteKey = (import.meta.env && import.meta.env.VITE_API_KEY);
-  // @ts-ignore
-  const processKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY);
-  
-  const apiKey = viteKey || processKey;
-
-  if (!apiKey) {
-    console.error("ERRO CRÍTICO: Chave de API não encontrada.");
-    throw new Error("API Key not found. Please set VITE_API_KEY environment variable.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-  
+  const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
   chatSession = ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: getSystemInstruction(), // Chamada Lazy
-      temperature: 0.3, // Baixa temperatura para seguir as regras estritamente
+      systemInstruction: getSystemInstruction(),
+      temperature: 0.3,
       maxOutputTokens: 600,
     },
   });
-
   return chatSession;
 };
 
 export const sendMessageToGemini = async (message: string): Promise<string> => {
   try {
-    if (!chatSession) {
-      await initializeChat();
-    }
-    
-    if (!chatSession) {
-        return "O assistente está a ligar os motores... um momento!";
-    }
-
+    if (!chatSession) await initializeChat();
+    if (!chatSession) return "A ligar sistemas...";
     const response: GenerateContentResponse = await chatSession.sendMessage({ message });
-    return response.text || "Peço desculpa, não consegui processar. Pode repetir?";
+    return response.text || "Pode repetir?";
   } catch (error) {
-    console.error("Error sending message to Gemini:", error);
-    // Tenta reinicializar se houver erro de sessão
-    try {
-        await initializeChat();
-        if (chatSession) {
-             const responseRetry = await chatSession.sendMessage({ message });
-             return responseRetry.text || "Pode repetir, por favor?";
-        }
-    } catch (retryError) {
-        console.error("Retry failed", retryError);
-    }
-    return "Estou com uma pequena dificuldade técnica. Pode tentar novamente?";
+    console.error(error);
+    return "Tive um soluço técnico. Pode tentar de novo?";
   }
 };
 
-/**
- * Função para analisar o inventário e dar dicas financeiras.
- * Aceita um prompt do utilizador para personalizar a resposta.
- */
 export const getInventoryAnalysis = async (products: InventoryProduct[], userPrompt: string): Promise<string> => {
-    // @ts-ignore
-    const viteKey = (import.meta.env && import.meta.env.VITE_API_KEY);
-    // @ts-ignore
-    const processKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY);
-    const apiKey = viteKey || processKey;
-    
-    if (!apiKey) return "API Key em falta.";
-
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // Formatar dados do inventário para a IA entender custos vs lucro
-    const inventoryContext = products
-        .filter(p => p.status !== 'SOLD')
-        .map(p => {
-            const currentStock = p.quantityBought - p.quantitySold;
-            return `
-            - Produto: ${p.name}
-              Stock Atual: ${currentStock}
-              Custo de Compra (Unid): €${p.purchasePrice}
-              Preço Venda Atual (Estimado): €${p.targetSalePrice || 'N/A'}
-            `;
-        }).join('\n');
-
-    const prompt = `
-      Atue como um **Consultor de Negócios Sênior** para a loja 'Allshop'.
-      
-      **DADOS DO INVENTÁRIO (CONFIDENCIAL):**
-      ${inventoryContext}
-
-      **PEDIDO DO UTILIZADOR:**
-      "${userPrompt}"
-
-      **REGRAS ESTRITAS DE NEGÓCIO:**
-      1. **Proteção de Lucro:** NUNCA sugira vender abaixo do Preço de Custo. Se sugerir desconto, garanta que ainda há margem.
-      2. **Combos Inteligentes:** Se sugerir bundles (Produto A + B), some os custos de ambos e sugira um preço final que seja atrativo mas lucrativo.
-      3. **Realismo:** Sugira descontos pequenos (ex: 2€ a 5€) ou ofertas de valor percebido (ex: portes grátis se a margem permitir).
-      4. **Formato:** Responda de forma curta, estratégica e use emojis. Foque em ação.
-      
-      Se o utilizador pedir para analisar stock parado, identifique os produtos e sugira uma ação específica.
-    `;
-
+    const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
+    const inventoryContext = products.filter(p => p.status !== 'SOLD').map(p => `- ${p.name}: ${p.quantityBought - p.quantitySold} unid. (€${p.purchasePrice})`).join('\n');
+    const prompt = `Consultor Financeiro Allshop. Inventário:\n${inventoryContext}\nPedido: ${userPrompt}\nRegras: Proteger lucro, sugerir combos.`;
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt
+        const response = await ai.models.generateContent({ 
+            model: 'gemini-3-pro-preview', 
+            contents: prompt 
         });
-        return response.text || "Sem sugestões no momento.";
-    } catch (e) {
-        console.error(e);
-        return "Não foi possível gerar análise no momento.";
+        return response.text || "Sem sugestões.";
+    } catch (e) { 
+        return "Erro na análise."; 
     }
 };
