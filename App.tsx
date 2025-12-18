@@ -88,7 +88,6 @@ const App: React.FC = () => {
 
   // --- SINCRONIZAÇÃO DE DADOS (USER, ORDERS, REVIEWS) ---
   useEffect(() => {
-    // Carregar Reviews iniciais
     const loadReviews = async () => {
         try {
             const snapshot = await db.collection('reviews').get();
@@ -116,7 +115,6 @@ const App: React.FC = () => {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
                     setUser(basicUser);
                 }
-                // Escutar encomendas do utilizador em tempo real
                 const unsubOrders = db.collection("orders")
                     .where("userId", "==", firebaseUser.uid)
                     .onSnapshot(snap => {
