@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
-import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye, CreditCard } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye, Info, X } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 import { PRODUCTS } from '../constants';
 
@@ -134,27 +134,23 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                <button onClick={() => onToggleWishlist(product.id)} className={`px-6 rounded-xl border-2 flex items-center justify-center transition-colors ${isFavorite ? 'border-red-200 bg-red-50 text-red-500' : 'border-gray-200 hover:border-red-200 hover:text-red-500 text-gray-400'}`}><Heart size={28} className={isFavorite ? "fill-current" : ""} /></button>
            </div>
 
-           {/* Pagamentos Aceites (Confiança - OTIMIZADOS PARA LEITURA) */}
-           {!isOutOfStock && (
-               <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3 shadow-inner">
-                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Pagamento 100% Seguro</p>
-                   <div className="flex gap-3 items-center flex-wrap justify-center">
-                        {/* Contentores uniformes: h-10 w-16 com preenchimento total da imagem */}
-                        <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
-                            <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
-                        </div>
-                        <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
-                            <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
-                        </div>
-                        <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
-                            <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
-                        </div>
-                        <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/320px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
-                        </div>
-                   </div>
+           <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3 shadow-inner">
+               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Pagamento 100% Seguro</p>
+               <div className="flex gap-3 items-center flex-wrap justify-center">
+                    <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
+                        <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
+                        <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
+                        <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="bg-white p-0.5 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center h-10 w-16 overflow-hidden">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/320px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
+                    </div>
                </div>
-           )}
+           </div>
 
            <div className="space-y-6 text-gray-600 leading-relaxed">
                <p className="text-lg">{product.description}</p>
@@ -172,9 +168,82 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
       <ReviewSection productId={product.id} reviews={reviews} onAddReview={onAddReview} currentUser={currentUser} />
 
+      {/* --- TABELA DE COMPARAÇÃO (ESPECÍFICA DE TV BOXES) --- */}
+      {product.category === 'TV & Streaming' && (
+          <div className="mt-20 border-t border-gray-100 pt-16">
+              <div className="text-center mb-10">
+                  <h2 className="text-3xl font-extrabold text-gray-900">Qual a Box ideal para si?</h2>
+                  <p className="text-gray-500 mt-2">Compare as gerações da Xiaomi com a potência da H96 Max.</p>
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-gray-200 shadow-xl bg-white">
+                  <table className="w-full text-left border-collapse">
+                      <thead>
+                          <tr className="bg-gray-50">
+                              <th className="p-4 md:p-6 text-xs font-bold text-gray-500 uppercase border-b border-gray-200">Specs</th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
+                                  <span className="block font-bold text-gray-900 text-sm">Xiaomi S (3ª Gen)</span>
+                                  <span className="text-[10px] text-primary font-bold">A MAIS RECENTE</span>
+                              </th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
+                                  <span className="block font-bold text-gray-900 text-sm">Xiaomi S (2ª Gen)</span>
+                                  <span className="text-[10px] text-gray-400 font-bold">EQUILIBRADA</span>
+                              </th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
+                                  <span className="block font-bold text-gray-900 text-sm">H96 Max M2</span>
+                                  <span className="text-[10px] text-orange-500 font-bold">POTÊNCIA/APK</span>
+                              </th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-xs md:text-sm">
+                          <tr>
+                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Ideal Para</td>
+                              <td className="p-4 md:p-6 text-center font-medium text-blue-700">Netflix & Disney+ 8K</td>
+                              <td className="p-4 md:p-6 text-center text-gray-600">Netflix & Disney+ 4K</td>
+                              <td className="p-4 md:p-6 text-center text-orange-700 font-medium">IPTV & Apps Externos</td>
+                          </tr>
+                          <tr>
+                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Sistema</td>
+                              <td className="p-4 md:p-6 text-center">Google TV (Novo)</td>
+                              <td className="p-4 md:p-6 text-center">Google TV</td>
+                              <td className="p-4 md:p-6 text-center">Android 13 (Puro)</td>
+                          </tr>
+                          <tr>
+                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Memória RAM</td>
+                              <td className="p-4 md:p-6 text-center">2GB (LPDDR4X)</td>
+                              <td className="p-4 md:p-6 text-center">2GB</td>
+                              <td className="p-4 md:p-6 text-center font-bold">4GB</td>
+                          </tr>
+                          <tr>
+                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Netflix Oficial</td>
+                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim (8K/4K)</td>
+                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim (4K)</td>
+                              <td className="p-4 md:p-6 text-center text-red-400 font-bold">Não (Qualid. Móvel)</td>
+                          </tr>
+                          <tr>
+                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">APK Externos</td>
+                              <td className="p-4 md:p-6 text-center text-gray-400">Restrito</td>
+                              <td className="p-4 md:p-6 text-center text-gray-400">Restrito</td>
+                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Livre Total</td>
+                          </tr>
+                          <tr className="bg-indigo-50/20">
+                              <td className="p-4 md:p-6 font-bold text-indigo-900 bg-indigo-50/30">Escolha esta se...</td>
+                              <td className="p-4 md:p-6 text-center italic">Quer o melhor processador e futuro 8K.</td>
+                              <td className="p-4 md:p-6 text-center italic">Quer gastar menos para ver Netflix 4K.</td>
+                              <td className="p-4 md:p-6 text-center italic font-medium">Instala apps de terceiros e IPTV.</td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
+              <div className="mt-6 bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start gap-3">
+                  <Info className="text-primary shrink-0" size={20} />
+                  <p className="text-sm text-blue-800"><strong>Dica de Especialista:</strong> Se é cliente Netflix/Disney+, escolha sempre **Xiaomi**. Se o seu objetivo é instalar aplicações que não existem na loja oficial da Google (como apps de IPTV personalizadas ou APKs), a **H96 Max** é muito mais flexível e potente.</p>
+              </div>
+          </div>
+      )}
+
       {relatedProducts.length > 0 && (
           <div className="mt-20 border-t border-gray-100 pt-12">
-              <h2 className="text-2xl font-bold text-gray-900 mb-8">Produtos Relacionados</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-8">Outras opções para si</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   {relatedProducts.map(rel => (
                       <div key={rel.id} onClick={() => window.location.hash = `product/${rel.id}`} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
