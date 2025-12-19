@@ -1,5 +1,4 @@
 
-
 export interface ProductVariant {
   name: string;      // Ex: "33W", "Preto", "128GB"
   price?: number;    // Preço específico desta variante (se for null, usa o preço base)
@@ -18,12 +17,13 @@ export interface Product {
   features: string[];
   variants?: ProductVariant[]; // Lista de opções
   variantLabel?: string;       // Texto da escolha, ex: "Escolha a Potência" ou "Cor"
+  comingSoon?: boolean;        // Indica que o produto ainda não está disponível em stock
 }
 
 export interface CartItem extends Product {
   quantity: number;
   selectedVariant?: string; // Nome da variante escolhida
-  cartItemId: string;       // ID único no carrinho (ex: "ID_PRODUTO-VARIANTE") para distinguir
+  cartItemId: string;       // ID único no carrinho
 }
 
 export interface ChatMessage {
@@ -42,36 +42,33 @@ export interface UserCheckoutInfo {
 
 export interface Address {
   id: string;
-  alias: string; // ex: "Casa", "Trabalho"
+  alias: string;
   street: string;
   city: string;
   zip: string;
-  userId?: string; // Ligação ao ID do Firebase
+  userId?: string;
 }
 
-// --- SISTEMA DE PONTOS ---
 export interface PointHistory {
   id: string;
   date: string;
-  amount: number; // Positivo (ganhou) ou Negativo (gastou)
-  reason: string; // Ex: "Encomenda #123", "Resgate Cupão 5€"
+  amount: number;
+  reason: string;
   orderId?: string;
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
 
 export interface User {
-  uid?: string; // ID único do Firebase
+  uid?: string;
   name: string;
   email: string;
   phone?: string;
   nif?: string;
   addresses: Address[];
-  wishlist?: number[]; // IDs dos produtos favoritos
-  
-  // Fidelização
+  wishlist?: number[];
   loyaltyPoints?: number;
-  totalSpent?: number; // Total gasto na vida (para calcular Tier)
+  totalSpent?: number;
   tier?: UserTier;
   pointsHistory?: PointHistory[];
 }
@@ -82,13 +79,9 @@ export interface Order {
   total: number;
   status: 'Processamento' | 'Enviado' | 'Entregue' | 'Cancelado';
   items: string[];
-  userId?: string; // Para ligar a encomenda ao utilizador real
-  trackingNumber?: string; // Código de Rastreio (CTT/Transportadora)
-  
-  // Controle de Pontos
-  pointsAwarded?: boolean; // Se true, os pontos já foram dados ao cliente
-
-  // Dados de Envio guardados na encomenda
+  userId?: string;
+  trackingNumber?: string;
+  pointsAwarded?: boolean;
   shippingInfo?: {
     name: string;
     address: string;
@@ -101,13 +94,11 @@ export interface Review {
   id: string;
   productId: number;
   userName: string;
-  rating: number; // 1 a 5
+  rating: number;
   comment: string;
   date: string;
-  images: string[]; // Base64 strings
+  images: string[];
 }
-
-// --- BACKOFFICE / DASHBOARD TYPES ---
 
 export type ProductStatus = 'IN_STOCK' | 'SOLD' | 'PARTIAL';
 export type CashbackStatus = 'PENDING' | 'RECEIVED' | 'NONE';
@@ -116,43 +107,28 @@ export interface SaleRecord {
   id: string;
   date: string;
   quantity: number;
-  unitPrice: number; // O preço a que foi vendido ESTA unidade específica
-  shippingCost?: number; // Custo de envio (Portes) associado a esta venda
-  notes?: string; // Ex: "Vendido ao Filipe", "OLX"
+  unitPrice: number;
+  shippingCost?: number;
+  notes?: string;
 }
 
 export interface InventoryProduct {
-  id: string; // Firebase Doc ID
+  id: string;
   name: string;
   category: string;
-  purchaseDate: string; // YYYY-MM-DD
-  
-  // RASTREABILIDADE DE FORNECEDOR (NOVO)
-  supplierName?: string; // Ex: Temu, AliExpress, Amazon
-  supplierOrderId?: string; // Ex: PO-234234234, #112-3344
-
-  // Link ao Produto Público (Opcional, mas recomendado para sync de stock)
+  purchaseDate: string;
+  supplierName?: string;
+  supplierOrderId?: string;
   publicProductId?: number;
-  variant?: string; // NOVO: Nome da variante (ex: "33W") para stock específico
-
-  // Quantidades
-  quantityBought: number; // Quantidade total comprada
-  quantitySold: number;   // Quantidade já vendida (Calculado ou manual)
-
-  // Valores Unitários (IMPORTANTE: Unitários)
-  purchasePrice: number; // Custo por unidade
-  targetSalePrice?: number; // Preço alvo/estimado de venda
-  
-  salePrice: number;    // Preço MÉDIO ou Último Preço (para compatibilidade)
-  
-  // Histórico de Vendas (NOVO - Para resolver o problema de preços variados)
+  variant?: string;
+  quantityBought: number;
+  quantitySold: number;
+  purchasePrice: number;
+  targetSalePrice?: number;
+  salePrice: number;
   salesHistory?: SaleRecord[];
-
-  // Cashback (Valor total da compra)
   cashbackValue: number;
   cashbackStatus: CashbackStatus;
-  
-  // Estado
   status: ProductStatus;
 }
 
@@ -160,8 +136,8 @@ export interface Coupon {
   id?: string;
   code: string;
   type: 'PERCENTAGE' | 'FIXED';
-  value: number; // Ex: 10 (para 10%) ou 5 (para 5€)
-  minPurchase: number; // Valor mínimo para ativar
+  value: number;
+  minPurchase: number;
   isActive: boolean;
   usageCount: number;
 }
