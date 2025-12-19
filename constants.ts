@@ -1,3 +1,4 @@
+
 import { Product } from './types';
 
 export const STORE_NAME = "Allshop";
@@ -29,6 +30,44 @@ export const LOYALTY_REWARDS = [
 ];
 
 export const PRODUCTS: Product[] = [
+  {
+    id: 15,
+    name: "Logitech G502 HERO Master Wired Gaming Mouse",
+    price: 41.99,
+    description: "O rato gaming mais vendido do mundo. Equipado com o sensor óptico HERO 25K para máxima precisão, 11 botões programáveis e pesos ajustáveis para uma experiência personalizada.",
+    category: "Acessórios",
+    comingSoon: true,
+    image: "https://ae-pic-a1.aliexpress-media.com/kf/S03f27e919ec04bc08d82d6152d4ccc969.jpg_960x960q75.jpg_.avif",
+    images: [
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sdbf942f2734b45e38592e870c27452f3I.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/S99071cc1439445288a4cb1dbce61bc65n.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sde751da529794fd09c6fc693ec493939G.jpg_960x960q75.jpg_.avif"
+    ],
+    features: ["Sensor HERO 25K (25.600 DPI)", "11 Botões Programáveis", "Pesos Ajustáveis (5x 3.6g)", "Iluminação RGB LIGHTSYNC", "Cabo Trançado Resistente"]
+  },
+  {
+    id: 13,
+    name: "Tapete Gaming Mouse Pad XL - Sports Car Edition",
+    price: 13.99,
+    description: "Grande tapete de mesa com design Sports Car. Superfície estendida de alta precisão de 900x400mm com base antiderrapante.",
+    category: "Acessórios",
+    comingSoon: true,
+    image: "https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif",
+    variantLabel: "Escolha o Design",
+    variants: [
+      {
+        name: "Design Branco Clássico (V1)",
+        price: 13.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif"
+      },
+      {
+        name: "Design Futurista (V2)",
+        price: 13.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/S56b9fec6534d4a6b8d6bb97561c7c49ez.png_960x960.png_.avif"
+      }
+    ],
+    features: ["Tamanho XL: 900x400x2mm", "Base de Borracha Antiderrapante", "Design Sports Car Exclusivo", "Bordas Reforçadas"]
+  },
   {
     id: 6,
     name: "Xiaomi TV Box S (3ª Geração) - 4K Ultra HD",
@@ -66,6 +105,31 @@ export const PRODUCTS: Product[] = [
     features: ["Android 13.0", "4GB RAM + 64GB ROM", "WiFi 6 Rápido", "Instalação Livre APK"]
   },
   {
+    id: 8,
+    name: "Carregador Xiaomi Turbo Original (Kit)",
+    price: 14.99,
+    description: "Carregador original Xiaomi disponível em 33W e 67W. Ideal para carregamento rápido (Turbo Charge) de modelos Redmi Note, POCO e Mi. Inclui cabo USB-C de 6A robusto.",
+    category: "Acessórios",
+    image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg",
+    images: [
+        "https://ae-pic-a1.aliexpress-media.com/kf/S555171f359404ae89c4d848cc2fe87d9k.jpg_960x960q75.jpg_.avif"
+    ],
+    features: ["Carregamento Turbo", "Cabo USB-C 6A Incluído", "Compatível com POCO/Redmi", "Proteção Inteligente"],
+    variantLabel: "Escolha a Potência",
+    variants: [
+        {
+            name: "33W Turbo",
+            price: 14.99,
+            image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg"
+        },
+        {
+            name: "67W Max",
+            price: 18.99,
+            image: "https://ae-pic-a1.aliexpress-media.com/kf/S743b4ba68517490bae3380429127f3e8b.jpg_960x960q75.jpg_.avif"
+        }
+    ]
+  },
+  {
     id: 3,
     name: "Cabo HDMI 2.1 Ultra Speed (2m)",
     price: 6.99,
@@ -90,16 +154,16 @@ export const PRODUCTS: Product[] = [
     features: ["Velocidade até 40Gbps", "2000MHz Frequência", "Blindagem S/FTP", "10 Metros"]
   },
   {
-    id: 5,
-    name: "Hub Acer USB-A para Ethernet LAN",
-    price: 7.00,
-    description: "Conectividade fiável. Adicione uma porta de rede Gigabit ao seu portátil ou PC via USB com a qualidade Acer.",
-    category: "Adaptadores",
-    image: "https://img.kwcdn.com/product/fancy/769740de-1fd9-4a79-a1d9-de36003c9316.jpg?imageView2/2/w/800/q/70/format/avif",
+    id: 9,
+    name: "Cabo Xiaomi Turbo USB-C para USB-C (120W)",
+    price: 3.99,
+    description: "Cabo original para HyperCharge 120W da Xiaomi. Ideal para tirar o máximo proveito dos carregadores turbo originais.",
+    category: "Cabos",
+    image: "https://ae-pic-a1.aliexpress-media.com/kf/Scd9ec99f95dc4efb8b3f82634c835943C.jpg_960x960q75.jpg_.avif",
     images: [
-        "https://img.kwcdn.com/product/fancy/ee3ca530-c421-47db-80b2-a2b74dbd7709.jpg?imageView2/2/w/800/q/70/format/avif"
+        "https://ae-pic-a1.aliexpress-media.com/kf/Sad41e1921649498fb062d77d60d4824dg.jpg_220x220q75.jpg_.avif"
     ],
-    features: ["Gigabit Ethernet (1000Mbps)", "USB 3.0 Rápido", "Plug & Play", "Design Compacto"]
+    features: ["Suporta 120W HyperCharge", "Chip Original Xiaomi", "Alta Resistência", "Ideal para Série Mi e POCO"]
   },
   {
     id: 7,
@@ -132,40 +196,15 @@ export const PRODUCTS: Product[] = [
     ]
   },
   {
-    id: 8,
-    name: "Carregador Xiaomi Turbo Original (Kit)",
-    price: 14.99,
-    description: "Carregador original Xiaomi disponível em 33W e 67W. Ideal para carregamento rápido (Turbo Charge) de modelos Redmi Note, POCO e Mi. Inclui cabo USB-C de 6A robusto.",
-    category: "Acessórios",
-    image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg",
+    id: 5,
+    name: "Hub Acer USB-A para Ethernet LAN",
+    price: 7.00,
+    description: "Conectividade fiável. Adicione uma porta de rede Gigabit ao seu portátil ou PC via USB com a qualidade Acer.",
+    category: "Adaptadores",
+    image: "https://img.kwcdn.com/product/fancy/769740de-1fd9-4a79-a1d9-de36003c9316.jpg?imageView2/2/w/800/q/70/format/avif",
     images: [
-        "https://ae-pic-a1.aliexpress-media.com/kf/S555171f359404ae89c4d848cc2fe87d9k.jpg_960x960q75.jpg_.avif"
+        "https://img.kwcdn.com/product/fancy/ee3ca530-c421-47db-80b2-a2b74dbd7709.jpg?imageView2/2/w/800/q/70/format/avif"
     ],
-    features: ["Carregamento Turbo", "Cabo USB-C 6A Incluído", "Compatível com POCO/Redmi", "Proteção Inteligente"],
-    variantLabel: "Escolha a Potência",
-    variants: [
-        {
-            name: "33W Turbo",
-            price: 14.99,
-            image: "https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg"
-        },
-        {
-            name: "67W Max",
-            price: 18.99,
-            image: "https://ae-pic-a1.aliexpress-media.com/kf/S743b4ba68517490bae3380429127f3e8b.jpg_960x960q75.jpg_.avif"
-        }
-    ]
-  },
-  {
-    id: 9,
-    name: "Cabo Xiaomi Turbo USB-C para USB-C (120W)",
-    price: 3.99,
-    description: "Cabo de dados e carregamento rápido com dupla ponta USB-C. Suporta protocolo HyperCharge 120W da Xiaomi e transferência de dados rápida. Ideal para carregar smartphones, tablets e portáteis modernos.",
-    category: "Cabos",
-    image: "https://ae-pic-a1.aliexpress-media.com/kf/Scd9ec99f95dc4efb8b3f82634c835943C.jpg_960x960q75.jpg_.avif",
-    images: [
-        "https://ae-pic-a1.aliexpress-media.com/kf/Sad41e1921649498fb062d77d60d4824dg.jpg_220x220q75.jpg_.avif"
-    ],
-    features: ["Suporta 120W HyperCharge", "USB-C para USB-C", "Alta Resistência", "Transferência de Dados"]
+    features: ["Gigabit Ethernet (1000Mbps)", "USB 3.0 Rápido", "Plug & Play", "Design Compacto Acer"]
   }
 ];
