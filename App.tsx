@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
 import Header from './components/Header';
@@ -12,6 +13,7 @@ import Privacy from './components/Privacy';
 import FAQ from './components/FAQ';
 import Returns from './components/Returns';
 import LoginModal from './components/LoginModal';
+import ResetPasswordModal from './components/ResetPasswordModal'; // Novo Import
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { PRODUCTS, ADMIN_EMAILS, STORE_NAME } from './constants';
@@ -37,6 +39,7 @@ const App: React.FC = () => {
   });
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [resetCode, setResetCode] = useState<string | null>(null); // Estado para o código de redefinição
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -48,6 +51,17 @@ const App: React.FC = () => {
     const userEmail = user.email.trim().toLowerCase();
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
+
+  // --- DETETAR REDEFINIÇÃO DE PASSWORD NA URL ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    const oobCode = params.get('oobCode');
+
+    if (mode === 'resetPassword' && oobCode) {
+      setResetCode(oobCode);
+    }
+  }, []);
 
   // --- TAB FOCUS EFFECT (Retenção de Cliente) ---
   useEffect(() => {
@@ -86,7 +100,7 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [route, user]);
 
-  // --- SINCRONIZAÇÃO DE DADOS (USER, ORDERS, REVIEWS) ---
+  // --- SINCRONIZAÇÃO DE DADOS ---
   useEffect(() => {
     const loadReviews = async () => {
         try {
@@ -258,20 +272,17 @@ const App: React.FC = () => {
     }
   };
 
-  if (route === '#dashboard' && isAdmin) return <Dashboard />;
-
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
       <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} user={user} onOpenLogin={() => setIsLoginOpen(true)} onLogout={handleLogout} searchTerm={searchTerm} onSearchChange={handleSearchChange} onResetHome={handleResetHome} />
-
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
           <div className="relative">
              <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           </div>
-          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium border-b border-gray-50">Início</a>
-          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium border-b border-gray-50">Sobre</a>
+          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Início</a>
+          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Sobre</a>
           <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Contato</a>
           <div className="pt-4 border-t border-gray-100">
             {user ? (
@@ -282,14 +293,12 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
-
       <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
             <div className="flex flex-col items-center md:items-start"><h4 className="text-white font-bold text-lg mb-4">Allshop</h4><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
-            <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos de Uso</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
-            <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia e Trocas</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas (FAQ)</a></li></ul></div>
+            <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
+            <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
             <div className="flex flex-col items-center md:items-start">
                 <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
                 <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
@@ -309,12 +318,13 @@ const App: React.FC = () => {
             </div>
         </div>
         <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-[10px]">
-            <span>&copy; {new Date().getFullYear()} Allshop Store. Todos os direitos reservados.</span>
-            {isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Admin Area</a>}
+            <span>&copy; {new Date().getFullYear()} Allshop Store.</span>
+            {isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Painel Admin</a>}
         </div>
       </footer>
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
+      {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
       <AIChat />
     </div>
   );
