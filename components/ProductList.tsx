@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -73,15 +74,13 @@ const ProductList: React.FC<ProductListProps> = ({
       }
   };
 
-  // Helper para decidir qual selo mostrar (TOTALMENTE REFINADO)
   const getProductBadge = (product: Product) => {
-      // Xiaomi TV Box 3rd Gen
+      // Prioridade máxima para "Em Breve"
+      if (product.comingSoon) return { text: 'EM BREVE', color: 'bg-purple-600', icon: <CalendarClock size={10} /> };
+      
       if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
-      // Xiaomi TV Box 2nd Gen ou Kits Turbo originais
       if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
-      // Promoção real (ex: o Kit 7 que é mais barato que o original)
       if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
-      // Se for cabo ou adaptador (Essenciais)
       if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
       return null;
   };
@@ -129,11 +128,6 @@ const ProductList: React.FC<ProductListProps> = ({
                     </div>
                 </div>
             </div>
-            
-            <div className="flex justify-between items-center px-2 text-sm text-gray-500">
-                <span>A mostrar <strong>{paginatedProducts.length}</strong> de <strong>{filteredAndSortedProducts.length}</strong></span>
-                {searchTerm && <span className="bg-yellow-50 px-3 py-1 rounded border border-yellow-200">Pesquisa: "{searchTerm}"</span>}
-            </div>
         </div>
 
         {filteredAndSortedProducts.length === 0 ? (
@@ -150,10 +144,7 @@ const ProductList: React.FC<ProductListProps> = ({
             }`}>
             {paginatedProducts.map((product) => {
                 const stock = getStock(product.id);
-                const isOutOfStock = stock <= 0 && stock !== 999;
-                const isLowStock = stock > 0 && stock <= 3 && stock !== 999;
-                const hasVariants = product.variants && product.variants.length > 0;
-                const isFavorite = wishlist.includes(product.id);
+                const isOutOfStock = stock <= 0 && stock !== 999 && !product.comingSoon;
                 const badge = getProductBadge(product);
 
                 if (viewMode === 'list') {
@@ -162,26 +153,25 @@ const ProductList: React.FC<ProductListProps> = ({
                             <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="w-32 sm:w-56 h-32 sm:h-auto bg-gray-50 relative shrink-0 p-4 flex items-center justify-center">
                                 <img src={product.image} alt={product.name} className={`max-w-full max-h-full object-contain ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
                                 {isOutOfStock && <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded">ESGOTADO</span>}
-                                {badge && !isOutOfStock && <span className={`absolute top-2 left-2 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm`}>{badge.icon}{badge.text}</span>}
+                                {badge && <span className={`absolute top-2 left-2 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm`}>{badge.icon}{badge.text}</span>}
                             </a>
                             <div className="flex-1 p-6 flex flex-col sm:flex-row gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</div>
                                         <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="text-gray-300 hover:text-red-500">
-                                            <Heart size={20} className={isFavorite ? "fill-red-500 text-red-500" : ""} />
+                                            <Heart size={20} className={wishlist.includes(product.id) ? "fill-red-500 text-red-500" : ""} />
                                         </button>
                                     </div>
                                     <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors">
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">{product.name}</h3>
                                     </a>
                                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{product.description}</p>
-                                    <div className="flex flex-wrap gap-2">{product.features.slice(0, 3).map((feat, idx) => (<span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200">{feat}</span>))}</div>
                                 </div>
                                 <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-4 min-w-[140px] sm:border-l border-gray-100 sm:pl-6">
                                     <div className="text-right"><div className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</div></div>
-                                    {hasVariants ? (
-                                        <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-white border border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-bold transition-colors">Ver Opções</button>
+                                    {product.comingSoon ? (
+                                        <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-bold transition-colors">Ver Detalhes</button>
                                     ) : (
                                         <button onClick={() => !isOutOfStock && onAddToCart(product)} disabled={isOutOfStock} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>{isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}</button>
                                     )}
@@ -193,15 +183,14 @@ const ProductList: React.FC<ProductListProps> = ({
 
                 return (
                 <div key={product.id} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col group relative animate-fade-in">
-                    {/* Badge Novo/Destaque */}
-                    {badge && !isOutOfStock && (
+                    {badge && (
                         <div className={`absolute top-4 left-4 z-10 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1.5`}>
                             {badge.icon} {badge.text}
                         </div>
                     )}
                     
                     <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/90 shadow-sm hover:scale-110 transition-all">
-                        <Heart size={20} className={isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
+                        <Heart size={20} className={wishlist.includes(product.id) ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
                     </button>
 
                     <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block relative h-64 overflow-hidden bg-gray-100">
@@ -211,27 +200,21 @@ const ProductList: React.FC<ProductListProps> = ({
                                 <span className="bg-red-600 text-white px-4 py-1 rounded text-sm font-bold uppercase transform -rotate-12 border border-white">Esgotado</span>
                             </div>
                         )}
-                        {!isOutOfStock && (
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                <span className="bg-white/90 text-gray-900 px-4 py-2 rounded-full font-bold text-sm shadow-lg flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all"><Eye size={16} /> Ver Detalhes</span>
-                            </div>
-                        )}
                     </a>
                     
                     <div className="p-5 flex flex-col flex-grow">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</span>
-                            {isLowStock && <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle size={10} /> Restam {stock}</span>}
                         </div>
                         <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors mb-2"><h3 className="text-lg font-bold text-gray-900 line-clamp-1">{product.name}</h3></a>
                         <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-2">{product.description}</p>
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                             <div>
                                 <span className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</span>
-                                {hasVariants && <span className="text-xs text-gray-400 block">a partir de</span>}
+                                {product.comingSoon && <span className="text-xs text-purple-600 font-bold block uppercase">Em Breve</span>}
                             </div>
-                            {hasVariants ? (
-                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-white border border-secondary text-secondary hover:bg-secondary hover:text-white rounded-full transition-colors"><ArrowRight size={20} /></button>
+                            {product.comingSoon ? (
+                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-full transition-colors"><ArrowRight size={20} /></button>
                             ) : (
                                 <button onClick={() => !isOutOfStock && onAddToCart(product)} disabled={isOutOfStock} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}><Plus size={20} /></button>
                             )}
@@ -246,17 +229,9 @@ const ProductList: React.FC<ProductListProps> = ({
         {filteredAndSortedProducts.length > itemsPerPage && (
             <div className="flex justify-center items-center gap-2 mt-16 animate-fade-in-up">
                 <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft size={20} /></button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum = i + 1;
-                    if (totalPages > 5 && currentPage > 3) {
-                        pageNum = currentPage - 2 + i;
-                        if (pageNum > totalPages) pageNum = pageNum - (pageNum - totalPages);
-                    }
-                    if (pageNum <= 0 || pageNum > totalPages) return null;
-                    return (
-                        <button key={pageNum} onClick={() => handlePageChange(pageNum)} className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${currentPage === pageNum ? 'bg-primary text-white shadow-md transform scale-105' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>{pageNum}</button>
-                    );
-                })}
+                {Array.from({ length: totalPages }, (_, i) => (
+                    <button key={i} onClick={() => handlePageChange(i + 1)} className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${currentPage === i + 1 ? 'bg-primary text-white shadow-md transform scale-105' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>{i + 1}</button>
+                ))}
                 <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"><ChevronRight size={20} /></button>
             </div>
         )}
