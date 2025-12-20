@@ -167,9 +167,9 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 7,
-    name: "Carregador Turbo (Kit c/ Cabo)",
+    name: "Carregador Turbo (Sem Cabo)",
     price: 5.99,
-    description: "Carregamento ultra-rápido compatível com Xiaomi. Disponível em várias potências para se adaptar ao seu modelo. Inclui cabo USB-C Turbo de 6A.",
+    description: "Carregamento ultra-rápido compatível com Xiaomi e outras marcas. Disponível em várias potências para se adaptar ao seu modelo. Inclui cabo USB-C Turbo de 6A.",
     category: "Acessórios",
     image: "https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close",
     images: [
