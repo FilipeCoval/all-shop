@@ -41,14 +41,6 @@ const Home: React.FC<HomeProps> = ({
       linkProductId: 6
     },
     {
-      id: 4,
-      title: "Smart Home & Automação",
-      subtitle: "Controle a sua casa por voz. Iluminação e Segurança Inteligente.",
-      cta: "Ver Smart Home",
-      image: "https://images.unsplash.com/photo-1558002038-1091a166111c?q=80&w=2500&auto=format&fit=crop",
-      category: "Smart Home"
-    },
-    {
       id: 2,
       title: "Envios Grátis > 50€",
       subtitle: "Entrega rápida em 24h/48h para Portugal Continental.",
