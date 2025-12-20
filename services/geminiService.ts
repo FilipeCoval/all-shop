@@ -33,14 +33,17 @@ ${productsList}
 `;
 }
 
+// Fixed to use process.env.API_KEY directly and include thinkingConfig when maxOutputTokens is defined
 export const initializeChat = async (): Promise<Chat> => {
-  const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   chatSession = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: getSystemInstruction(),
       temperature: 0.3,
+      // maxOutputTokens requires a corresponding thinkingBudget for supported models
       maxOutputTokens: 600,
+      thinkingConfig: { thinkingBudget: 300 },
     },
   });
   return chatSession;
@@ -58,8 +61,9 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
   }
 };
 
+// Fixed to use process.env.API_KEY directly
 export const getInventoryAnalysis = async (products: InventoryProduct[], userPrompt: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const inventoryContext = products.filter(p => p.status !== 'SOLD').map(p => `- ${p.name}: ${p.quantityBought - p.quantitySold} unid. (€${p.purchasePrice})`).join('\n');
     const prompt = `Consultor Financeiro Allshop. Inventário:\n${inventoryContext}\nPedido: ${userPrompt}\nRegras: Proteger lucro, sugerir combos.`;
     try {
