@@ -1,3 +1,4 @@
+
 import { Product, ProductVariant } from '../types';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
@@ -40,6 +41,14 @@ const Home: React.FC<HomeProps> = ({
       linkProductId: 6
     },
     {
+      id: 4,
+      title: "Smart Home & Automação",
+      subtitle: "Controle a sua casa por voz. Iluminação e Segurança Inteligente.",
+      cta: "Ver Smart Home",
+      image: "https://images.unsplash.com/photo-1558002038-1091a166111c?q=80&w=2500&auto=format&fit=crop",
+      category: "Smart Home"
+    },
+    {
       id: 2,
       title: "Envios Grátis > 50€",
       subtitle: "Entrega rápida em 24h/48h para Portugal Continental.",
@@ -65,9 +74,6 @@ const Home: React.FC<HomeProps> = ({
   }, [slides.length]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isDown = useRef(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
   const isDragging = useRef(false); 
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -90,25 +96,26 @@ const Home: React.FC<HomeProps> = ({
   };
 
   const categoryVisuals = useMemo(() => {
-      // Fixed unknown[] type issue by explicitly defining realCats as string[]
       const realCats: string[] = ['Todas', ...Array.from(new Set<string>(products.map(p => p.category)))];
       const testCats = ['Gaming', 'Smart Home', 'Audio', 'Drones'];
-      // Fixed uniqueCats type by ensuring it's a string[] to match mapCats parameter
-      const uniqueCats: string[] = [...realCats, ...testCats];
+      const uniqueCats: string[] = Array.from(new Set([...realCats, ...testCats]));
+      
       const mapCats = (list: string[]) => list.map(cat => {
           let image = '';
           if (cat === 'Todas') image = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
           else if (cat === 'Gaming') image = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80";
-          else if (cat === 'Smart Home') image = "https://images.unsplash.com/photo-1558002038-1091a166111c?auto=format&fit=crop&q=80";
+          else if (cat === 'Smart Home') image = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&q=80";
           else if (cat === 'Audio') image = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80";
           else if (cat === 'Drones') image = "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&q=80";
           else {
               const product = products.find(p => p.category === cat);
-              image = product ? product.image : 'https://via.placeholder.com/150';
+              image = product ? product.image : 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80';
           }
           return { name: cat, image };
       });
-      return [...mapCats(uniqueCats), ...mapCats(uniqueCats), ...mapCats(uniqueCats)];
+      
+      const uniqueFinal = mapCats(uniqueCats);
+      return [...uniqueFinal, ...uniqueFinal, ...uniqueFinal]; // Infinito falso
   }, [products]);
 
   const scroll = (direction: 'left' | 'right') => {
@@ -150,6 +157,16 @@ const Home: React.FC<HomeProps> = ({
              </div>
           </div>
         ))}
+        {/* Carousel Nav Dots */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+            {slides.map((_, i) => (
+                <button 
+                    key={i} 
+                    onClick={() => setCurrentSlide(i)} 
+                    className={`w-2 h-2 rounded-full transition-all ${currentSlide === i ? 'bg-white w-6' : 'bg-white/40'}`}
+                />
+            ))}
+        </div>
       </section>
 
       <section className="pt-6 pb-2 bg-gray-50 relative group overflow-hidden select-none border-b border-gray-100">
