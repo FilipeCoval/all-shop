@@ -31,6 +31,64 @@ export const LOYALTY_REWARDS = [
 
 export const PRODUCTS: Product[] = [
   {
+    id: 17,
+    name: "Xiaomi Redmi Buds 6 Play TWS Bluetooth 5.4",
+    price: 24.99,
+    description: "Auriculares de última geração com Bluetooth 5.4 para uma conexão ultra-estável. Incluem redução de ruído por IA para chamadas cristalinas e uma bateria de longa duração com carregamento rápido. Design leve e ergonómico.",
+    category: "Audio",
+    comingSoon: true,
+    image: "https://ae-pic-a1.aliexpress-media.com/kf/S697d3f549e66498fbd43dddce27314a1C.jpg_960x960q75.jpg_.avif",
+    images: [
+      "https://ae-pic-a1.aliexpress-media.com/kf/S5f439034a59e41aeae77f667f32d5314Q.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/S76c39334876945bea9e717758760ae9dZ.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sc4d7867dc6b54fe6af374347532a29ees.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sacb254d8acef4cb4b4135aeb34828af2i.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/S827348a2e5a74a478ea0178d9f370a6eS.jpg_960x960q75.jpg_.avif"
+    ],
+    variantLabel: "Escolha a Cor",
+    variants: [
+      {
+        name: "Preto",
+        price: 24.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/Sc3fd2cc394224207816e8a000322702e2.jpg_960x960q75.jpg_.avif"
+      },
+      {
+        name: "Branco",
+        price: 24.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/S3fa13df2c427401993d90cd746e54602T.jpg_960x960q75.jpg_.avif"
+      }
+    ],
+    features: ["Bluetooth 5.4 Ultra-Rápido", "Redução de Ruído com IA", "Até 36h de Autonomia Total", "Driver Dinâmico de 10mm", "Proteção IPX4"]
+  },
+  {
+    id: 16,
+    name: "Lenovo LivePods LP40 TWS Wireless Earbuds",
+    price: 11.99,
+    description: "Auriculares originais Lenovo com design ultra-leve, Bluetooth 5.0 e controlo tátil. Som estéreo de alta fidelidade e resistência ao suor, ideais para desporto e uso diário.",
+    category: "Audio",
+    comingSoon: true,
+    image: "https://ae-pic-a1.aliexpress-media.com/kf/H373ed0e5b37540fab33a0e6277954888T.jpg_960x960q75.jpg_.avif",
+    images: [
+      "https://ae-pic-a1.aliexpress-media.com/kf/Hbb0fed2da7994d65a054f68b411ed309Q.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/H3dccd4fcdf4543c6b7e1144dd11820bdI.jpg_960x960q75.jpg_.avif",
+      "https://ae-pic-a1.aliexpress-media.com/kf/Sb3b7433868b74dba98b4aa074d3290670.jpg_960x960q75.jpg_.avif"
+    ],
+    variantLabel: "Escolha a Cor",
+    variants: [
+      {
+        name: "Branco",
+        price: 11.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/H3dccd4fcdf4543c6b7e1144dd11820bdI.jpg_960x960q75.jpg_.avif"
+      },
+      {
+        name: "Preto",
+        price: 11.99,
+        image: "https://ae-pic-a1.aliexpress-media.com/kf/Sb3b7433868b74dba98b4aa074d3290670.jpg_960x960q75.jpg_.avif"
+      }
+    ],
+    features: ["Bluetooth 5.0", "Controlo Tátil Inteligente", "Resistência à Água IPX4", "Carregamento USB-C", "Design Ergonómico e Leve"]
+  },
+  {
     id: 15,
     name: "Logitech G502 HERO Master Wired Gaming Mouse",
     price: 41.99,
