@@ -314,9 +314,9 @@ const App: React.FC = () => {
                     <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Mastercard">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
                     </div>
-                    {/* NOVO MÉTODO: COBRANÇA */}
+                    {/* NOVO MÉTODO: COBRANÇA - LINK ATUALIZADO */}
                     <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Pagamento na Entrega">
-                        <img src="https://img.icons8.com/color/48/cash-on-delivery.png" alt="Cobrança" className="h-full w-full object-contain" />
+                        <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
                     </div>
                 </div>
             </div>
