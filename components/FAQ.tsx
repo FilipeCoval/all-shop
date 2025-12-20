@@ -13,7 +13,7 @@ const FAQ: React.FC = () => {
     },
     {
       question: "Quais são os métodos de pagamento aceites?",
-      answer: "Aceitamos MB Way, Transferência Bancária e Pagamento à Cobrança (pagamento no ato da entrega, com um custo adicional de 2€)."
+      answer: "Aceitamos os principais métodos de pagamento em Portugal: MB Way, Referência Multibanco, Cartões (Visa e Mastercard), Transferência Bancária e o nosso popular Pagamento à Cobrança (paga apenas quando o estafeta entregar a encomenda)."
     },
     {
       question: "Quanto tempo demora a entrega?",
@@ -54,8 +54,8 @@ const FAQ: React.FC = () => {
           </div>
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm text-center">
               <CreditCard className="mx-auto text-green-500 mb-3" size={24} />
-              <h3 className="font-bold text-gray-900">Pagamento Fácil</h3>
-              <p className="text-sm text-gray-500 mt-1">MB Way e Cobrança</p>
+              <h3 className="font-bold text-gray-900">Vários Métodos</h3>
+              <p className="text-sm text-gray-500 mt-1">Cartão, MB Way e Cobrança</p>
           </div>
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm text-center">
               <ShieldCheck className="mx-auto text-indigo-500 mb-3" size={24} />
