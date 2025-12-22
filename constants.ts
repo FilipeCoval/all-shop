@@ -141,7 +141,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração) - 4K Ultra HD",
-    price: 45.00,
+    price: 43.00,
     description: "A clássica e fiável. Certificada para todos os serviços oficiais com Dolby Vision e HDR10+. Excelente custo-benefício para streaming oficial.",
     category: "TV & Streaming",
     image: "https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif",
