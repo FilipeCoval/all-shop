@@ -66,7 +66,8 @@ const App: React.FC = () => {
   // --- TAB FOCUS EFFECT (Retenção de Cliente) ---
   useEffect(() => {
     const originalTitle = document.title;
-    const handleBlur = () => { document.title = "Volte aqui! 🛒 " + STORE_NAME; };
+    // Alterado: Nome da loja agora aparece primeiro
+    const handleBlur = () => { document.title = STORE_NAME + " - Volte aqui! 🛒"; };
     const handleFocus = () => { document.title = originalTitle; };
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
@@ -223,14 +224,14 @@ const App: React.FC = () => {
       setOrders(prev => [newOrder, ...prev]);
       setCartItems([]); 
       try {
-          await db.collection("orders").doc(newOrder.id).set(newOrder);
+          await db.collection('orders').doc(newOrder.id).set(newOrder);
           notifyNewOrder(newOrder, user ? user.name : 'Cliente Anónimo');
       } catch (e) { console.error("Erro checkout:", e); }
   };
 
   const handleAddReview = async (newReview: Review) => {
       setReviews(prev => [newReview, ...prev]);
-      try { await db.collection("reviews").doc(newReview.id).set(newReview); }
+      try { await db.collection('reviews').doc(newReview.id).set(newReview); }
       catch (e) { console.error("Erro review:", e); }
   };
 
