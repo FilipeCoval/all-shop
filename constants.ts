@@ -129,7 +129,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 6,
     name: "Xiaomi TV Box S (3ª Geração) - 4K Ultra HD",
-    price: 49.99,
+    price: 49.95,
     description: "A elite do streaming. Salto de 130% em performance gráfica e 32GB de armazenamento. Ideal para quem quer a box mais fluída do mercado com Wi-Fi 6.",
     category: "TV & Streaming",
     image: "https://imiland.ir/wp-content/uploads/2025/05/1748368235_68_Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png",
