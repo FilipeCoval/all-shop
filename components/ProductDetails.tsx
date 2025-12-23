@@ -1,7 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
-import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye, Info, X, CalendarClock, Copy } from 'lucide-react';
+import { 
+    ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
+    Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
+    Eye, Info, X, CalendarClock, Copy 
+} from 'lucide-react';
 import ReviewSection from './ReviewSection';
 import { PRODUCTS, STORE_NAME } from '../constants';
 
@@ -48,6 +52,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const selectedVariant = product.variants?.find(v => v.name === selectedVariantName);
   const currentPrice = selectedVariant?.price || product.price;
   const currentStock = getStock(product.id, selectedVariantName);
+  
   const isOutOfStock = currentStock <= 0 && currentStock !== 999 && !product.comingSoon;
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
@@ -73,10 +78,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
+    const shareUrl = `${window.location.href}${window.location.href.includes('?') ? '&' : '?'}refresh=${Date.now()}`;
+    
     const shareData = {
-      title: product.name,
-      text: `Vê este produto fantástico na ${STORE_NAME}: ${product.name}`,
-      url: window.location.href,
+      title: `${product.name} - ${STORE_NAME}`,
+      text: `Dá uma olhada nisto: ${product.name} por apenas ${currentPrice}€!`,
+      url: shareUrl,
     };
 
     try {
@@ -84,13 +91,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         await navigator.share(shareData);
         setShareFeedback('shared');
       } else {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
       }
     } catch (err) {
-      // Se o utilizador cancelar a partilha nativa, não fazemos nada
       if ((err as Error).name !== 'AbortError') {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
       }
     }
@@ -104,7 +110,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div className="space-y-4">
           <div className="aspect-square bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative group">
-            <img src={selectedImage} alt={product.name} className={`w-full h-full object-contain p-4 transition-all duration-300 ${isOutOfStock ? 'grayscale opacity-50' : ''}`} />
+            <img 
+                src={selectedImage} 
+                alt={product.name} 
+                referrerPolicy="no-referrer"
+                className={`w-full h-full object-contain p-4 transition-all duration-300 ${isOutOfStock ? 'grayscale opacity-50' : ''}`} 
+            />
             {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform -rotate-12 border-4 border-white">ESGOTADO</span></div>}
             {product.comingSoon && <div className="absolute inset-0 flex items-center justify-center bg-purple-900/10"><span className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform rotate-3 border-4 border-white">EM BREVE</span></div>}
             <button onClick={() => onToggleWishlist(product.id)} className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur rounded-full shadow-sm hover:scale-110 transition-transform text-gray-400 hover:text-red-500"><Heart size={24} className={isFavorite ? "fill-red-500 text-red-500" : ""} /></button>
@@ -113,7 +124,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
              {uniqueImages.map((img, idx) => {
                  const variantName = product.variants?.find(v => v.image === img)?.name;
                  return (
-                    <button key={idx} onClick={() => { setSelectedImage(img); if (variantName) setSelectedVariantName(variantName); }} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`} title={variantName || `Imagem ${idx + 1}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-contain p-1" /></button>
+                    <button key={idx} onClick={() => { setSelectedImage(img); if (variantName) setSelectedVariantName(variantName); }} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`} title={variantName || `Imagem ${idx + 1}`}><img src={img} alt={`Thumbnail ${idx}`} referrerPolicy="no-referrer" className="w-full h-full object-contain p-1" /></button>
                  );
              })}
           </div>
@@ -287,6 +298,10 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                       </tbody>
                   </table>
               </div>
+              <div className="mt-6 bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start gap-3">
+                  <Info className="text-primary shrink-0" size={20} />
+                  <p className="text-sm text-blue-800"><strong>Dica de Especialista:</strong> Se é cliente Netflix/Disney+, escolha sempre <strong>Xiaomi</strong>. Se o seu objetivo é instalar aplicações que não existem na loja oficial da Google (como apps de IPTV personalizadas ou APKs), a <strong>H96 Max</strong> é muito mais flexível e potente.</p>
+              </div>
           </div>
       )}
 
@@ -297,7 +312,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   {relatedProducts.map(rel => (
                       <div key={rel.id} onClick={() => window.location.hash = `product/${rel.id}`} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
                           <div className="aspect-square bg-gray-100 relative overflow-hidden">
-                              <img src={rel.image} alt={rel.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                              <img src={rel.image} alt={rel.name} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><span className="bg-white text-gray-900 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md"><Eye size={12} /> Ver</span></div>
                           </div>
                           <div className="p-4">
@@ -326,3 +341,4 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 };
 
 export default ProductDetails;
+
