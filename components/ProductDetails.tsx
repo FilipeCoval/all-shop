@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
-import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye, Info, X, CalendarClock } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, Truck, AlertTriangle, XCircle, Heart, ArrowRight, Eye, Info, X, CalendarClock, Copy } from 'lucide-react';
 import ReviewSection from './ReviewSection';
-import { PRODUCTS } from '../constants';
+import { PRODUCTS, STORE_NAME } from '../constants';
 
 interface ProductDetailsProps {
   product: Product;
@@ -23,6 +23,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(
     product.variants && product.variants.length > 0 ? product.variants[0].name : undefined
   );
+  const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared'>('idle');
   
   useEffect(() => {
     setSelectedImage(product.image);
@@ -71,6 +72,32 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     window.location.hash = '/';
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      title: product.name,
+      text: `Vê este produto fantástico na ${STORE_NAME}: ${product.name}`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareFeedback('shared');
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareFeedback('copied');
+      }
+    } catch (err) {
+      // Se o utilizador cancelar a partilha nativa, não fazemos nada
+      if ((err as Error).name !== 'AbortError') {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareFeedback('copied');
+      }
+    }
+
+    setTimeout(() => setShareFeedback('idle'), 3000);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 animate-fade-in pb-32 md:pb-8">
       <button onClick={handleBack} className="flex items-center gap-2 text-gray-500 hover:text-primary mb-8 font-medium transition-colors"><ArrowLeft size={20} /> Voltar à Loja</button>
@@ -98,7 +125,18 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                     <span className="text-sm font-bold text-primary tracking-wider uppercase">{product.category}</span>
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4 leading-tight">{product.name}</h1>
                 </div>
-                <button className="p-2 text-gray-400 hover:text-primary transition-colors" title="Partilhar"><Share2 size={24} /></button>
+                <div className="relative">
+                    <button 
+                        onClick={handleShare}
+                        className={`p-3 rounded-full transition-all duration-300 flex items-center gap-2 group
+                            ${shareFeedback !== 'idle' ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400 hover:text-primary hover:bg-blue-50'}
+                        `} 
+                        title="Partilhar"
+                    >
+                        {shareFeedback === 'idle' ? <Share2 size={24} /> : shareFeedback === 'copied' ? <Copy size={24} /> : <Check size={24} />}
+                        {shareFeedback === 'copied' && <span className="absolute right-full mr-2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap animate-fade-in">Link Copiado!</span>}
+                    </button>
+                </div>
            </div>
 
            <div className="flex items-end gap-3 mb-6">
