@@ -13,7 +13,7 @@ import Privacy from './components/Privacy';
 import FAQ from './components/FAQ';
 import Returns from './components/Returns';
 import LoginModal from './components/LoginModal';
-import ResetPasswordModal from './components/ResetPasswordModal'; // Novo Import
+import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { PRODUCTS, ADMIN_EMAILS, STORE_NAME } from './constants';
@@ -39,7 +39,7 @@ const App: React.FC = () => {
   });
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [resetCode, setResetCode] = useState<string | null>(null); // Estado para o código de redefinição
+  const [resetCode, setResetCode] = useState<string | null>(null); 
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -52,21 +52,15 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  // --- DETETAR REDEFINIÇÃO DE PASSWORD NA URL ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     const oobCode = params.get('oobCode');
-
-    if (mode === 'resetPassword' && oobCode) {
-      setResetCode(oobCode);
-    }
+    if (mode === 'resetPassword' && oobCode) setResetCode(oobCode);
   }, []);
 
-  // --- TAB FOCUS EFFECT (Retenção de Cliente) ---
   useEffect(() => {
     const originalTitle = document.title;
-    // Alterado: Nome da loja agora aparece primeiro
     const handleBlur = () => { document.title = STORE_NAME + " - Volte aqui! 🛒"; };
     const handleFocus = () => { document.title = originalTitle; };
     window.addEventListener('blur', handleBlur);
@@ -77,7 +71,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- PRESENÇA EM TEMPO REAL ---
   useEffect(() => {
     if (route.includes('dashboard')) return;
     let sessionId = sessionStorage.getItem('session_id');
@@ -94,14 +87,17 @@ const App: React.FC = () => {
             userName: user ? user.name : 'Visitante',
             device: isMobile ? 'Mobile' : 'Desktop',
             userId: user?.uid || null
-        }).catch(err => console.error("Erro presence", err));
+        }).catch(err => {
+            if (err.code !== 'permission-denied') {
+                console.debug("Presence sync restricted.");
+            }
+        });
     };
     updatePresence();
-    const interval = setInterval(updatePresence, 10000);
+    const interval = setInterval(updatePresence, 20000);
     return () => clearInterval(interval);
   }, [route, user]);
 
-  // --- SINCRONIZAÇÃO DE DADOS ---
   useEffect(() => {
     const loadReviews = async () => {
         try {
@@ -110,7 +106,9 @@ const App: React.FC = () => {
             snapshot.forEach(doc => { loadedReviews.push(doc.data() as Review); });
             loadedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setReviews(loadedReviews);
-        } catch (error) { console.error("Erro reviews:", error); }
+        } catch (error) { 
+            console.debug("Reviews access restricted."); 
+        }
     };
     loadReviews();
 
@@ -130,16 +128,34 @@ const App: React.FC = () => {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
                     setUser(basicUser);
                 }
-                const unsubOrders = db.collection("orders")
-                    .where("userId", "==", firebaseUser.uid)
-                    .onSnapshot(snap => {
-                        const userOrders: Order[] = [];
-                        snap.forEach(doc => userOrders.push(doc.data() as Order));
-                        userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                        setOrders(userOrders);
+
+                // Tentar carregar encomendas, falhar silenciosamente se sem permissão
+                try {
+                    db.collection("orders")
+                        .where("userId", "==", firebaseUser.uid)
+                        .onSnapshot(snap => {
+                            const userOrders: Order[] = [];
+                            snap.forEach(doc => userOrders.push(doc.data() as Order));
+                            userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            setOrders(userOrders);
+                        }, () => {});
+                } catch(e) { console.debug("Orders sync restricted."); }
+
+            } catch (err: any) { 
+                // CORREÇÃO DO SYNC ERROR: Se permissão negada, usamos dados do Auth
+                if (err.code === 'permission-denied') {
+                    console.warn("Firestore sync restricted. Using auth profile profile.");
+                    setUser({
+                        uid: firebaseUser.uid,
+                        name: firebaseUser.displayName || 'Cliente',
+                        email: firebaseUser.email || '',
+                        addresses: [],
+                        wishlist: []
                     });
-                return () => unsubOrders();
-            } catch (err) { console.error("Erro auth sync:", err); }
+                } else {
+                    console.error("Sync error", err);
+                }
+            }
         } else {
             setUser(null);
             setOrders([]); 
@@ -163,7 +179,7 @@ const App: React.FC = () => {
     localStorage.setItem('wishlist', JSON.stringify(newWishlist));
     if (user?.uid) {
         try { await db.collection("users").doc(user.uid).update({ wishlist: newWishlist }); }
-        catch (error) { console.error("Erro wishlist sync:", error); }
+        catch (error) { console.debug("Wishlist update restricted."); }
     }
   };
 
@@ -211,13 +227,13 @@ const App: React.FC = () => {
     setUser(updatedUser);
     if (updatedUser.uid) {
         try { await db.collection("users").doc(updatedUser.uid).set(updatedUser); }
-        catch (err) { console.error("Erro save user:", err); }
+        catch (err) { console.error("Save error", err); }
     }
   };
 
   const handleLogout = async () => {
     try { await auth.signOut(); setUser(null); window.location.hash = '/'; }
-    catch (error) { console.error("Erro logout:", error); }
+    catch (error) { console.error("Logout error", error); }
   };
 
   const handleCheckout = async (newOrder: Order) => {
@@ -226,13 +242,13 @@ const App: React.FC = () => {
       try {
           await db.collection('orders').doc(newOrder.id).set(newOrder);
           notifyNewOrder(newOrder, user ? user.name : 'Cliente Anónimo');
-      } catch (e) { console.error("Erro checkout:", e); }
+      } catch (e) { console.error("Checkout error", e); }
   };
 
   const handleAddReview = async (newReview: Review) => {
       setReviews(prev => [newReview, ...prev]);
       try { await db.collection('reviews').doc(newReview.id).set(newReview); }
-      catch (e) { console.error("Erro review:", e); }
+      catch (e) { console.error("Review error", e); }
   };
 
   const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cartItems]);
@@ -303,20 +319,19 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center md:items-start">
                 <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
                 <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="MB Way">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Multibanco">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Visa">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Mastercard">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
                     </div>
-                    {/* NOVO MÉTODO: COBRANÇA - LINK ATUALIZADO */}
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Pagamento na Entrega">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
                     </div>
                 </div>
@@ -336,3 +351,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
