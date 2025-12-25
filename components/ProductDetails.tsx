@@ -78,14 +78,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.href}${window.location.href.includes('?') ? '&' : '?'}refresh=${Date.now()}`;
-    
+    const shareUrl = window.location.href;
     const shareData = {
       title: `${product.name} - ${STORE_NAME}`,
       text: `Dá uma olhada nisto: ${product.name} por apenas ${currentPrice}€!`,
       url: shareUrl,
     };
-
     try {
       if (navigator.share) {
         await navigator.share(shareData);
@@ -100,7 +98,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         setShareFeedback('copied');
       }
     }
-
     setTimeout(() => setShareFeedback('idle'), 3000);
   };
 
@@ -121,12 +118,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
             <button onClick={() => onToggleWishlist(product.id)} className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur rounded-full shadow-sm hover:scale-110 transition-transform text-gray-400 hover:text-red-500"><Heart size={24} className={isFavorite ? "fill-red-500 text-red-500" : ""} /></button>
           </div>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-             {uniqueImages.map((img, idx) => {
-                 const variantName = product.variants?.find(v => v.image === img)?.name;
-                 return (
-                    <button key={idx} onClick={() => { setSelectedImage(img); if (variantName) setSelectedVariantName(variantName); }} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`} title={variantName || `Imagem ${idx + 1}`}><img src={img} alt={`Thumbnail ${idx}`} referrerPolicy="no-referrer" className="w-full h-full object-contain p-1" /></button>
-                 );
-             })}
+             {uniqueImages.map((img, idx) => (
+                <button key={idx} onClick={() => setSelectedImage(img)} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`}><img src={img} alt={`Thumbnail ${idx}`} referrerPolicy="no-referrer" className="w-full h-full object-contain p-1" /></button>
+             ))}
           </div>
         </div>
 
@@ -136,18 +130,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                     <span className="text-sm font-bold text-primary tracking-wider uppercase">{product.category}</span>
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4 leading-tight">{product.name}</h1>
                 </div>
-                <div className="relative">
-                    <button 
-                        onClick={handleShare}
-                        className={`p-3 rounded-full transition-all duration-300 flex items-center gap-2 group
-                            ${shareFeedback !== 'idle' ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400 hover:text-primary hover:bg-blue-50'}
-                        `} 
-                        title="Partilhar"
-                    >
-                        {shareFeedback === 'idle' ? <Share2 size={24} /> : shareFeedback === 'copied' ? <Copy size={24} /> : <Check size={24} />}
-                        {shareFeedback === 'copied' && <span className="absolute right-full mr-2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap animate-fade-in">Link Copiado!</span>}
-                    </button>
-                </div>
+                <button onClick={handleShare} className="p-3 rounded-full bg-gray-50 text-gray-400 hover:text-primary transition-all">
+                    {shareFeedback === 'idle' ? <Share2 size={24} /> : shareFeedback === 'copied' ? <Copy size={24} /> : <Check size={24} />}
+                </button>
            </div>
 
            <div className="flex items-end gap-3 mb-6">
@@ -160,13 +145,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                <div className="mb-8">
                    <label className="block text-sm font-bold text-gray-700 mb-3">{product.variantLabel || 'Escolha uma opção:'}</label>
                    <div className="flex flex-wrap gap-3">
-                       {product.variants.map((v) => {
-                           const vStock = getStock(product.id, v.name);
-                           const vOutOfStock = vStock <= 0 && vStock !== 999 && !product.comingSoon;
-                           return (
-                               <button key={v.name} onClick={() => !vOutOfStock && handleVariantChange(v)} disabled={vOutOfStock} className={`px-4 py-3 rounded-lg border-2 text-sm font-bold transition-all relative ${selectedVariantName === v.name ? 'border-primary bg-blue-50 text-primary' : vOutOfStock ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed decoration-slice line-through' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>{v.name}{v.price && v.price !== product.price && (<span className="block text-xs font-normal opacity-80">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v.price)}</span>)}{vOutOfStock && (<span className="absolute -top-2 -right-2 bg-red-100 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full no-underline">Esgotado</span>)}</button>
-                           );
-                       })}
+                       {product.variants.map((v) => (
+                           <button key={v.name} onClick={() => handleVariantChange(v)} className={`px-4 py-3 rounded-lg border-2 text-sm font-bold transition-all ${selectedVariantName === v.name ? 'border-primary bg-blue-50 text-primary' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>{v.name}</button>
+                       ))}
                    </div>
                </div>
            )}
@@ -181,40 +162,29 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                ) : (
                    <div className="flex items-center gap-2 text-green-700 bg-green-50 px-4 py-3 rounded-lg border border-green-100 w-fit">
                        <Check size={20} /><span className="font-bold">Em Stock</span>
-                       {isLowStock && <span className="ml-2 text-orange-600 text-sm font-normal flex items-center gap-1"><AlertTriangle size={14} /> Restam apenas {currentStock} unidades</span>}
+                       {isLowStock && <span className="ml-2 text-orange-600 text-sm font-normal flex items-center gap-1"><AlertTriangle size={14} /> Restam apenas {currentStock}</span>}
                    </div>
                )}
            </div>
 
-           <div className="flex gap-4 mb-4">
+           <div className="flex gap-4 mb-8">
                {product.comingSoon ? (
-                   <button className="flex-1 py-4 rounded-xl font-bold text-lg bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none flex items-center justify-center gap-2">
+                   <button className="flex-1 py-4 rounded-xl font-bold text-lg bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 flex items-center justify-center gap-2">
                        <CalendarClock size={24} /> Brevemente Disponível
                    </button>
                ) : (
-                   <button onClick={handleAddToCart} disabled={isOutOfStock} className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-primary hover:bg-blue-600 text-white shadow-blue-500/30'}`}><ShoppingCart size={24} /> {isOutOfStock ? 'Indisponível' : 'Adicionar ao Carrinho'}</button>
+                   <button onClick={handleAddToCart} disabled={isOutOfStock} className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}><ShoppingCart size={24} /> {isOutOfStock ? 'Indisponível' : 'Comprar Agora'}</button>
                )}
-               <button onClick={() => onToggleWishlist(product.id)} className={`px-6 rounded-xl border-2 flex items-center justify-center transition-colors ${isFavorite ? 'border-red-200 bg-red-50 text-red-500' : 'border-gray-200 hover:border-red-200 hover:text-red-500 text-gray-400'}`}><Heart size={28} className={isFavorite ? "fill-current" : ""} /></button>
            </div>
 
-           <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3 shadow-inner">
+           <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3">
                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Pagamento 100% Seguro</p>
                <div className="flex gap-2 items-center flex-wrap justify-center">
-                    <div className="bg-white p-0.5 rounded shadow-sm border border-gray-100 flex items-center justify-center h-8 w-12 overflow-hidden">
-                        <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded shadow-sm border border-gray-100 flex items-center justify-center h-8 w-12 overflow-hidden">
-                        <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded shadow-sm border border-gray-100 flex items-center justify-center h-8 w-12 overflow-hidden">
-                        <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded shadow-sm border border-gray-100 flex items-center justify-center h-8 w-12 overflow-hidden">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded shadow-sm border border-gray-100 flex items-center justify-center h-8 w-12 overflow-hidden">
-                        <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
-                    </div>
+                    <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-6 object-contain" />
+                    <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-6 object-contain" />
+                    <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-6 object-contain" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-6 object-contain" />
+                    <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-6 object-contain" />
                </div>
            </div>
 
@@ -225,20 +195,16 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">{product.features.map((feat, idx) => (<li key={idx} className="flex items-center gap-2 text-sm"><div className="w-1.5 h-1.5 bg-primary rounded-full"></div>{feat}</li>))}</ul>
                </div>
                <div className="flex flex-col sm:flex-row gap-6 pt-4 border-t border-gray-100 text-sm font-medium">
-                   {product.comingSoon ? (
-                       <div className="flex items-center gap-2 text-purple-600"><CalendarClock size={20} /> Previsão de chegada: 7-14 dias</div>
-                   ) : (
-                       <div className="flex items-center gap-2 text-gray-500"><Truck size={20} className="text-primary" /> Entrega 1-3 dias (Grátis acima de 50€)</div>
-                   )}
+                   <div className="flex items-center gap-2 text-gray-500"><Truck size={20} className="text-primary" /> Entrega 1-3 dias</div>
                    <div className="flex items-center gap-2 text-gray-500"><ShieldCheck size={20} className="text-green-600" /> Garantia de 3 Anos</div>
                </div>
            </div>
         </div>
       </div>
 
+      {/* Fix: use the correct prop onAddReview instead of the non-existent handleAddReview */}
       <ReviewSection productId={product.id} reviews={reviews} onAddReview={onAddReview} currentUser={currentUser} />
 
-      {/* --- TABELA DE COMPARAÇÃO --- */}
       {product.category === 'TV & Streaming' && (
           <div className="mt-20 border-t border-gray-100 pt-16">
               <div className="text-center mb-10">
@@ -250,57 +216,18 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                       <thead>
                           <tr className="bg-gray-50">
                               <th className="p-4 md:p-6 text-xs font-bold text-gray-500 uppercase border-b border-gray-200">Specs</th>
-                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
-                                  <span className="block font-bold text-gray-900 text-sm">Xiaomi S (3ª Gen)</span>
-                                  <span className="text-[10px] text-primary font-bold">A MAIS RECENTE</span>
-                              </th>
-                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
-                                  <span className="block font-bold text-gray-900 text-sm">Xiaomi S (2ª Gen)</span>
-                                  <span className="text-[10px] text-gray-400 font-bold">EQUILIBRADA</span>
-                              </th>
-                              <th className="p-4 md:p-6 border-b border-gray-200 min-w-[150px] text-center">
-                                  <span className="block font-bold text-gray-900 text-sm">H96 Max M2</span>
-                                  <span className="text-[10px] text-orange-500 font-bold">POTÊNCIA/APK</span>
-                              </th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 text-center"><span className="block font-bold text-gray-900 text-sm">Xiaomi S (3ª Gen)</span><span className="text-[10px] text-primary font-bold">A MAIS RECENTE</span></th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 text-center"><span className="block font-bold text-gray-900 text-sm">Xiaomi S (2ª Gen)</span><span className="text-[10px] text-gray-400 font-bold">EQUILIBRADA</span></th>
+                              <th className="p-4 md:p-6 border-b border-gray-200 text-center"><span className="block font-bold text-gray-900 text-sm">H96 Max M2</span><span className="text-[10px] text-orange-500 font-bold">POTÊNCIA/APK</span></th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs md:text-sm">
-                          <tr>
-                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Ideal Para</td>
-                              <td className="p-4 md:p-6 text-center font-medium text-blue-700">Netflix & Disney+ 8K</td>
-                              <td className="p-4 md:p-6 text-center text-gray-600">Netflix & Disney+ 4K</td>
-                              <td className="p-4 md:p-6 text-center text-orange-700 font-medium">IPTV & Apps Externos</td>
-                          </tr>
-                          <tr>
-                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Sistema</td>
-                              <td className="p-4 md:p-6 text-center">Google TV (Novo)</td>
-                              <td className="p-4 md:p-6 text-center">Google TV</td>
-                              <td className="p-4 md:p-6 text-center">Android 13 (Puro)</td>
-                          </tr>
-                          <tr>
-                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Memória RAM</td>
-                              <td className="p-4 md:p-6 text-center">2GB (LPDDR4X)</td>
-                              <td className="p-4 md:p-6 text-center">2GB</td>
-                              <td className="p-4 md:p-6 text-center font-bold">4GB</td>
-                          </tr>
-                          <tr>
-                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Netflix Oficial</td>
-                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim (8K/4K)</td>
-                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim (4K)</td>
-                              <td className="p-4 md:p-6 text-center text-red-400 font-bold">Não (Qualid. Móvel)</td>
-                          </tr>
-                          <tr>
-                              <td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">APK Externos</td>
-                              <td className="p-4 md:p-6 text-center text-gray-400">Restrito</td>
-                              <td className="p-4 md:p-6 text-center text-gray-400">Restrito</td>
-                              <td className="p-4 md:p-6 text-center text-green-600 font-bold">Livre Total</td>
-                          </tr>
+                          <tr><td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Ideal Para</td><td className="p-4 md:p-6 text-center text-blue-700">Netflix & Disney+ 8K</td><td className="p-4 md:p-6 text-center">Netflix & Disney+ 4K</td><td className="p-4 md:p-6 text-center text-orange-700">IPTV & Apps Externos</td></tr>
+                          <tr><td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">RAM / ROM</td><td className="p-4 md:p-6 text-center">2GB / 32GB (Novo)</td><td className="p-4 md:p-6 text-center">2GB / 8GB</td><td className="p-4 md:p-6 text-center font-bold">4GB / 64GB</td></tr>
+                          <tr><td className="p-4 md:p-6 font-bold text-gray-700 bg-gray-50/30">Netflix Oficial</td><td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim</td><td className="p-4 md:p-6 text-center text-green-600 font-bold">Sim</td><td className="p-4 md:p-6 text-center text-red-400 font-bold">Não</td></tr>
+                          <tr><td className="p-4 md:p-6 font-bold text-gray-700 bg-indigo-50/30">Escolha se...</td><td className="p-4 md:p-6 text-center italic">Quer o melhor processador.</td><td className="p-4 md:p-6 text-center italic">Quer o melhor preço oficial.</td><td className="p-4 md:p-6 text-center italic">Instala apps externas/IPTV.</td></tr>
                       </tbody>
                   </table>
-              </div>
-              <div className="mt-6 bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start gap-3">
-                  <Info className="text-primary shrink-0" size={20} />
-                  <p className="text-sm text-blue-800"><strong>Dica de Especialista:</strong> Se é cliente Netflix/Disney+, escolha sempre <strong>Xiaomi</strong>. Se o seu objetivo é instalar aplicações que não existem na loja oficial da Google (como apps de IPTV personalizadas ou APKs), a <strong>H96 Max</strong> é muito mais flexível e potente.</p>
               </div>
           </div>
       )}
@@ -313,7 +240,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                       <div key={rel.id} onClick={() => window.location.hash = `product/${rel.id}`} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
                           <div className="aspect-square bg-gray-100 relative overflow-hidden">
                               <img src={rel.image} alt={rel.name} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><span className="bg-white text-gray-900 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md"><Eye size={12} /> Ver</span></div>
                           </div>
                           <div className="p-4">
                               <h3 className="font-bold text-gray-900 text-sm line-clamp-2 group-hover:text-primary transition-colors">{rel.name}</h3>
@@ -324,21 +250,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
               </div>
           </div>
       )}
-
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-4 z-40 md:hidden shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] flex items-center justify-between animate-fade-in-up">
-           <div className="flex flex-col">
-              <span className="text-xs text-gray-500 line-clamp-1 max-w-[150px]">{product.name}</span>
-              <span className="font-bold text-lg text-primary">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}</span>
-           </div>
-           {product.comingSoon ? (
-               <button className="px-6 py-2.5 bg-gray-100 text-gray-400 rounded-lg font-bold border border-gray-200 cursor-not-allowed">Em Breve</button>
-           ) : (
-               <button onClick={handleAddToCart} disabled={isOutOfStock} className={`px-6 py-2.5 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}>{isOutOfStock ? 'Esgotado' : <><ShoppingCart size={18} /> Comprar</>}</button>
-           )}
-      </div>
     </div>
   );
 };
 
 export default ProductDetails;
-
