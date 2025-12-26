@@ -16,7 +16,8 @@
     "react-dom": "^18.3.1",
     "lucide-react": "^0.454.0",
     "@google/genai": "latest",
-    "firebase": "^10.13.1"
+    "firebase": "^10.13.1",
+    "@zxing/library": "^0.21.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
