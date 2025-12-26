@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -9,74 +10,95 @@ import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Cou
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS, LOYALTY_TIERS } from '../constants';
 import { db } from '../services/firebaseConfig';
+import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 
-// Declaramos a variável global da biblioteca carregada no index.html
-declare const Html5Qrcode: any;
 
 // Utility para formatação de moeda
 const formatCurrency = (value: number) => 
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
-// --- COMPONENTE DE SCANNER COM ENTRADA MANUAL ---
+// --- COMPONENTE DE SCANNER COM MOTOR ZXING ---
 const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: () => void }> = ({ onCodeSubmit, onClose }) => {
     const [error, setError] = useState<string | null>(null);
     const [isTorchOn, setIsTorchOn] = useState(false);
     const [manualCode, setManualCode] = useState('');
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const scannerRef = useRef<any>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
-        let isMounted = true;
         const startScanner = async () => {
+            if (!videoRef.current) return;
+            
+            const hints = new Map();
+            const formats = [
+                BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, 
+                BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, 
+                BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+            ];
+            hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
+
+            codeReaderRef.current = new BrowserMultiFormatReader(hints, {
+              delayBetweenScanAttempts: 100,
+              delayBetweenScanSuccess: 500,
+            });
+
             try {
-                await new Promise(resolve => setTimeout(resolve, 300));
-                if (!isMounted) return;
-                scannerRef.current = new Html5Qrcode("reader");
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                streamRef.current = stream;
                 
-                // Formatos otimizados para produtos (EAN_13, UPC_A, CODE_128)
-                const formatsToSupport = [3, 5, 7]; 
-
-                const config = { 
-                    fps: 20, 
-                    qrbox: { width: 280, height: 140 },
-                    formatsToSupport,
-                };
-
-                await scannerRef.current.start(
-                    { facingMode: "environment" }, 
-                    config, 
-                    (decodedText: string) => {
-                        onCodeSubmit(decodedText.trim().toUpperCase());
-                    }, 
-                    () => {}
-                );
+                if (videoRef.current) {
+                    await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
+                        if (result) {
+                            onCodeSubmit(result.getText().trim().toUpperCase());
+                        }
+                        if (err && !(err.name === 'NotFoundException')) {
+                            console.debug("Scan error:", err.message);
+                        }
+                    });
+                }
             } catch (err) {
-                console.error("Scanner error:", err);
+                console.error("Scanner init error:", err);
                 setError("Câmara indisponível ou permissão negada.");
             }
         };
 
         startScanner();
-        return () => { isMounted = false; stopScanner(); };
+
+        return () => {
+            if (codeReaderRef.current) {
+                codeReaderRef.current.reset();
+            }
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
     }, []);
 
     const toggleTorch = async () => {
-        if (!scannerRef.current) return;
-        try {
-            const newState = !isTorchOn;
-            await scannerRef.current.applyVideoConstraints({ advanced: [{ torch: newState }] });
-            setIsTorchOn(newState);
-        } catch (e) {
-            console.warn("Lanterna não suportada:", e);
+        if (streamRef.current) {
+            const track = streamRef.current.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            // Fix: Property 'torch' does not exist on type 'MediaTrackCapabilities'. Cast to `any` to access this property as it may not be in the default TS lib definitions.
+            if ((capabilities as any).torch) {
+                try {
+                    await track.applyConstraints({
+                        // Fix: Property 'torch' does not exist in type 'MediaTrackConstraintSet'. Cast constraint to `any` to apply it.
+                        advanced: [{ torch: !isTorchOn } as any]
+                    });
+                    setIsTorchOn(!isTorchOn);
+                } catch(e) {
+                    console.warn("Lanterna não pôde ser ativada:", e);
+                }
+            } else {
+                console.warn("Lanterna não suportada por este dispositivo.");
+            }
         }
     };
     
-    const stopScanner = async () => {
-        if (scannerRef.current && scannerRef.current.isScanning) {
-            try { await scannerRef.current.stop(); } catch (e) {}
-        }
-    };
-
     const handleManualSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (manualCode.trim()) {
@@ -90,9 +112,9 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
             
             <div className="w-full max-w-sm">
                 <div className="relative aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
-                    <div id="reader" className="w-full h-full"></div>
+                    <video ref={videoRef} className="w-full h-full object-cover scale-110" muted playsInline />
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-[90%] max-w-[300px] h-[120px] border-2 border-indigo-500/30 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.6)]">
+                        <div className="w-[90%] max-w-[300px] h-[100px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.6)]">
                             <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>
                         </div>
                     </div>
@@ -100,12 +122,10 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                 </div>
                 
                 <div className="mt-6 flex justify-center">
-                    {isMobile && (
-                        <button onClick={toggleTorch} className={`w-16 h-16 rounded-full transition-all shadow-lg flex flex-col items-center justify-center border-2 ${isTorchOn ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 text-white border-white/20'}`}>
-                            {isTorchOn ? <Zap size={24} fill="currentColor" /> : <ZapOff size={24} />}
-                            <span className="text-[9px] font-bold mt-1 uppercase">{isTorchOn ? 'ON' : 'Flash'}</span>
-                        </button>
-                    )}
+                    <button onClick={toggleTorch} className={`w-16 h-16 rounded-full transition-all shadow-lg flex flex-col items-center justify-center border-2 ${isTorchOn ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 text-white border-white/20'}`}>
+                        {isTorchOn ? <Zap size={24} fill="currentColor" /> : <ZapOff size={24} />}
+                        <span className="text-[9px] font-bold mt-1 uppercase">{isTorchOn ? 'ON' : 'Flash'}</span>
+                    </button>
                 </div>
 
                 <div className="text-center text-gray-400 text-xs font-bold my-6">OU</div>
@@ -226,10 +246,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         const activeUsers: any[] = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (now - data.lastActive < 30000) activeUsers.push({ id: doc.id, ...data });
+            if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) {
+                 activeUsers.push({ id: doc.id, ...data });
+            }
         });
         setOnlineUsers(activeUsers);
-    }, (err) => console.error("Online users listener failed:", err));
+    }, (err) => {
+      if (err.code !== 'permission-denied') {
+        console.error("Online users listener failed:", err);
+      }
+    });
     return () => unsubscribe();
   }, [isAdmin]);
 
