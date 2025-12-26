@@ -1,4 +1,3 @@
-
 import { Product } from './types';
 
 export const STORE_NAME = "Allshop";
@@ -10,8 +9,15 @@ export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8";
 export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBYs";
 export const TELEGRAM_CHAT_ID = "-1003494194252"; 
 
+/**
+ * IMPORTANTE: Lista de emails com permissão de administrador.
+ * Estes emails DEVEM ser exatamente os mesmos (letra por letra) que estão
+ * nas Regras de Segurança do Firestore para que o acesso funcione.
+ * 
+ * Foram convertidos para minúsculas para evitar erros de case-sensitivity.
+ */
 export const ADMIN_EMAILS = [
-  "filipe_Coval_90@hotmail.com",
+  "filipe_coval_90@hotmail.com",
   "mcpoleca@gmail.com",
   "filipe@teste.com"
 ];
@@ -31,7 +37,7 @@ export const LOYALTY_REWARDS = [
 
 /** 
  * Proxy de Imagens Ultra-Compatível
- * Essencial para contornar o bloqueio de "hotlinking" da AliExpress (Error 403)
+ * Necessário para contornar o bloqueio de hotlinking (403) de sites como AliExpress e Temu.
  */
 const proxyImg = (url: string) => {
     if (!url) return LOGO_URL;
@@ -57,16 +63,8 @@ export const PRODUCTS: Product[] = [
     ],
     variantLabel: "Escolha a Cor",
     variants: [
-      {
-        name: "Preto",
-        price: 24.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sc3fd2cc394224207816e8a000322702e2.jpg_960x960q75.jpg_.avif")
-      },
-      {
-        name: "Branco",
-        price: 24.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S3fa13df2c427401993d90cd746e54602T.jpg_960x960q75.jpg_.avif")
-      }
+      { name: "Preto", price: 24.99, image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sc3fd2cc394224207816e8a000322702e2.jpg_960x960q75.jpg_.avif") },
+      { name: "Branco", price: 24.99, image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S3fa13df2c427401993d90cd746e54602T.jpg_960x960q75.jpg_.avif") }
     ],
     features: ["Bluetooth 5.4 Ultra-Rápido", "Redução de Ruído com IA", "Até 36h de Autonomia Total", "Driver Dinâmico de 10mm", "Proteção IPX4"]
   },
@@ -74,27 +72,21 @@ export const PRODUCTS: Product[] = [
     id: 16,
     name: "Lenovo LivePods LP40 TWS Wireless Earbuds",
     price: 11.99,
-    description: "Auriculares originais Lenovo com design ultra-leve, Bluetooth 5.0 e controlo tátil. Som estéreo de alta fidelidade e resistência ao suor, ideais para desporto e uso diário.",
+    description: "Auriculares originais Lenovo com design ultra-leve, Bluetooth 5.0 e controlo tátil. Som estéreo de alta fidelidade e resistência ao suor, ideais para desporto e uso diário. Nota: As novas versões poderão vir com a marca 'thinkplus' em vez de 'Lenovo', mantendo a mesma qualidade e fabricante.",
     category: "Audio",
     comingSoon: true,
-    image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/H373ed0e5b37540fab33a0e6277954888T.jpg_960x960q75.jpg_.avif"),
+    image: proxyImg("https://img.kwcdn.com/product/fancy/25abdacb-27d9-4a63-8103-13d3d01a5ce8.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
+      proxyImg("https://img.kwcdn.com/product/fancy/697e1a4e-72a9-40a0-afd9-38aba3645c78.jpg?imageView2/2/w/800/q/70/format/avif"),
+      proxyImg("https://img.kwcdn.com/product/fancy/25abdacb-27d9-4a63-8103-13d3d01a5ce8.jpg?imageView2/2/w/800/q/70/format/avif"),
+      proxyImg("https://img.kwcdn.com/product/fancy/4d8e0644-7d96-44ef-a718-bd701520ce0c.jpg?imageView2/2/w/800/q/70/format/avif"),
       proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Hbb0fed2da7994d65a054f68b411ed309Q.jpg_960x960q75.jpg_.avif"),
-      proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/H3dccd4fcdf4543c6b7e1144dd11820bdI.jpg_960x960q75.jpg_.avif"),
-      proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sb3b7433868b74dba98b4aa074d3290670.jpg_960x960q75.jpg_.avif")
+      proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/H373ed0e5b37540fab33a0e6277954888T.jpg_960x960q75.jpg_.avif")
     ],
     variantLabel: "Escolha a Cor",
     variants: [
-      {
-        name: "Branco",
-        price: 11.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/H3dccd4fcdf4543c6b7e1144dd11820bdI.jpg_960x960q75.jpg_.avif")
-      },
-      {
-        name: "Preto",
-        price: 11.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sb3b7433868b74dba98b4aa074d3290670.jpg_960x960q75.jpg_.avif")
-      }
+      { name: "Branco", price: 11.99, image: proxyImg("https://img.kwcdn.com/product/fancy/25abdacb-27d9-4a63-8103-13d3d01a5ce8.jpg?imageView2/2/w/800/q/70/format/avif") },
+      { name: "Preto", price: 11.99, image: proxyImg("https://img.kwcdn.com/product/fancy/4d8e0644-7d96-44ef-a718-bd701520ce0c.jpg?imageView2/2/w/800/q/70/format/avif") }
     ],
     features: ["Bluetooth 5.0", "Controlo Tátil Inteligente", "Resistência à Água IPX4", "Carregamento USB-C", "Design Ergonómico e Leve"]
   },
@@ -123,16 +115,8 @@ export const PRODUCTS: Product[] = [
     image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif"),
     variantLabel: "Escolha o Design",
     variants: [
-      {
-        name: "Design Branco Clássico (V1)",
-        price: 13.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif")
-      },
-      {
-        name: "Design Futurista (V2)",
-        price: 13.99,
-        image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S56b9fec6534d4a6b8d6bb97561c7c49ez.png_960x960.png_.avif")
-      }
+      { name: "Design Branco Clássico (V1)", price: 13.99, image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif") },
+      { name: "Design Futurista (V2)", price: 13.99, image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S56b9fec6534d4a6b8d6bb97561c7c49ez.png_960x960.png_.avif") }
     ],
     features: ["Tamanho XL: 900x400x2mm", "Base de Borracha Antiderrapante", "Design Sports Car Exclusivo", "Bordas Reforçadas"]
   },
@@ -151,7 +135,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração) - 4K Ultra HD",
-    price: 42.50,
+    price: 45.00,
     description: "A clássica e fiável. Certificada para todos os serviços oficiais com Dolby Vision e HDR10+. Excelente custo-benefício para streaming oficial.",
     category: "TV & Streaming",
     image: proxyImg("https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif"),
@@ -163,7 +147,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2 - Android 13",
-    price: 29.95,
+    price: 35.00,
     description: "Liberdade total. Android 13 'puro' com 64GB de espaço. Perfeita para IPTV e aplicações externas (APKs) devido ao seu sistema aberto.",
     category: "TV & Streaming",
     image: proxyImg("https://img.kwcdn.com/product/fancy/d53c3efc-59aa-4ac2-bd40-201b43f0cc98.jpg?imageView2/2/w/800/q/70/format/avif"),
@@ -185,16 +169,8 @@ export const PRODUCTS: Product[] = [
     features: ["Carregamento Turbo", "Cabo USB-C 6A Incluído", "Compatível com POCO/Redmi", "Proteção Inteligente"],
     variantLabel: "Escolha a Potência",
     variants: [
-        {
-            name: "33W Turbo",
-            price: 14.99,
-            image: proxyImg("https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg")
-        },
-        {
-            name: "67W Max",
-            price: 18.99,
-            image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S743b4ba68517490bae3380429127f3e8b.jpg_960x960q75.jpg_.avif")
-        }
+        { name: "33W Turbo", price: 14.99, image: proxyImg("https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg") },
+        { name: "67W Max", price: 18.99, image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S743b4ba68517490bae3380429127f3e8b.jpg_960x960q75.jpg_.avif") }
     ]
   },
   {
@@ -246,21 +222,9 @@ export const PRODUCTS: Product[] = [
     features: ["Tecnologia GaN", "Proteção Contra Sobrecarga", "Inclui Cabo 6A", "Compatível Xiaomi"],
     variantLabel: "Escolha a Potência",
     variants: [
-        { 
-            name: "33W Turbo", 
-            price: 5.99, 
-            image: proxyImg("https://s.alicdn.com/@sc04/kf/H6194355092934d33aa1e0c39f9199e66m.jpg?avif=close&webp=close")
-        },
-        { 
-            name: "67W Max", 
-            price: 9.99,
-            image: proxyImg("https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg")
-        },
-        { 
-            name: "120W Turbo", 
-            price: 14.99, 
-            image: proxyImg("https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close")
-        }
+        { name: "33W Turbo", price: 5.99, image: proxyImg("https://s.alicdn.com/@sc04/kf/H6194355092934d33aa1e0c39f9199e66m.jpg?avif=close&webp=close") },
+        { name: "67W Max", price: 9.99, image: proxyImg("https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg") },
+        { name: "120W Turbo", price: 14.99, image: proxyImg("https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close") }
     ]
   },
   {
