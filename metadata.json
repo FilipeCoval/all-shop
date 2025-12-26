@@ -1,5 +1,7 @@
 {
   "name": "Allshop Store",
   "description": "A sua loja virtual completa para eletrônicos e gadgets, com os melhores preços da Europa.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
