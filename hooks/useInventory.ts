@@ -1,14 +1,19 @@
-
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
 
-export const useInventory = () => {
+export const useInventory = (isAdmin: boolean = false) => {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Subscrever à coleção 'products_inventory' em tempo real
+    // Só tentamos subscrever se o utilizador for admin
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = db.collection('products_inventory').onSnapshot(
       (snapshot) => {
         const items: InventoryProduct[] = [];
@@ -17,15 +22,21 @@ export const useInventory = () => {
         });
         setProducts(items);
         setLoading(false);
+        setError(null);
       },
-      (error) => {
-        console.error("Erro ao ler inventário:", error);
+      (err) => {
+        console.warn("Firestore Access Restricted:", err.message);
+        if (err.code === 'permission-denied') {
+            setError('permission-denied');
+        } else {
+            setError(err.message);
+        }
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin]);
 
   const addProduct = async (product: Omit<InventoryProduct, 'id'>) => {
     try {
@@ -54,5 +65,5 @@ export const useInventory = () => {
     }
   };
 
-  return { products, loading, addProduct, updateProduct, deleteProduct };
+  return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
