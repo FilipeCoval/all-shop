@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
@@ -9,6 +8,8 @@ export const useStock = () => {
   const [hasPermissionError, setHasPermissionError] = useState(false);
 
   useEffect(() => {
+    // Escutamos o inventário. Se as regras do Firestore permitirem leitura pública, 
+    // teremos stock real no site. Caso contrário, usamos o modo fallback.
     const unsubscribe = db.collection('products_inventory').onSnapshot(
       (snapshot) => {
         const items: InventoryProduct[] = [];
@@ -20,10 +21,11 @@ export const useStock = () => {
         setHasPermissionError(false);
       },
       (error) => {
-        // Log discreto para não alarmar o utilizador final
-        console.debug("Stock sync restricted. Mode: Infinite Stock.");
+        // Silenciamos erro para utilizadores não-admin para evitar ruído no site público
+        if (error.code === 'permission-denied') {
+            setHasPermissionError(true);
+        }
         setLoading(false);
-        setHasPermissionError(true);
       }
     );
 
@@ -31,7 +33,8 @@ export const useStock = () => {
   }, []);
 
   const getStockForProduct = (publicId: number, variantName?: string): number => {
-    // FALLBACK: Se permissões negadas ou erro de rede, devolve 999 (Stock não gerido)
+    // Se não temos permissão de leitura pública, assumimos stock ilimitado (999) 
+    // para não bloquear as vendas do site.
     if (hasPermissionError) return 999;
     if (loading) return 999;
 
@@ -47,6 +50,7 @@ export const useStock = () => {
         return true;
     });
     
+    // Se o produto não consta no inventário mas está no catálogo fixo, devolvemos 999
     if (relevantBatches.length === 0) return 999; 
 
     const totalStock = relevantBatches.reduce((acc, batch) => {
