@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Smartphone, Landmark, Banknote, Search } from 'lucide-react';
+import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
 import AIChat from './components/AIChat';
@@ -12,7 +12,7 @@ import Privacy from './components/Privacy';
 import FAQ from './components/FAQ';
 import Returns from './components/Returns';
 import LoginModal from './components/LoginModal';
-import ResetPasswordModal from './components/ResetPasswordModal'; // Novo Import
+import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { PRODUCTS, ADMIN_EMAILS, STORE_NAME } from './constants';
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [wishlist, setWishlist] = useState<number[]>(() => {
@@ -38,8 +38,9 @@ const App: React.FC = () => {
   });
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [resetCode, setResetCode] = useState<string | null>(null); // Estado para o código de redefinição
+  const [resetCode, setResetCode] = useState<string | null>(null); 
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
@@ -51,32 +52,199 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  // --- DETETAR REDEFINIÇÃO DE PASSWORD NA URL ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     const oobCode = params.get('oobCode');
-
-    if (mode === 'resetPassword' && oobCode) {
-      setResetCode(oobCode);
-    }
+    if (mode === 'resetPassword' && oobCode) setResetCode(oobCode);
   }, []);
 
-  // --- TAB FOCUS EFFECT (Retenção de Cliente) ---
   useEffect(() => {
     const originalTitle = document.title;
-    const handleBlur = () => { document.title = "Volte aqui! 🛒 " + STORE_NAME; };
-    // Alterado: Nome da loja agora aparece primeiro
     const handleBlur = () => { document.title = STORE_NAME + " - Volte aqui! 🛒"; };
     const handleFocus = () => { document.title = originalTitle; };
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
-@@ -223,115 +224,115 @@
+    return () => {
+        window.removeEventListener('blur', handleBlur);
+        window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (route.includes('dashboard')) return;
+    let sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('session_id', sessionId);
+    }
+    const updatePresence = () => {
+        if (!sessionId) return;
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        db.collection('online_users').doc(sessionId).set({
+            lastActive: Date.now(),
+            page: route,
+            userName: user ? user.name : 'Visitante',
+            device: isMobile ? 'Mobile' : 'Desktop',
+            userId: user?.uid || null
+        }).catch(err => {
+            if (err.code !== 'permission-denied') {
+                console.debug("Presence sync restricted.");
+            }
+        });
+    };
+    updatePresence();
+    const interval = setInterval(updatePresence, 20000);
+    return () => clearInterval(interval);
+  }, [route, user]);
+
+  useEffect(() => {
+    const loadReviews = async () => {
+        try {
+            const snapshot = await db.collection('reviews').get();
+            const loadedReviews: Review[] = [];
+            snapshot.forEach(doc => { loadedReviews.push(doc.data() as Review); });
+            loadedReviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setReviews(loadedReviews);
+        } catch (error) { 
+            console.debug("Reviews access restricted."); 
+        }
+    };
+    loadReviews();
+
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        if (firebaseUser) {
+            try {
+                const docRef = db.collection("users").doc(firebaseUser.uid);
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const userData = docSnap.data() as User;
+                    setUser(userData);
+                    if (userData.wishlist) {
+                        setWishlist(userData.wishlist);
+                        localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
+                    }
+                } else {
+                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
+                    setUser(basicUser);
+                }
+
+                try {
+                    db.collection("orders")
+                        .where("userId", "==", firebaseUser.uid)
+                        .onSnapshot(snap => {
+                            const userOrders: Order[] = [];
+                            snap.forEach(doc => userOrders.push(doc.data() as Order));
+                            userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            setOrders(userOrders);
+                        }, (error) => {
+                            console.error("Erro ao sincronizar encomendas:", error);
+                        });
+                } catch(e) { console.error("Falha ao iniciar listener de encomendas:", e); }
+
+            } catch (err: any) { 
+                if (err.code === 'permission-denied') {
+                    console.warn("Firestore sync restricted. Using auth profile profile.");
+                    setUser({
+                        uid: firebaseUser.uid,
+                        name: firebaseUser.displayName || 'Cliente',
+                        email: firebaseUser.email || '',
+                        addresses: [],
+                        wishlist: []
+                    });
+                } else {
+                    console.error("Sync error", err);
+                }
+            }
+        } else {
+            setUser(null);
+            setOrders([]); 
+        }
+        setAuthLoading(false);
+    });
+
+    const handleHashChange = () => {
+      setRoute(window.location.hash || '#/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+        unsubscribe();
+        window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  const toggleWishlist = async (productId: number) => {
+    let newWishlist = wishlist.includes(productId) ? wishlist.filter(id => id !== productId) : [...wishlist, productId];
+    setWishlist(newWishlist);
+    localStorage.setItem('wishlist', JSON.stringify(newWishlist));
+    if (user?.uid) {
+        try { await db.collection("users").doc(user.uid).update({ wishlist: newWishlist }); }
+        catch (error) { console.debug("Wishlist update restricted."); }
+    }
+  };
+
+  const addToCart = (product: Product, variant?: ProductVariant) => {
+    const currentStock = getStockForProduct(product.id, variant?.name);
+    if (currentStock <= 0) {
+        alert("Desculpe, este produto acabou de esgotar!");
+        return;
+    }
+    const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
+
+    setCartItems(prev => {
+      const existing = prev.find(item => item.cartItemId === cartItemId);
+      if (existing) {
+        if (existing.quantity + 1 > currentStock) {
+            alert(`Apenas ${currentStock} unidades disponíveis.`);
+            return prev;
+        }
+        return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const removeFromCart = (cartItemId: string) => {
+    setCartItems(prev => prev.filter(item => item.cartItemId !== cartItemId));
+  };
+
+  const updateQuantity = (cartItemId: string, delta: number) => {
+    setCartItems(prev => prev.map(item => {
+      if (item.cartItemId === cartItemId) {
+        const newQty = item.quantity + delta;
+        if (delta > 0) {
+            const currentStock = getStockForProduct(item.id, item.selectedVariant);
+            if (newQty > currentStock) { 
+                alert(`Máximo: ${currentStock}`); 
+                return item; 
+            }
+        }
+        return { ...item, quantity: Math.max(1, newQty) };
+      }
+      return item;
+    }));
+  };
+
+  const handleUpdateUser = async (updatedUser: User) => {
+    setUser(updatedUser);
+    if (updatedUser.uid) {
+        try { await db.collection("users").doc(updatedUser.uid).set(updatedUser); }
+        catch (err) { console.error("Save error", err); }
+    }
+  };
+
+  const handleLogout = async () => {
+    try { await auth.signOut(); setUser(null); window.location.hash = '/'; }
+    catch (error) { console.error("Logout error", error); }
+  };
+
+  const handleCheckout = async (newOrder: Order) => {
       setOrders(prev => [newOrder, ...prev]);
       setCartItems([]); 
       try {
           await db.collection("orders").doc(newOrder.id).set(newOrder);
-          await db.collection('orders').doc(newOrder.id).set(newOrder);
           notifyNewOrder(newOrder, user ? user.name : 'Cliente Anónimo');
       } catch (e) { console.error("Erro checkout:", e); }
   };
@@ -84,7 +252,6 @@ const App: React.FC = () => {
   const handleAddReview = async (newReview: Review) => {
       setReviews(prev => [newReview, ...prev]);
       try { await db.collection("reviews").doc(newReview.id).set(newReview); }
-      try { await db.collection('reviews').doc(newReview.id).set(newReview); }
       catch (e) { console.error("Erro review:", e); }
   };
 
@@ -105,7 +272,16 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (route === '#dashboard') return isAdmin ? <Dashboard /> : null;
+    if (route === '#dashboard') {
+        if (authLoading) {
+            return (
+                <div className="flex-grow flex items-center justify-center">
+                    <Loader2 className="animate-spin text-primary" size={48} />
+                </div>
+            );
+        }
+        return <Dashboard user={user} isAdmin={isAdmin} />;
+    }
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
       return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} />;
@@ -156,20 +332,19 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center md:items-start">
                 <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
                 <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="MB Way">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Multibanco">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Visa">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
                     </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Mastercard">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
                     </div>
-                    {/* NOVO MÉTODO: COBRANÇA - LINK ATUALIZADO */}
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm" title="Pagamento na Entrega">
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
                         <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
                     </div>
                 </div>
