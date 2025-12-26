@@ -1,9 +1,9 @@
 
 export interface ProductVariant {
-  name: string;      // Ex: "33W", "Preto", "128GB"
-  price?: number;    // Preço específico desta variante (se for null, usa o preço base)
-  stock?: number;    // Stock específico (opcional para já)
-  image?: string;    // Imagem específica desta variante
+  name: string;
+  price?: number;
+  stock?: number;
+  image?: string;
 }
 
 export interface Product {
@@ -15,15 +15,15 @@ export interface Product {
   image: string;
   images?: string[];
   features: string[];
-  variants?: ProductVariant[]; // Lista de opções
-  variantLabel?: string;       // Texto da escolha, ex: "Escolha a Potência" ou "Cor"
-  comingSoon?: boolean;        // Indica que o produto ainda não está disponível em stock
+  variants?: ProductVariant[];
+  variantLabel?: string;
+  comingSoon?: boolean;
 }
 
 export interface CartItem extends Product {
   quantity: number;
-  selectedVariant?: string; // Nome da variante escolhida
-  cartItemId: string;       // ID único no carrinho
+  selectedVariant?: string;
+  cartItemId: string;
 }
 
 export interface ChatMessage {
@@ -110,6 +110,14 @@ export interface SaleRecord {
   unitPrice: number;
   shippingCost?: number;
   notes?: string;
+  unitIds?: string[]; // IDs das unidades específicas vendidas nesta transação
+}
+
+export interface ProductUnit {
+  id: string;         // Serial Number ou ID Interno (AS-XXXX)
+  status: 'AVAILABLE' | 'SOLD' | 'RETURNED' | 'DEFECTIVE';
+  soldToOrderId?: string;
+  addedAt: string;
 }
 
 export interface InventoryProduct {
@@ -127,6 +135,7 @@ export interface InventoryProduct {
   targetSalePrice?: number;
   salePrice: number;
   salesHistory?: SaleRecord[];
+  units?: ProductUnit[]; // Lista de unidades individuais
   cashbackValue: number;
   cashbackStatus: CashbackStatus;
   status: ProductStatus;
