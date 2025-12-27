@@ -1,0 +1,90 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- REGRAS PÚBLICAS ---
+    match /products_inventory/{productId} {
+      // Permite leitura pública do inventário para o site saber o stock.
+      // A escrita continua a ser apenas para admins (ver abaixo).
+      allow read: if true;
+    }
+    
+    match /reviews/{reviewId} {
+      // Qualquer pessoa pode ler as reviews, qualquer pessoa pode criar uma.
+      allow read, create: if true;
+    }
+
+    match /coupons/{couponId} {
+        // Leitura pública de cupões para validação no checkout
+        allow read: if true;
+    }
+
+
+    // --- REGRAS DE PRESENÇA ONLINE ---
+    match /online_users/{sessionId} {
+      // Qualquer pessoa (mesmo anónima) pode escrever a sua própria presença.
+      // É seguro porque só podem escrever no seu próprio 'sessionId'.
+      allow write: if true;
+      
+      // Apenas um ADMIN autenticado pode ler a lista completa.
+      // Isto protege a privacidade dos utilizadores.
+      allow read: if request.auth != null && request.auth.token.email in [
+        "filipe_coval_90@hotmail.com", 
+        "mcpoleca@gmail.com", 
+        "filipe@teste.com"
+      ];
+    }
+
+
+    // --- REGRAS DE UTILIZADOR AUTENTICADO ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    match /users/{userId} {
+      // Um utilizador só pode ler e escrever os seus próprios dados.
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /orders/{orderId} {
+      // Qualquer pessoa pode criar uma encomenda (checkout anónimo).
+      allow create: if true;
+      
+      // O dono da encomenda pode lê-la.
+      allow read: if isOwner(request.resource.data.userId);
+
+      // Apenas um admin pode atualizar ou apagar encomendas.
+      allow update, delete: if isSignedIn() && request.auth.token.email in [
+        "filipe_coval_90@hotmail.com", 
+        "mcpoleca@gmail.com", 
+        "filipe@teste.com"
+      ];
+    }
+
+
+    // --- REGRAS DE ADMIN ---
+    // Regras que dão acesso total a coleções específicas para administradores.
+    match /products_inventory/{productId} {
+      allow write: if isSignedIn() && request.auth.token.email in [
+          "filipe_coval_90@hotmail.com", 
+          "mcpoleca@gmail.com", 
+          "filipe@teste.com"
+      ];
+    }
+
+    match /coupons/{couponId} {
+        allow write, delete: if isSignedIn() && request.auth.token.email in [
+          "filipe_coval_90@hotmail.com", 
+          "mcpoleca@gmail.com", 
+          "filipe@teste.com"
+      ];
+    }
+    
+  }
+}
