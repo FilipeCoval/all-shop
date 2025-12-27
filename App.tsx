@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -88,9 +89,7 @@ const App: React.FC = () => {
             device: isMobile ? 'Mobile' : 'Desktop',
             userId: user?.uid || null
         }).catch(err => {
-            if (err.code !== 'permission-denied') {
-                console.debug("Presence sync restricted.");
-            }
+            console.debug("Presence sync failed:", err);
         });
     };
     updatePresence();
