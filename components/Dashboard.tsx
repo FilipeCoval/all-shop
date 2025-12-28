@@ -9,7 +9,7 @@ import {
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
-import { PRODUCTS, LOYALTY_TIERS } from '../constants';
+import { PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 
@@ -199,6 +199,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [scannerMode, setScannerMode] = useState<'search' | 'add_unit'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
+  
+  const [stockAlerts, setStockAlerts] = useState<any[]>([]);
+
+  const [notificationModalData, setNotificationModalData] = useState<{
+    productName: string;
+    subject: string;
+    body: string;
+    bcc: string;
+    alertsToDelete: any[];
+  } | null>(null);
+  const [copySuccess, setCopySuccess] = useState('');
 
   const [formData, setFormData] = useState({
     name: '', category: '', publicProductId: '' as string, variant: '',
@@ -253,8 +264,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         setOnlineUsers(activeUsers);
     }, (err: any) => {
         if (err.code === 'permission-denied') {
-            // This is expected and safe to ignore, as only admins should have read access.
-            // Silently failing prevents console errors for admins during initial auth sync.
             console.debug("Permission denied for online_users listener, functionality will be limited.");
             setOnlineUsers([]);
         } else {
@@ -286,6 +295,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   }, [activeTab, isAdmin]);
   
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsubscribe = db.collection('stock_alerts').onSnapshot(snapshot => {
+        const alerts: any[] = [];
+        snapshot.forEach(doc => alerts.push({ id: doc.id, ...doc.data() }));
+        setStockAlerts(alerts);
+    }, (err) => console.error("Stock alerts listener failed:", err));
+    return () => unsubscribe();
+  }, [isAdmin]);
+
   const handleAddUnit = (code: string) => {
       if (modalUnits.some(u => u.id === code)) {
           alert("Este código já foi adicionado.");
@@ -299,6 +318,56 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setModalUnits(prev => [...prev, newUnit]);
   };
   const handleRemoveUnit = (id: string) => setModalUnits(prev => prev.filter(u => u.id !== id));
+
+  const handleNotifySubscribers = (productId: number, productName: string, variantName?: string) => {
+    const alertsForProduct = stockAlerts.filter(a => 
+        a.productId === productId && 
+        (variantName ? a.variantName === variantName : !a.variantName)
+    );
+
+    if (alertsForProduct.length === 0) {
+        alert("Nenhum cliente para notificar.");
+        return;
+    }
+
+    const emails = alertsForProduct.map(a => a.email);
+    const bccEmails = emails.join(', ');
+
+    const subject = `Temos novidades! O produto ${productName} está de volta!`;
+    const body = `Olá!\n\nBoas notícias! O produto "${productName}${variantName ? ` (${variantName})` : ''}" pelo qual mostrou interesse está novamente disponível na nossa loja.\n\nPode encontrá-lo aqui: ${window.location.origin}/#product/${productId}\n\nSeja rápido, o stock é limitado!\n\nCumprimentos,\nA equipa ${STORE_NAME}`;
+    
+    setNotificationModalData({
+        productName: `${productName}${variantName ? ` (${variantName})` : ''}`,
+        subject,
+        body,
+        bcc: bccEmails,
+        alertsToDelete: alertsForProduct
+    });
+  };
+  
+  const handleClearSentAlerts = async () => {
+    if (!notificationModalData) return;
+    try {
+        const batch = db.batch();
+        notificationModalData.alertsToDelete.forEach(alert => {
+            batch.delete(db.collection('stock_alerts').doc(alert.id));
+        });
+        await batch.commit();
+        console.log("Alertas de stock limpos com sucesso.");
+    } catch (error) {
+        console.error("Erro ao apagar alertas de stock:", error);
+        alert("Ocorreu um erro ao limpar os alertas. Poderá ter de os remover manualmente.");
+    } finally {
+        setNotificationModalData(null);
+    }
+  };
+
+  const handleCopyToClipboard = (text: string, type: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+        setCopySuccess(type);
+        setTimeout(() => setCopySuccess(''), 2000);
+    });
+  };
 
   const handleAddCoupon = async (e: React.FormEvent) => { e.preventDefault(); if (!newCoupon.code) return; try { await db.collection('coupons').add({ ...newCoupon, code: newCoupon.code.toUpperCase().trim() }); setNewCoupon({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 }); alert("Cupão criado!"); } catch (err) { console.error(err); alert("Erro ao criar cupão"); } };
   const handleToggleCoupon = async (coupon: Coupon) => { if (!coupon.id) return; try { await db.collection('coupons').doc(coupon.id).update({ isActive: !coupon.isActive }); } catch(err) { console.error(err); } };
@@ -340,6 +409,49 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
       
       {showToast && <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right"><div className="bg-white border-l-4 border-green-500 shadow-2xl rounded-r-lg p-4 flex items-start gap-3 w-80"><div className="text-green-500 bg-green-50 p-2 rounded-full"><DollarSign size={24} /></div><div className="flex-1"><h4 className="font-bold text-gray-900">Nova Venda Online!</h4><p className="text-sm text-gray-600 mt-1">Pedido {showToast.id.startsWith('#') ? '' : '#'}{showToast.id.toUpperCase()}</p><p className="text-lg font-bold text-green-600 mt-1">{formatCurrency(showToast.total)}</p></div><button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button></div></div>}
       {isScannerOpen && <BarcodeScanner onCodeSubmit={(code) => { if(scannerMode === 'search') setSearchTerm(code); else handleAddUnit(code); setIsScannerOpen(false); }} onClose={() => setIsScannerOpen(false)} />}
+      {notificationModalData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div>
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Bell size={20} className="text-blue-500" /> Notificar Clientes</h2>
+                    <p className="text-sm text-gray-500 mt-1">A notificar {notificationModalData.alertsToDelete.length} cliente(s) sobre: <strong>{notificationModalData.productName}</strong></p>
+                </div>
+                <button onClick={() => setNotificationModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
+            </div>
+            <div className="p-6 space-y-6 overflow-y-auto">
+                <div>
+                    <div className="flex items-center gap-3 mb-2"><div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">1</div><h3 className="font-bold text-gray-800">Copie os Emails (para BCC/CCO)</h3></div>
+                    <textarea readOnly value={notificationModalData.bcc} className="w-full h-24 p-2 border border-gray-200 rounded-lg bg-gray-50 text-xs font-mono" />
+                    <button onClick={() => handleCopyToClipboard(notificationModalData.bcc, 'bcc')} className="mt-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                        {copySuccess === 'bcc' ? <CheckCircle size={16} className="text-green-600" /> : <Copy size={16} />}
+                        {copySuccess === 'bcc' ? 'Emails Copiados!' : 'Copiar Emails'}
+                    </button>
+                </div>
+                <div>
+                    <div className="flex items-center gap-3 mb-2"><div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">2</div><h3 className="font-bold text-gray-800">Copie a Mensagem (Opcional)</h3></div>
+                    <textarea readOnly value={notificationModalData.body} className="w-full h-32 p-2 border border-gray-200 rounded-lg bg-gray-50 text-xs" />
+                    <button onClick={() => handleCopyToClipboard(notificationModalData.body, 'body')} className="mt-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                        {copySuccess === 'body' ? <CheckCircle size={16} className="text-green-600" /> : <Copy size={16} />}
+                        {copySuccess === 'body' ? 'Mensagem Copiada!' : 'Copiar Mensagem'}
+                    </button>
+                </div>
+                 <div>
+                    <div className="flex items-center gap-3 mb-2"><div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">3</div><h3 className="font-bold text-gray-800">Envie o Email</h3></div>
+                    <a href={`mailto:?subject=${encodeURIComponent(notificationModalData.subject)}`} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                      <Send size={18} /> Abrir Programa de Email
+                    </a>
+                    <p className="text-xs text-gray-500 mt-2 text-center">Cole os emails no campo <strong className="text-gray-800">BCC/CCO</strong> para proteger a privacidade dos clientes.</p>
+                </div>
+            </div>
+            <div className="p-4 bg-gray-50 border-t">
+                 <button onClick={handleClearSentAlerts} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                    <CheckCircle size={18} /> Já Enviei, Limpar Alertas
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="container mx-auto px-4 flex flex-col md:flex-row md:h-20 items-center justify-between gap-4 md:gap-0 py-4 md:py-0">
@@ -375,8 +487,8 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
             <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in"><div className="flex items-center gap-3 mb-4"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div><div><h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3><p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p></div></div><div className="flex flex-col sm:flex-row gap-2"><input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles." className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onKeyDown={(e) => e.key === 'Enter' && handleAskAi()} /><button onClick={handleAskAi} disabled={isAiLoading || !aiQuery.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">{isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}</button></div>{aiResponse && <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">{aiResponse}</div>}</div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {countInStock}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {countSold}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div><button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button><button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
             <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda Alvo</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
-            <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0;
-            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
+            <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
+            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
             </table></div></div></>}
         {activeTab === 'orders' && <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in"><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação (7 Dias)</h3><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button><button onClick={() => handleDeleteOrder(order.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded" title="Apagar Duplicado / Remover Encomenda"><Trash2 size={16} /></button></td></tr>)}</tbody></table></div></div></div>}
