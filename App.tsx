@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -16,8 +17,8 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, PRODUCTS } from './constants';
-import { Product, CartItem, User, Order, Review, ProductVariant } from './types';
+import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS } from './constants';
+import { Product, CartItem, User, Order, Review, ProductVariant, UserTier } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { notifyNewOrder } from './services/telegramNotifier';
@@ -113,11 +114,22 @@ const App: React.FC = () => {
     };
     loadReviews();
 
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+    const handleHashChange = () => {
+      setRoute(window.location.hash || '#/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    
+    let userUnsubscribe = () => {};
+    let ordersUnsubscribe = () => {};
+
+    const authUnsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+        userUnsubscribe();
+        ordersUnsubscribe();
+
         if (firebaseUser) {
-            try {
-                const docRef = db.collection("users").doc(firebaseUser.uid);
-                const docSnap = await docRef.get();
+            const userDocRef = db.collection("users").doc(firebaseUser.uid);
+            userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
                 if (docSnap.exists) {
                     const userData = docSnap.data() as User;
                     setUser(userData);
@@ -129,48 +141,35 @@ const App: React.FC = () => {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
                     setUser(basicUser);
                 }
+                setAuthLoading(false);
+            }, (error) => {
+                console.error("User data listener error:", error);
+                const fallbackUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
+                setUser(fallbackUser);
+                setAuthLoading(false);
+            });
 
-                try {
-                    db.collection("orders")
-                        .where("userId", "==", firebaseUser.uid)
-                        .onSnapshot(snap => {
-                            const userOrders: Order[] = [];
-                            snap.forEach(doc => userOrders.push(doc.data() as Order));
-                            userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                            setOrders(userOrders);
-                        }, (error) => {
-                            console.error("Erro ao sincronizar encomendas:", error);
-                        });
-                } catch(e) { console.error("Falha ao iniciar listener de encomendas:", e); }
-
-            } catch (err: any) { 
-                if (err.code === 'permission-denied') {
-                    console.warn("Firestore sync restricted. Using auth profile profile.");
-                    setUser({
-                        uid: firebaseUser.uid,
-                        name: firebaseUser.displayName || 'Cliente',
-                        email: firebaseUser.email || '',
-                        addresses: [],
-                        wishlist: []
-                    });
-                } else {
-                    console.error("Sync error", err);
-                }
-            }
+            ordersUnsubscribe = db.collection("orders")
+                .where("userId", "==", firebaseUser.uid)
+                .onSnapshot((snap) => {
+                    const userOrders: Order[] = [];
+                    snap.forEach(doc => userOrders.push(doc.data() as Order));
+                    userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setOrders(userOrders);
+                }, (error) => {
+                    console.error("Erro ao sincronizar encomendas:", error);
+                });
         } else {
             setUser(null);
-            setOrders([]); 
+            setOrders([]);
+            setAuthLoading(false);
         }
-        setAuthLoading(false);
     });
 
-    const handleHashChange = () => {
-      setRoute(window.location.hash || '#/');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-    window.addEventListener('hashchange', handleHashChange);
     return () => {
-        unsubscribe();
+        authUnsubscribe();
+        userUnsubscribe();
+        ordersUnsubscribe();
         window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
@@ -247,6 +246,32 @@ const App: React.FC = () => {
       try {
           await db.collection("orders").doc(newOrder.id).set(newOrder);
           notifyNewOrder(newOrder, user ? user.name : 'Cliente Anónimo');
+          
+          if (user?.uid) {
+            const userRef = db.collection("users").doc(user.uid);
+            await db.runTransaction(async (transaction) => {
+              const userDoc = await transaction.get(userRef);
+              if (!userDoc.exists) return;
+              
+              const userData = userDoc.data() as User;
+              const newTotalSpent = (userData.totalSpent || 0) + newOrder.total;
+              
+              let newTier: UserTier = userData.tier || 'Bronze';
+              if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) {
+                newTier = 'Ouro';
+              } else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) {
+                newTier = 'Prata';
+              }
+              
+              transaction.update(userRef, {
+                totalSpent: newTotalSpent,
+                tier: newTier
+              });
+            }).catch(e => {
+              console.error("Falha na transação de total gasto: ", e);
+            });
+          }
+
       } catch (e) { console.error("Erro checkout:", e); }
   };
 
