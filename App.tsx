@@ -16,7 +16,7 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { PRODUCTS, ADMIN_EMAILS, STORE_NAME } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
@@ -45,6 +45,8 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
+  
+  // Hooks
   const { getStockForProduct } = useStock();
 
   const isAdmin = useMemo(() => {
@@ -271,14 +273,15 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    if (authLoading) {
+        return (
+            <div className="flex-grow flex items-center justify-center">
+                <Loader2 className="animate-spin text-primary" size={48} />
+            </div>
+        );
+    }
+      
     if (route === '#dashboard') {
-        if (authLoading) {
-            return (
-                <div className="flex-grow flex items-center justify-center">
-                    <Loader2 className="animate-spin text-primary" size={48} />
-                </div>
-            );
-        }
         return <Dashboard user={user} isAdmin={isAdmin} />;
     }
     if (route === '#account') {
