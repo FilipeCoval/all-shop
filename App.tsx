@@ -123,11 +123,42 @@ const App: React.FC = () => {
     let userUnsubscribe = () => {};
     let ordersUnsubscribe = () => {};
 
-    const authUnsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+    const authUnsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         userUnsubscribe();
         ordersUnsubscribe();
 
         if (firebaseUser) {
+            // --- SINCRONIZAÇÃO DE HISTÓRICO DE COMPRAS ---
+            try {
+                const ordersQuery = db.collection("orders")
+                    .where("userId", "==", firebaseUser.uid)
+                    .where("status", "!=", "Cancelado");
+
+                const ordersSnapshot = await ordersQuery.get();
+                const historicalTotalSpent = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data() as Order).total, 0);
+                
+                const userDocRef = db.collection("users").doc(firebaseUser.uid);
+                const userDoc = await userDocRef.get();
+
+                if (userDoc.exists) {
+                    const userData = userDoc.data() as User;
+                    if ((userData.totalSpent || 0) !== historicalTotalSpent) {
+                        let newTier: UserTier = 'Bronze';
+                        if (historicalTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
+                        else if (historicalTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
+                        
+                        await userDocRef.update({
+                            totalSpent: historicalTotalSpent,
+                            tier: newTier
+                        });
+                        console.log(`Sincronizado: ${firebaseUser.uid}, total: ${historicalTotalSpent}`);
+                    }
+                }
+            } catch (error) {
+                console.error("Erro na sincronização do histórico:", error);
+            }
+            // --- FIM DA SINCRONIZAÇÃO ---
+
             const userDocRef = db.collection("users").doc(firebaseUser.uid);
             userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
                 if (docSnap.exists) {
@@ -138,7 +169,7 @@ const App: React.FC = () => {
                         localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
                     }
                 } else {
-                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [] };
+                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze' };
                     setUser(basicUser);
                 }
                 setAuthLoading(false);
