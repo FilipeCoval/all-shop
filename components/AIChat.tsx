@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, Loader2 } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { sendMessageToGemini } from '../services/geminiService';
+import { STORE_NAME } from '../constants';
 
 const AIChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,7 +10,7 @@ const AIChat: React.FC = () => {
     {
       id: 'welcome',
       role: 'model',
-      text: 'Olá! Sou o assistente virtual da AllShop. Como posso ajuda-lo a encontrar o produto ideal ou tirar dúvidas?',
+      text: `Olá! Sou o assistente virtual da ${STORE_NAME}. Posso ajudar a encontrar o produto ideal ou tirar dúvidas?`,
       timestamp: new Date()
     }
   ]);
