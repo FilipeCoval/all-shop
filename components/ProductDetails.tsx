@@ -60,7 +60,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const currentPrice = selectedVariant?.price || product.price;
   const currentStock = getStock(product.id, selectedVariantName);
   
-  const isOutOfStock = currentStock <= 0 && currentStock !== 999 && !product.comingSoon;
+  const isOutOfStock = currentStock <= 0 && currentStock !== 999;
+  const isUnavailable = isOutOfStock || !!product.comingSoon;
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
 
@@ -74,7 +75,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleAddToCart = () => {
-      if (product.comingSoon) return;
+      if (isUnavailable) return;
       if (selectedVariant) onAddToCart(product, selectedVariant);
       else onAddToCart(product);
   };
@@ -138,9 +139,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                 src={selectedImage} 
                 alt={product.name} 
                 referrerPolicy="no-referrer"
-                className={`w-full h-full object-contain p-4 transition-all duration-300 ${isOutOfStock ? 'grayscale opacity-50' : ''}`} 
+                className={`w-full h-full object-contain p-4 transition-all duration-300 ${isUnavailable ? 'grayscale opacity-50' : ''}`} 
             />
-            {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform -rotate-12 border-4 border-white">ESGOTADO</span></div>}
+            {isOutOfStock && !product.comingSoon && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform -rotate-12 border-4 border-white">ESGOTADO</span></div>}
             {product.comingSoon && <div className="absolute inset-0 flex items-center justify-center bg-purple-900/10"><span className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform rotate-3 border-4 border-white">EM BREVE</span></div>}
             <button onClick={() => onToggleWishlist(product.id)} className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur rounded-full shadow-sm hover:scale-110 transition-transform text-gray-400 hover:text-red-500"><Heart size={24} className={isFavorite ? "fill-red-500 text-red-500" : ""} /></button>
           </div>
@@ -164,7 +165,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
            <div className="flex items-end gap-3 mb-6">
                <span className="text-4xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}</span>
-               {isOutOfStock && <span className="text-red-500 font-bold mb-2">Indisponível</span>}
+               {isOutOfStock && !product.comingSoon && <span className="text-red-500 font-bold mb-2">Indisponível</span>}
                {product.comingSoon && <span className="text-purple-600 font-bold mb-2 uppercase tracking-wide">Pré-Lançamento</span>}
            </div>
 
@@ -180,11 +181,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
            )}
 
            <div className="mb-8">
-               {product.comingSoon ? (
-                   <div className="flex items-center gap-2 text-purple-700 bg-purple-50 px-4 py-3 rounded-lg border border-purple-100">
-                       <CalendarClock size={20} /><span className="font-bold">Em Breve no Stock</span>
-                   </div>
-               ) : isOutOfStock ? (
+               {isUnavailable ? (
                     <div className="bg-yellow-50 p-6 rounded-2xl border border-yellow-200 animate-fade-in">
                         {alertStatus === 'success' ? (
                             <div className="text-center">
@@ -194,8 +191,13 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                             </div>
                         ) : (
                             <>
-                                <h4 className="font-bold text-yellow-900 text-lg mb-2 flex items-center gap-2"><Mail size={20}/> Avise-me quando chegar!</h4>
-                                <p className="text-sm text-yellow-800 mb-4">Deixe o seu email para ser notificado assim que este produto estiver disponível.</p>
+                                <h4 className="font-bold text-yellow-900 text-lg mb-2 flex items-center gap-2">
+                                    <Mail size={20}/> 
+                                    {product.comingSoon ? 'Seja o primeiro a saber!' : 'Avise-me quando chegar!'}
+                                </h4>
+                                <p className="text-sm text-yellow-800 mb-4">
+                                    {product.comingSoon ? 'Deixe o seu email para ser notificado assim que este produto for lançado.' : 'Deixe o seu email para ser notificado assim que este produto estiver disponível.'}
+                                </p>
                                 <form onSubmit={handleStockAlertSubmit} className="flex flex-col sm:flex-row gap-2">
                                     <input 
                                         type="email" 
@@ -225,13 +227,18 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
            </div>
 
            <div className="flex gap-4 mb-8">
-               {product.comingSoon ? (
-                   <button className="flex-1 py-4 rounded-xl font-bold text-lg bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 flex items-center justify-center gap-2">
-                       <CalendarClock size={24} /> Brevemente Disponível
-                   </button>
-               ) : (
-                   <button onClick={handleAddToCart} disabled={isOutOfStock} className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-blue-600 text-white'}`}><ShoppingCart size={24} /> {isOutOfStock ? 'Indisponível' : 'Comprar Agora'}</button>
-               )}
+               <button 
+                onClick={handleAddToCart} 
+                disabled={isUnavailable} 
+                className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 
+                    ${isUnavailable 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                        : 'bg-primary hover:bg-blue-600 text-white'
+                    }`}
+               >
+                   <ShoppingCart size={24} /> 
+                   {isUnavailable ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') : 'Comprar Agora'}
+               </button>
            </div>
 
            <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3">
