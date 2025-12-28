@@ -1,6 +1,6 @@
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X } from 'lucide-react';
-import { STORE_NAME, LOGO_URL } from '../constants';
+import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X, Award } from 'lucide-react';
+import { STORE_NAME, LOGO_URL, LOYALTY_TIERS } from '../constants';
 import { User } from '../types';
 
 interface HeaderProps {
@@ -14,6 +14,44 @@ interface HeaderProps {
   onSearchChange: (term: string) => void;
   onResetHome: () => void;
 }
+
+const LoyaltyProgressBar: React.FC<{ user: User }> = ({ user }) => {
+    const currentTotalSpent = user.totalSpent || 0;
+    const currentTier = user.tier || 'Bronze';
+    
+    let nextTierLabel: string | null = null;
+    let progress = 0;
+    let remaining = 0;
+
+    if (currentTier === 'Bronze') {
+        const limit = LOYALTY_TIERS.SILVER.threshold;
+        nextTierLabel = LOYALTY_TIERS.SILVER.label;
+        progress = (currentTotalSpent / limit) * 100;
+        remaining = limit - currentTotalSpent;
+    } else if (currentTier === 'Prata') {
+        const lowerLimit = LOYALTY_TIERS.SILVER.threshold;
+        const upperLimit = LOYALTY_TIERS.GOLD.threshold;
+        nextTierLabel = LOYALTY_TIERS.GOLD.label;
+        progress = ((currentTotalSpent - lowerLimit) / (upperLimit - lowerLimit)) * 100;
+        remaining = upperLimit - currentTotalSpent;
+    } else { // Ouro
+        progress = 100;
+    }
+
+    if(remaining <= 0) return null;
+
+    return (
+        <div className="w-full text-center">
+            <p className="text-xs text-gray-500 mb-1 px-4">
+                Faltam <strong>{remaining.toFixed(2)}€</strong> para o nível <strong className="text-primary">{nextTierLabel}</strong>!
+            </p>
+            <div className="w-full bg-gray-200 h-1 rounded-full overflow-hidden">
+                <div className="bg-primary h-1" style={{ width: `${Math.min(100, progress)}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
 
 const Header: React.FC<HeaderProps> = ({ 
   cartCount, 
@@ -132,7 +170,10 @@ const Header: React.FC<HeaderProps> = ({
                             <span className="text-base max-w-[100px] truncate hidden lg:block">{getFirstName()}</span>
                         </button>
                         {/* Dropdown Menu */}
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 p-1 z-50">
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform translate-y-2 group-hover:translate-y-0 p-1 z-50">
+                            <div className="p-3 border-b border-gray-100">
+                                <LoyaltyProgressBar user={user} />
+                            </div>
                             <a href="#account" onClick={handleNav('account')} className="block px-4 py-2 hover:bg-gray-50 rounded-lg text-sm text-gray-700 font-medium">Minha Conta</a>
                             <button onClick={onLogout} className="w-full text-left px-4 py-2 hover:bg-red-50 rounded-lg text-sm text-red-600 flex items-center gap-2 font-medium">
                                 <LogOut size={14} /> Sair
