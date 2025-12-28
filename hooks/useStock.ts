@@ -47,11 +47,13 @@ export const useStock = () => {
             const requestedVariant = variantName.trim().toLowerCase();
             return inventoryVariant === requestedVariant;
         }
-        return true;
+        // Se nenhuma variante for pedida, corresponde apenas a lotes de inventário sem variante definida.
+        return !p.variant;
     });
     
-    // Se o produto não consta no inventário mas está no catálogo fixo, devolvemos 999
-    if (relevantBatches.length === 0) return 999; 
+    // Se o produto não consta no inventário (não está a ser rastreado),
+    // consideramos o stock como 0 para mostrar o alerta "Avise-me" e evitar vendas acidentais.
+    if (relevantBatches.length === 0) return 0; 
 
     const totalStock = relevantBatches.reduce((acc, batch) => {
       const remaining = batch.quantityBought - batch.quantitySold;
