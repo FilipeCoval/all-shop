@@ -1,9 +1,8 @@
 
-
 import React, { useState } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon } from '../types';
 import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight } from 'lucide-react';
-import { STORE_NAME, LOGO_URL, PRODUCTS, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
+import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS, PRODUCTS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
