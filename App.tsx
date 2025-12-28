@@ -18,7 +18,7 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS } from './constants';
-import { Product, CartItem, User, Order, Review, ProductVariant, UserTier } from './types';
+import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { notifyNewOrder } from './services/telegramNotifier';
@@ -128,36 +128,69 @@ const App: React.FC = () => {
         ordersUnsubscribe();
 
         if (firebaseUser) {
-            // --- SINCRONIZAÇÃO DE HISTÓRICO DE COMPRAS ---
             try {
-                const ordersQuery = db.collection("orders")
-                    .where("userId", "==", firebaseUser.uid)
-                    .where("status", "!=", "Cancelado");
-
-                const ordersSnapshot = await ordersQuery.get();
-                const historicalTotalSpent = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data() as Order).total, 0);
-                
                 const userDocRef = db.collection("users").doc(firebaseUser.uid);
-                const userDoc = await userDocRef.get();
+                const ordersQuery = db.collection("orders").where("userId", "==", firebaseUser.uid);
+
+                const [ordersSnapshot, userDoc] = await Promise.all([
+                    ordersQuery.get(),
+                    userDocRef.get()
+                ]);
 
                 if (userDoc.exists) {
+                    const allUserOrders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+                    const nonCancelledOrders = allUserOrders.filter(o => o.status !== 'Cancelado');
                     const userData = userDoc.data() as User;
-                    if ((userData.totalSpent || 0) !== historicalTotalSpent) {
-                        let newTier: UserTier = 'Bronze';
-                        if (historicalTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
-                        else if (historicalTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
+                    
+                    const historicalTotalSpent = nonCancelledOrders.reduce((sum, doc) => sum + doc.total, 0);
+
+                    const ordersToAwardPoints = allUserOrders.filter(o => o.status === 'Entregue' && !o.pointsAwarded);
+                    
+                    const missingPoints = ordersToAwardPoints.reduce((sum, o) => {
+                        return sum + Math.floor(o.total * LOYALTY_TIERS.BRONZE.multiplier);
+                    }, 0);
+
+                    let correctTier: UserTier = 'Bronze';
+                    if (historicalTotalSpent >= LOYALTY_TIERS.GOLD.threshold) correctTier = 'Ouro';
+                    else if (historicalTotalSpent >= LOYALTY_TIERS.SILVER.threshold) correctTier = 'Prata';
+                    
+                    const needsUpdate = (userData.totalSpent || 0) !== historicalTotalSpent || (userData.tier || 'Bronze') !== correctTier || missingPoints > 0;
+
+                    if (needsUpdate) {
+                        const batch = db.batch();
+                        const userUpdateData: any = {};
+
+                        if ((userData.totalSpent || 0) !== historicalTotalSpent) userUpdateData.totalSpent = historicalTotalSpent;
+                        if ((userData.tier || 'Bronze') !== correctTier) userUpdateData.tier = correctTier;
                         
-                        await userDocRef.update({
-                            totalSpent: historicalTotalSpent,
-                            tier: newTier
+                        if (missingPoints > 0) {
+                            userUpdateData.loyaltyPoints = (userData.loyaltyPoints || 0) + missingPoints;
+                            const newHistoryItems: PointHistory[] = ordersToAwardPoints.map(o => ({
+                                id: `sync-${o.id}`,
+                                date: new Date().toISOString(),
+                                amount: Math.floor(o.total * LOYALTY_TIERS.BRONZE.multiplier),
+                                reason: `Compra ${o.id} (Sinc.)`,
+                                orderId: o.id
+                            }));
+                            userUpdateData.pointsHistory = [...newHistoryItems, ...(userData.pointsHistory || [])];
+                        }
+
+                        if (Object.keys(userUpdateData).length > 0) {
+                            batch.update(userDocRef, userUpdateData);
+                        }
+                        
+                        ordersToAwardPoints.forEach(order => {
+                            const orderRef = db.collection('orders').doc(order.id);
+                            batch.update(orderRef, { pointsAwarded: true });
                         });
-                        console.log(`Sincronizado: ${firebaseUser.uid}, total: ${historicalTotalSpent}`);
+
+                        await batch.commit();
+                        console.log(`Sincronização de pontos e gastos completa para ${firebaseUser.uid}.`);
                     }
                 }
             } catch (error) {
-                console.error("Erro na sincronização do histórico:", error);
+                console.error("Erro na sincronização de histórico e pontos:", error);
             }
-            // --- FIM DA SINCRONIZAÇÃO ---
 
             const userDocRef = db.collection("users").doc(firebaseUser.uid);
             userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
@@ -169,7 +202,7 @@ const App: React.FC = () => {
                         localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
                     }
                 } else {
-                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze' };
+                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0 };
                     setUser(basicUser);
                 }
                 setAuthLoading(false);
