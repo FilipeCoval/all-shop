@@ -1,13 +1,13 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { 
     ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
     Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
-    Eye, Info, X, CalendarClock, Copy 
+    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 import { PRODUCTS, STORE_NAME } from '../constants';
+import { db } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
   product: Product;
@@ -21,7 +21,7 @@ interface ProductDetailsProps {
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
-  product, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist 
+  product, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist
 }) => {
   const [selectedImage, setSelectedImage] = useState(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(
@@ -29,6 +29,11 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   );
   const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared'>('idle');
   
+  // State para Alertas de Stock
+  const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
+  const [alertStatus, setAlertStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+
+
   useEffect(() => {
     setSelectedImage(product.image);
     if (product.variants && product.variants.length > 0) {
@@ -36,8 +41,10 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     } else {
         setSelectedVariantName(undefined);
     }
+    setAlertStatus('idle');
+    setAlertEmail(currentUser?.email || '');
     window.scrollTo(0, 0);
-  }, [product]);
+  }, [product, currentUser]);
 
   const uniqueImages = useMemo(() => {
     const imgs = new Set<string>();
@@ -101,6 +108,26 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     setTimeout(() => setShareFeedback('idle'), 3000);
   };
 
+  const handleStockAlertSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!alertEmail) return;
+      setAlertStatus('loading');
+      try {
+          await db.collection('stock_alerts').add({
+              email: alertEmail,
+              productId: product.id,
+              productName: product.name,
+              variantName: selectedVariantName || null,
+              date: new Date().toISOString()
+          });
+          setAlertStatus('success');
+      } catch (error) {
+          console.error("Erro ao subscrever alerta de stock:", error);
+          setAlertStatus('idle'); // Permite tentar de novo
+      }
+  };
+
+
   return (
     <div className="container mx-auto px-4 py-8 animate-fade-in pb-32 md:pb-8">
       <button onClick={handleBack} className="flex items-center gap-2 text-gray-500 hover:text-primary mb-8 font-medium transition-colors"><ArrowLeft size={20} /> Voltar à Loja</button>
@@ -158,7 +185,37 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                        <CalendarClock size={20} /><span className="font-bold">Em Breve no Stock</span>
                    </div>
                ) : isOutOfStock ? (
-                   <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-100"><XCircle size={20} /><span className="font-bold">Esgotado Temporariamente</span></div>
+                    <div className="bg-yellow-50 p-6 rounded-2xl border border-yellow-200 animate-fade-in">
+                        {alertStatus === 'success' ? (
+                            <div className="text-center">
+                                <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+                                <h4 className="font-bold text-green-800 text-lg">Inscrição confirmada!</h4>
+                                <p className="text-sm text-green-700">Será notificado em <span className="font-semibold">{alertEmail}</span> assim que houver stock.</p>
+                            </div>
+                        ) : (
+                            <>
+                                <h4 className="font-bold text-yellow-900 text-lg mb-2 flex items-center gap-2"><Mail size={20}/> Avise-me quando chegar!</h4>
+                                <p className="text-sm text-yellow-800 mb-4">Deixe o seu email para ser notificado assim que este produto estiver disponível.</p>
+                                <form onSubmit={handleStockAlertSubmit} className="flex flex-col sm:flex-row gap-2">
+                                    <input 
+                                        type="email" 
+                                        required 
+                                        value={alertEmail}
+                                        onChange={(e) => setAlertEmail(e.target.value)}
+                                        placeholder="O seu melhor email" 
+                                        className="flex-1 px-4 py-2 rounded-lg border border-yellow-300 bg-white focus:ring-2 focus:ring-yellow-500 outline-none"
+                                    />
+                                    <button 
+                                        type="submit"
+                                        disabled={alertStatus === 'loading'}
+                                        className="bg-yellow-600 hover:bg-yellow-700 text-white px-5 py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
+                                    >
+                                        {alertStatus === 'loading' ? <Loader2 className="animate-spin" size={16}/> : 'Notificar'}
+                                    </button>
+                                </form>
+                            </>
+                        )}
+                    </div>
                ) : (
                    <div className="flex items-center gap-2 text-green-700 bg-green-50 px-4 py-3 rounded-lg border border-green-100 w-fit">
                        <Check size={20} /><span className="font-bold">Em Stock</span>
