@@ -39,7 +39,7 @@ export const LOYALTY_REWARDS = [
  * Proxy de Imagens Ultra-Compatível
  * Necessário para contornar o bloqueio de hotlinking (403) de sites como AliExpress e Temu.
  */
-const proxyImg = (url: string) => {
+export const proxyImg = (url: string) => {
     if (!url) return LOGO_URL;
     if (url.includes('imgur.com') || url.includes('nSiZKBf')) return url;
     return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
