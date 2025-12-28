@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, Lock, ChevronLeft, Truck, Coins, Landmark, Banknote, AlertCircle, Copy } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -23,25 +23,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [isCopied, setIsCopied] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
-  const [showManualMessage, setShowManualMessage] = useState<string | null>(null);
   
-  const lastOrderRef = useRef<{ items: string, total: number, time: number } | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
-
-  const [addressFields, setAddressFields] = useState({
-    street: '', number: '', zip: '', city: ''
-  });
   
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
     name: '', address: '', paymentMethod: 'MB Way', phone: ''
   });
-
-  const [formError, setFormError] = useState<string | null>(null);
 
   const SHIPPING_THRESHOLD = 50;
   const SHIPPING_COST = 4.99;
@@ -56,20 +48,21 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             setAppliedCoupon(null);
             setCouponCode('');
             setIsFinalizing(false);
-            setShowManualMessage(null);
-        }, 500);
+        }, 300);
     }
   }, [isOpen]);
 
   useEffect(() => {
       if (user) {
           const firstAddr = user.addresses?.[0];
-          if (firstAddr) {
-              setAddressFields({ street: firstAddr.street || '', number: '', zip: firstAddr.zip || '', city: firstAddr.city || '' });
-          }
-          setUserInfo(prev => ({ ...prev, name: user.name || '', phone: user.phone || prev.phone }));
+          setUserInfo(prev => ({ 
+              ...prev, 
+              name: user.name || '', 
+              phone: user.phone || prev.phone,
+              address: firstAddr ? `${firstAddr.street}, ${firstAddr.zip} ${firstAddr.city}` : prev.address
+          }));
       }
-  }, [user]);
+  }, [user, isOpen]);
 
   const shippingCost = total >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
   const paymentFee = userInfo.paymentMethod === 'Cobrança' ? COD_FEE : 0;
@@ -78,37 +71,37 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const remainingForFreeShipping = SHIPPING_THRESHOLD - total;
   const progressPercentage = (total / SHIPPING_THRESHOLD) * 100;
 
+  const orderMessage = useMemo(() => {
+    const itemsList = cartItems.map(item => `• ${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`).join('\n');
+    return `🛍️ *${STORE_NAME}* - Pedido ${currentOrderId}\n👤 Cliente: ${userInfo.name}\n📍 Morada: ${userInfo.address}\n📱 Tel: ${userInfo.phone}\n💳 Pagamento: ${userInfo.paymentMethod}\n\n🛒 Artigos:\n${itemsList}\n\n💰 TOTAL: ${finalTotal.toFixed(2)}€`.trim();
+  }, [cartItems, userInfo, finalTotal, currentOrderId]);
+
   const handleApplyCoupon = async () => {
       const code = couponCode.trim().toUpperCase();
       if (!code) return;
       setIsCheckingCoupon(true);
+      setCouponError('');
       try {
           const snapshot = await db.collection('coupons').where('code', '==', code).get();
           if (snapshot.empty) { setCouponError('Cupão inválido.'); return; }
           const couponData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Coupon;
           if (!couponData.isActive) { setCouponError('Expirado.'); return; }
-          if (total < couponData.minPurchase) { setCouponError(`Mín. ${couponData.minPurchase}€`); return; }
+          if (total < couponData.minPurchase) { setCouponError(`Mín. ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(couponData.minPurchase)}`); return; }
           setAppliedCoupon(couponData);
           setDiscount(couponData.type === 'PERCENTAGE' ? total * (couponData.value / 100) : couponData.value);
           setCouponCode('');
       } catch (error) { setCouponError('Erro.'); } finally { setIsCheckingCoupon(false); }
   };
-
-  const legacyCopy = (text: string): boolean => {
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      // Ensure element is not visible but part of DOM
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-9999px';
-      textArea.style.top = '0';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const success = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return success;
-    } catch { return false; }
+  
+  const handleProceedToPlatform = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!userInfo.name || !userInfo.address || !userInfo.phone) {
+          alert("Por favor, preencha todos os dados de envio.");
+          return;
+      }
+      const orderId = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
+      setCurrentOrderId(orderId);
+      setCheckoutStep('platform');
   };
 
   const handleFinalizeOrder = async () => {
@@ -116,7 +109,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       setIsFinalizing(true);
       
       const newOrder: Order = {
-          id: currentOrderId || `#AS-${Math.floor(100000 + Math.random() * 900000)}`,
+          id: currentOrderId,
           date: new Date().toISOString(),
           total: finalTotal,
           status: 'Processamento',
@@ -127,66 +120,50 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
       onCheckout(newOrder);
 
-      const itemsList = cartItems.map(item => `• ${item.quantity}x ${item.name} - ${item.price}€`).join('\n');
-      const message = `🛍️ *${STORE_NAME}* - Pedido ${newOrder.id}\n👤 Cliente: ${userInfo.name}\n📍 Morada: ${userInfo.address}\n📱 Tel: ${userInfo.phone}\n💳 Pagamento: ${userInfo.paymentMethod}\n\n🛒 Artigos:\n${itemsList}\n\n💰 TOTAL: ${finalTotal.toFixed(2)}€`.trim();
-
       if (platform === 'whatsapp') {
-          window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(message)}`, '_blank');
+          window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
           onClose();
       } else {
-          // Telegram flow
-          // Attempt copy FIRST to ensure focus is on document
-          let success = false;
-          
-          // Try async Clipboard API first
-          try {
-             if (navigator.clipboard && navigator.clipboard.writeText) {
-                 await navigator.clipboard.writeText(message);
-                 success = true;
-             }
-          } catch (err) {
-             console.debug("Async copy failed, trying legacy", err);
-          }
-
-          // Fallback to legacy execCommand if async failed or unavailable
-          if (!success) {
-              success = legacyCopy(message);
-          }
-
-          if (success) {
-              setIsCopied(true);
-              // Open Telegram AFTER copy to prevent losing focus
-              window.open(TELEGRAM_LINK, '_blank');
-              setTimeout(() => { setIsCopied(false); onClose(); }, 2000);
-          } else {
-              // If all copy attempts fail, open telegram anyway but show manual copy modal
-              window.open(TELEGRAM_LINK, '_blank');
-              setShowManualMessage(message);
-              setIsFinalizing(false);
-          }
+          // Telegram flow is handled separately now
       }
+      setIsFinalizing(false);
   };
   
+  const handleTelegramCheckout = () => {
+      if (isFinalizing) return;
+      setIsFinalizing(true);
+      
+      const newOrder: Order = {
+          id: currentOrderId,
+          date: new Date().toISOString(),
+          total: finalTotal,
+          status: 'Processamento',
+          items: cartItems.map(item => `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`),
+          userId: user?.uid,
+          shippingInfo: userInfo
+      };
+
+      onCheckout(newOrder);
+      window.open(TELEGRAM_LINK, '_blank');
+      
+      setTimeout(() => {
+          onClose();
+      }, 500);
+      setIsFinalizing(false);
+  };
+
+  const handleCopyToClipboard = () => {
+      navigator.clipboard.writeText(orderMessage).then(() => {
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000);
+      });
+  };
+
   return (
     <>
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
       <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
-        {/* Modal Mensagem Manual Telegram */}
-        {showManualMessage && (
-            <div className="absolute inset-0 z-[60] bg-white p-6 flex flex-col items-center justify-center text-center">
-                <div className="bg-blue-50 p-4 rounded-full text-blue-500 mb-4"><AlertCircle size={40}/></div>
-                <h3 className="text-xl font-bold mb-2">Quase lá!</h3>
-                <p className="text-sm text-gray-500 mb-6">O navegador bloqueou a cópia automática. Por favor, copie a mensagem abaixo e cole-a no Telegram:</p>
-                <div className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-left mb-6 font-mono whitespace-pre-wrap select-all max-h-48 overflow-y-auto">
-                    {showManualMessage}
-                </div>
-                <button onClick={() => { legacyCopy(showManualMessage); onClose(); }} className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2">
-                    <Check size={20}/> Concluir
-                </button>
-            </div>
-        )}
-
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-2">
               {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep(checkoutStep === 'platform' ? 'info' : 'cart')} className="p-1 hover:bg-gray-100 rounded-full mr-1"><ChevronLeft size={20}/></button>}
@@ -222,10 +199,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             )}
 
             {checkoutStep === 'info' && (
-                <form id="infoForm" onSubmit={(e) => { e.preventDefault(); setCheckoutStep('platform'); }} className="space-y-4 animate-fade-in">
+                <form id="infoForm" onSubmit={handleProceedToPlatform} className="space-y-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4">
                         <input type="text" required placeholder="Nome Completo" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                        <input type="text" required placeholder="Morada Completa" value={userInfo.address} onChange={e => setUserInfo({...userInfo, address: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        <input type="text" required placeholder="Morada Completa (Rua, Nº, Andar...)" value={userInfo.address} onChange={e => setUserInfo({...userInfo, address: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <input type="tel" required placeholder="Telemóvel" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <div className="space-y-2">
                             {['MB Way', 'Transferência', 'Cobrança'].map(m => (
@@ -254,6 +231,25 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                             <Send className="text-blue-500" size={32} /><span className="font-bold">Telegram</span>
                         </button>
                     </div>
+
+                    {platform === 'telegram' && (
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-200 space-y-4">
+                            <h4 className="font-bold text-blue-900 text-center">Passos para Telegram:</h4>
+                            <p className="text-xs text-gray-500 text-center -mt-2">Siga estes 2 passos para garantir que o seu pedido é enviado corretamente.</p>
+                            
+                            <div className="space-y-3">
+                                <label className="block text-xs font-bold text-gray-500">Passo 1: Copie a sua encomenda</label>
+                                <textarea readOnly value={orderMessage} className="w-full h-32 p-2 text-xs font-mono bg-gray-50 border rounded-lg" />
+                                <button onClick={handleCopyToClipboard} className="w-full bg-gray-100 text-gray-700 font-bold py-2 rounded-lg flex items-center justify-center gap-2">
+                                    {isCopied ? <><Check size={16}/> Copiado!</> : <><Copy size={16}/> Copiar Mensagem</>}
+                                </button>
+                            </div>
+                            
+                            <button onClick={handleTelegramCheckout} className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                                <Send size={16}/> Passo 2: Abrir Telegram para Colar
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -293,12 +289,22 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             </div>
 
             {checkoutStep === 'cart' ? (
-                <button onClick={() => cartItems.length > 0 && (user ? setCheckoutStep('info') : onOpenLogin())} disabled={cartItems.length === 0} className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg disabled:opacity-50">Continuar Compra</button>
+                 <>
+                    <div className="mb-4">
+                      <div className="flex gap-2">
+                        <input type="text" value={couponCode} onChange={e=>setCouponCode(e.target.value)} placeholder="Código do Cupão" className="flex-1 px-4 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary outline-none" />
+                        <button onClick={handleApplyCoupon} disabled={isCheckingCoupon} className="bg-gray-800 text-white px-4 rounded-lg font-bold text-sm disabled:opacity-50">{isCheckingCoupon ? <Loader2 className="animate-spin" /> : 'Aplicar'}</button>
+                      </div>
+                      {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
+                    </div>
+                    <button onClick={() => cartItems.length > 0 && (user ? setCheckoutStep('info') : onOpenLogin())} disabled={cartItems.length === 0} className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg disabled:opacity-50">Continuar Compra</button>
+                 </>
             ) : checkoutStep === 'info' ? (
                 <button form="infoForm" type="submit" className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg">Seguinte</button>
             ) : (
-                <button onClick={handleFinalizeOrder} disabled={isFinalizing} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 text-white ${platform === 'whatsapp' ? 'bg-green-600' : 'bg-blue-500'}`}>
-                    {isFinalizing ? <Loader2 className="animate-spin" /> : isCopied ? <Check /> : <Send />} Finalizar no {platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
+                platform === 'whatsapp' &&
+                <button onClick={handleFinalizeOrder} disabled={isFinalizing} className="w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 text-white bg-green-600">
+                    {isFinalizing ? <Loader2 className="animate-spin" /> : <Send />} Finalizar no WhatsApp
                 </button>
             )}
         </div>
