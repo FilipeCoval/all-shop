@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight } from 'lucide-react';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS, PRODUCTS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -15,10 +15,42 @@ interface ClientAreaProps {
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
 }
 
-type ActiveTab = 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
+type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
+
+const CircularProgress: React.FC<{ progress: number; size: number; strokeWidth: number }> = ({ progress, size, strokeWidth }) => {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (progress / 100) * circumference;
+
+    return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+            <circle
+                className="text-gray-200"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                r={radius}
+                cx={size / 2}
+                cy={size / 2}
+            />
+            <circle
+                className="text-blue-500 transition-all duration-1000 ease-out"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+                strokeLinecap="round"
+                fill="transparent"
+                r={radius}
+                cx={size / 2}
+                cy={size / 2}
+            />
+        </svg>
+    );
+};
 
 const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart }) => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('orders');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   
   // State for Profile Form
   const [profileForm, setProfileForm] = useState({
@@ -112,16 +144,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
           const updatedPoints = currentPoints - reward.cost;
           const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
-
-          // Se onUpdateUser atualiza localmente E remotamente, usamos isso.
-          // Mas como ClientArea recebe a prop, assumimos que App.tsx gere a persistência.
-          // Para segurança, aqui fazemos o update direto para garantir atomicidade visual.
+          
           await db.collection('users').doc(user.uid).update({
               loyaltyPoints: updatedPoints,
               pointsHistory: updatedHistory
           });
 
-          // Atualizar estado local via prop (para refletir na UI instantaneamente)
           onUpdateUser({
               ...user,
               loyaltyPoints: updatedPoints,
@@ -138,24 +166,43 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       }
   };
 
-  // Calcular progresso do Tier
+  // --- DATA FOR DASHBOARD ---
+  const currentPoints = user.loyaltyPoints || 0;
   const currentTotalSpent = user.totalSpent || 0;
   const currentTier = user.tier || 'Bronze';
   
-  let nextTier = null;
-  let progress = 0;
-  let limit = 0;
+  // Tier Progress
+  let nextTierLabel = null;
+  let tierProgress = 0;
+  let tierLimit = 0;
 
   if (currentTier === 'Bronze') {
-      nextTier = 'Prata';
-      limit = LOYALTY_TIERS.SILVER.threshold;
-      progress = (currentTotalSpent / limit) * 100;
+      nextTierLabel = 'Prata';
+      tierLimit = LOYALTY_TIERS.SILVER.threshold;
+      tierProgress = (currentTotalSpent / tierLimit) * 100;
   } else if (currentTier === 'Prata') {
-      nextTier = 'Ouro';
-      limit = LOYALTY_TIERS.GOLD.threshold;
-      progress = (currentTotalSpent / limit) * 100;
+      nextTierLabel = 'Ouro';
+      tierLimit = LOYALTY_TIERS.GOLD.threshold;
+      tierProgress = (currentTotalSpent / tierLimit) * 100;
   } else {
-      progress = 100; // Ouro é max
+      tierProgress = 100;
+  }
+
+  // Reward Progress
+  const sortedRewards = [...LOYALTY_REWARDS].sort((a, b) => a.cost - b.cost);
+  const nextReward = sortedRewards.find(r => r.cost > currentPoints);
+  const affordableRewards = sortedRewards.filter(r => r.cost <= currentPoints);
+  const highestAffordableReward = affordableRewards.length > 0 ? affordableRewards[affordableRewards.length - 1] : null;
+
+  let rewardProgress = 0;
+  let rewardGoalText = "Recompensa Máxima!";
+  
+  if (nextReward) {
+      rewardProgress = (currentPoints / nextReward.cost) * 100;
+      rewardGoalText = `${currentPoints} / ${nextReward.cost} pts para Vale de ${nextReward.value}€`;
+  } else if (highestAffordableReward) {
+      rewardProgress = 100;
+      rewardGoalText = `Pode resgatar o Vale de ${highestAffordableReward.value}€!`;
   }
 
   // Stats
@@ -197,7 +244,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             -webkit-print-color-adjust: exact; 
           }
           
-          /* A4 Sheet Simulation */
           .sheet {
             width: 210mm;
             min-height: 297mm;
@@ -208,31 +254,26 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             position: relative;
           }
 
-          /* Header Styles */
           .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 40px; }
           .logo { font-size: 28px; font-weight: bold; color: #2563eb; }
           .invoice-title { text-align: right; }
           .invoice-title h1 { margin: 0; font-size: 24px; text-transform: uppercase; color: #333; letter-spacing: 1px; }
           .invoice-title p { margin: 5px 0 0; color: #666; font-size: 14px; }
           
-          /* Grid Info */
           .grid { display: flex; justify-content: space-between; margin-bottom: 50px; }
           .box { width: 45%; }
           .box h3 { font-size: 12px; text-transform: uppercase; color: #999; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; letter-spacing: 0.5px; }
           .box p { margin: 4px 0; font-size: 14px; line-height: 1.5; color: #333; }
           .box strong { font-weight: 600; font-size: 15px; }
           
-          /* Table */
           table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
           th { text-align: left; padding: 12px 10px; border-bottom: 2px solid #eee; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
           td { padding: 16px 10px; border-bottom: 1px solid #eee; font-size: 14px; color: #333; }
           
-          /* Totals */
           .total-row td { border-top: 2px solid #333; border-bottom: none; padding-top: 20px; }
           .total-label { font-weight: bold; font-size: 14px; text-transform: uppercase; }
           .total-amount { font-weight: bold; font-size: 20px; color: #2563eb; }
           
-          /* Warranty Box */
           .warranty-badge { 
             background: #f0fdf4; 
             border: 1px solid #bbf7d0; 
@@ -245,10 +286,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           }
           .warranty-title { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; margin-bottom: 10px; color: #15803d; }
           
-          /* Footer */
           .footer { margin-top: 60px; text-align: center; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 20px; }
 
-          /* Print Specifics */
           @media print {
             body { background: none; }
             .sheet { margin: 0; box-shadow: none; width: 100%; min-height: auto; }
@@ -345,7 +384,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative">
               {user.name.charAt(0).toUpperCase()}
               
-              {/* Tier Badge */}
               <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
                 ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
               `} title={`Nível ${currentTier}`}>
@@ -367,39 +405,22 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           </div>
 
           <nav className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-            <button 
-                onClick={() => setActiveTab('orders')}
-                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
-                ${activeTab === 'orders' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
-            >
-              <Package size={20} /> Minhas Encomendas
+            <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'overview' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
+              <LayoutDashboard size={20} /> Resumo
             </button>
-            <button 
-                onClick={() => setActiveTab('points')}
-                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
-                ${activeTab === 'points' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
-            >
-              <Award size={20} /> Pontos e Recompensas
+            <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'orders' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
+              <Package size={20} /> Encomendas
             </button>
-            <button 
-                onClick={() => setActiveTab('wishlist')}
-                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
-                ${activeTab === 'wishlist' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
-            >
+            <button onClick={() => setActiveTab('points')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'points' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
+              <Award size={20} /> Pontos
+            </button>
+            <button onClick={() => setActiveTab('wishlist')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'wishlist' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
               <Heart size={20} /> Favoritos
             </button>
-            <button 
-                onClick={() => setActiveTab('profile')}
-                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
-                ${activeTab === 'profile' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
-            >
-              <UserIcon size={20} /> Dados Pessoais
+            <button onClick={() => setActiveTab('profile')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'profile' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
+              <UserIcon size={20} /> Perfil
             </button>
-            <button 
-                onClick={() => setActiveTab('addresses')}
-                className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left
-                ${activeTab === 'addresses' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}
-            >
+            <button onClick={() => setActiveTab('addresses')} className={`flex items-center gap-3 px-6 py-4 font-medium transition-colors text-left ${activeTab === 'addresses' ? 'bg-blue-50 text-primary border-l-4 border-primary' : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'}`}>
               <MapPin size={20} /> Moradas
             </button>
           </nav>
@@ -408,6 +429,83 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         {/* Main Content */}
         <div className="flex-1">
           
+          {/* --- OVERVIEW TAB --- */}
+          {activeTab === 'overview' && (
+            <div className="animate-fade-in space-y-6">
+                <h2 className="text-2xl font-bold text-gray-800">Olá, {user.name.split(' ')[0]}! 👋</h2>
+                
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><p className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1"><DollarSign size={12}/>Total Gasto</p><p className="text-xl font-bold text-gray-800 mt-1">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(totalSpent)}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><p className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1"><Package size={12}/>Encomendas</p><p className="text-xl font-bold text-gray-800 mt-1">{totalOrders}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><p className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1"><Award size={12}/>Nível</p><p className="text-xl font-bold text-gray-800 mt-1">{currentTier}</p></div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><p className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1"><Coins size={12}/>AllPoints</p><p className="text-xl font-bold text-blue-600 mt-1">{currentPoints}</p></div>
+                </div>
+
+                {/* Loyalty & Rewards Panel */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <h3 className="font-bold text-gray-800 mb-1">Próxima Recompensa</h3>
+                            <p className="text-sm text-gray-500 mb-4">Troque os seus AllPoints por vales de desconto!</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="relative">
+                                <CircularProgress progress={rewardProgress} size={80} strokeWidth={8} />
+                                <div className="absolute inset-0 flex items-center justify-center text-blue-600 font-bold text-lg">
+                                    <Gift size={24} />
+                                </div>
+                            </div>
+                            <div className="flex-1">
+                                <p className={`font-bold ${highestAffordableReward ? 'text-green-600' : 'text-gray-800'}`}>{highestAffordableReward ? `Vale de ${highestAffordableReward.value}€ Disponível!` : nextReward ? `Vale de ${nextReward.value}€` : 'Nível Máximo'}</p>
+                                <p className="text-xs text-gray-500">{rewardGoalText}</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setActiveTab('points')} className="mt-4 w-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-sm py-2 rounded-lg transition-colors">Ver Recompensas</button>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                        <h3 className="font-bold text-gray-800 mb-1">Próximo Nível: <span className="text-primary">{nextTierLabel || 'Máximo'}</span></h3>
+                        <p className="text-sm text-gray-500 mb-4">Clientes Prata e Ouro ganham mais pontos por cada euro gasto.</p>
+                        {nextTierLabel ? (
+                            <>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                                    <div className="bg-primary h-2.5 rounded-full" style={{ width: `${tierProgress}%` }}></div>
+                                </div>
+                                <p className="text-xs text-gray-500 text-right">Faltam <strong>{(tierLimit - currentTotalSpent).toFixed(2)}€</strong></p>
+                            </>
+                        ) : (
+                            <div className="bg-green-100 text-green-800 text-sm font-bold p-3 rounded-lg text-center">Parabéns! Já atingiu o nível mais alto.</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Last Order Panel */}
+                {orders.length > 0 && (
+                     <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                        <h3 className="font-bold text-gray-800 mb-4">Última Encomenda</h3>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <p className="font-bold text-primary">{displayOrderId(orders[0].id)}</p>
+                                <p className="text-sm text-gray-500">{orders[0].items.join(', ')}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="font-bold text-lg">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(orders[0].total)}</span>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                                    ${orders[0].status === 'Entregue' ? 'bg-green-100 text-green-800' : 
+                                    orders[0].status === 'Enviado' ? 'bg-blue-100 text-blue-800' : 
+                                    orders[0].status === 'Cancelado' ? 'bg-red-100 text-red-800' :
+                                    'bg-yellow-100 text-yellow-800'}`}>
+                                    {orders[0].status}
+                                </span>
+                            </div>
+                        </div>
+                        <button onClick={() => setActiveTab('orders')} className="mt-4 text-primary font-bold text-sm hover:underline flex items-center gap-1">Ver todas as encomendas <ArrowRight size={14}/></button>
+                     </div>
+                )}
+            </div>
+          )}
+
           {/* --- ORDERS TAB --- */}
           {activeTab === 'orders' && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
@@ -507,8 +605,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           {/* --- POINTS & REWARDS TAB --- */}
           {activeTab === 'points' && (
               <div className="animate-fade-in space-y-8">
-                  
-                  {/* PROGRESS HEADER */}
                   <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 text-white relative overflow-hidden">
                       <div className="relative z-10">
                           <div className="flex justify-between items-start mb-6">
@@ -525,29 +621,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                               </div>
                           </div>
 
-                          {nextTier && (
+                          {nextTierLabel && (
                               <div>
                                   <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
-                                      <span>Progresso para {nextTier}</span>
-                                      <span>{currentTotalSpent.toFixed(0)}€ / {limit}€</span>
+                                      <span>Progresso para {nextTierLabel}</span>
+                                      <span>{currentTotalSpent.toFixed(0)}€ / {tierLimit}€</span>
                                   </div>
                                   <div className="w-full bg-gray-700 rounded-full h-2.5">
-                                      <div className="bg-blue-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, progress)}%` }}></div>
+                                      <div className="bg-blue-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, tierProgress)}%` }}></div>
                                   </div>
                                   <p className="text-xs text-gray-400 mt-2">
-                                      Faltam apenas <strong>{(limit - currentTotalSpent).toFixed(2)}€</strong> para desbloquear <strong>{nextTier === 'Prata' ? '3x' : '5x'} mais pontos</strong> por compra!
+                                      Faltam apenas <strong>{(tierLimit - currentTotalSpent).toFixed(2)}€</strong> para desbloquear <strong>{nextTierLabel === 'Prata' ? '3x' : '5x'} mais pontos</strong> por compra!
                                   </p>
                               </div>
                           )}
-                          {!nextTier && <p className="text-yellow-400 font-bold text-sm">👑 Você é um cliente VIP Ouro! Ganha o máximo de pontos possível.</p>}
+                          {!nextTierLabel && <p className="text-yellow-400 font-bold text-sm">👑 Você é um cliente VIP Ouro! Ganha o máximo de pontos possível.</p>}
                       </div>
-                      
-                      {/* Decorative Circles */}
                       <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
                       <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
                   </div>
-
-                  {/* REWARDS GRID */}
                   <div>
                       <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                           <Gift className="text-primary" /> Recompensas Disponíveis
@@ -580,8 +672,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           })}
                       </div>
                   </div>
-
-                  {/* HISTORY TABLE */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                       <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                           <h4 className="font-bold text-gray-800 text-sm">Histórico de Pontos</h4>
@@ -606,7 +696,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           )}
                       </div>
                   </div>
-
               </div>
           )}
 
@@ -829,37 +918,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 </div>
             </div>
           )}
-
-          {/* Quick Stats (Visible only on Orders Tab) */}
-          {activeTab === 'orders' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-green-50 text-green-600 rounded-lg">
-                            <CreditCard size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500">Total Gasto</p>
-                            <p className="text-2xl font-bold text-gray-900">
-                                {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(totalSpent)}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                            <Package size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500">Total Pedidos</p>
-                            <p className="text-2xl font-bold text-gray-900">{totalOrders}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          )}
-
         </div>
       </div>
     </div>
