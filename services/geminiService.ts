@@ -1,7 +1,6 @@
-
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { PRODUCTS, STORE_NAME } from '../constants';
-import { InventoryProduct } from '../types';
+import { InventoryProduct, Product } from '../types';
 
 let chatSession: Chat | null = null;
 
@@ -35,7 +34,6 @@ ${productsList}
 `;
 }
 
-// Fixed to use process.env.API_KEY directly and include thinkingConfig when maxOutputTokens is defined
 export const initializeChat = async (): Promise<Chat> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   chatSession = ai.chats.create({
@@ -43,7 +41,6 @@ export const initializeChat = async (): Promise<Chat> => {
     config: {
       systemInstruction: getSystemInstruction(),
       temperature: 0.3,
-      // maxOutputTokens requires a corresponding thinkingBudget for supported models
       maxOutputTokens: 600,
       thinkingConfig: { thinkingBudget: 300 },
     },
@@ -53,8 +50,11 @@ export const initializeChat = async (): Promise<Chat> => {
 
 export const sendMessageToGemini = async (message: string): Promise<string> => {
   try {
-    if (!chatSession) await initializeChat();
+    if (!chatSession) {
+        await initializeChat();
+    }
     if (!chatSession) return "A ligar sistemas...";
+    
     const response: GenerateContentResponse = await chatSession.sendMessage({ message });
     return response.text || "Pode repetir?";
   } catch (error) {
@@ -63,18 +63,43 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
   }
 };
 
-// Fixed to use process.env.API_KEY directly
 export const getInventoryAnalysis = async (products: InventoryProduct[], userPrompt: string): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const inventoryContext = products.filter(p => p.status !== 'SOLD').map(p => `- ${p.name}: ${p.quantityBought - p.quantitySold} unid. (€${p.purchasePrice})`).join('\n');
-    const prompt = `Consultor Financeiro Allshop. Inventário:\n${inventoryContext}\nPedido: ${userPrompt}\nRegras: Proteger lucro, sugerir combos.`;
+    
+    const inventoryContext = products
+      .filter(p => (p.quantityBought - p.quantitySold) > 0)
+      .map(p => {
+        const remaining = p.quantityBought - p.quantitySold;
+        const profit = (p.salePrice - p.purchasePrice) * remaining;
+        return `- ${p.name} (${p.variant || 'Padrão'}): ${remaining} unidades em stock. Custo unitário: ${p.purchasePrice.toFixed(2)}€. Preço de venda: ${p.salePrice.toFixed(2)}€. Lucro potencial total neste lote: ${profit.toFixed(2)}€.`;
+      })
+      .join('\n');
+
+    const prompt = `
+      Você é um consultor estratégico de e-commerce para a loja Allshop.
+      O seu objetivo é analisar o inventário atual e fornecer conselhos práticos e criativos para maximizar o lucro e movimentar o stock.
+      
+      INVENTÁRIO ATUAL (APENAS PRODUTOS COM STOCK):
+      ${inventoryContext}
+      
+      PEDIDO DO GESTOR: "${userPrompt}"
+      
+      As suas respostas devem ser:
+      - Em Português de Portugal.
+      - Diretas, práticas e focadas em ações.
+      - Sugira bundles (combos de produtos), promoções específicas ("leve X pague Y"), ou destaque os produtos com maior margem de lucro.
+      - Use **negrito** para destacar produtos ou ações chave.
+      - Mantenha um tom profissional mas encorajador.
+    `;
+
     try {
         const response = await ai.models.generateContent({ 
             model: 'gemini-3-pro-preview', 
             contents: prompt 
         });
-        return response.text || "Sem sugestões.";
+        return response.text || "Não foi possível gerar uma análise. Tente ser mais específico.";
     } catch (e) { 
-        return "Erro na análise."; 
+        console.error("Gemini Analysis Error:", e);
+        return "Ocorreu um erro ao comunicar com o serviço de IA. Verifique a consola para mais detalhes."; 
     }
 };
