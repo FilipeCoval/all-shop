@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct } from '../types';
+import { PRODUCTS } from '../constants';
 
 export const useStock = () => {
   const [inventory, setInventory] = useState<InventoryProduct[]>([]);
@@ -38,23 +39,23 @@ export const useStock = () => {
     if (hasPermissionError) return 999;
     if (loading) return 999;
 
-    const relevantBatches = inventory.filter(p => {
-        const isSameProduct = p.publicProductId === publicId;
-        if (!isSameProduct) return false;
+    // Primeiro, encontra todos os lotes de inventário que correspondem ao ID do produto público.
+    const allBatchesForProduct = inventory.filter(p => p.publicProductId === publicId);
 
-        if (variantName) {
-            const inventoryVariant = (p.variant || '').trim().toLowerCase();
-            const requestedVariant = variantName.trim().toLowerCase();
-            return inventoryVariant === requestedVariant;
-        }
-        // Se nenhuma variante for pedida, corresponde apenas a lotes de inventário sem variante definida.
-        return !p.variant;
-    });
-    
-    // Se o produto não consta no inventário (não está a ser rastreado),
-    // consideramos o stock como 0 para mostrar o alerta "Avise-me" e evitar vendas acidentais.
-    if (relevantBatches.length === 0) return 0; 
+    // Se o produto não estiver de todo a ser rastreado no inventário, está esgotado.
+    if (allBatchesForProduct.length === 0) {
+        return 0;
+    }
 
+    // Se uma variante específica for solicitada, filtramos esses lotes.
+    // Caso contrário, usamos todos os lotes encontrados (somando o stock de todas as variantes).
+    const relevantBatches = variantName
+        ? allBatchesForProduct.filter(p => 
+            (p.variant || '').trim().toLowerCase() === variantName.trim().toLowerCase()
+          )
+        : allBatchesForProduct;
+
+    // Calcula o stock total restante dos lotes relevantes.
     const totalStock = relevantBatches.reduce((acc, batch) => {
       const remaining = batch.quantityBought - batch.quantitySold;
       return acc + Math.max(0, remaining);
