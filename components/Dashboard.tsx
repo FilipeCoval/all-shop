@@ -694,51 +694,87 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       
       {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p><div className="flex items-start gap-1"><MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-700">{selectedOrderDetails.shippingInfo?.address}</span></div></div></div>
       <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
-      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & Origem</h4><ul className="space-y-3">{selectedOrderDetails.items.map((item, idx) => { const itemAny = item as any; const itemNameClean = typeof itemAny === 'string' ? itemAny.replace(/^\d+x\s/, '').trim().split('(')[0].trim() : (item.name || '').trim(); const relatedInventoryItem = products.find(p => (p.name.includes(itemNameClean) || itemNameClean.includes(p.name)) && (p.supplierName || p.supplierOrderId)); 
-      
-      if (typeof itemAny === 'string') {
-        return <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm"><div className="flex items-start gap-2 text-sm"><div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">1x</div><span className="text-gray-700 font-medium">{itemAny}</span></div>{relatedInventoryItem && <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem"><CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" /><div className="text-xs"><span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span><span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span></div></div>}</li>;
-      }
-      
-      const productName = item.name || 'Produto';
-      const variant = item.selectedVariant ? ` (${item.selectedVariant})` : '';
-      const quantity = item.quantity || 1;
-      const serials = item.serialNumbers || [];
-      
-      return (
-        <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-            <div className="flex justify-between items-start">
-                <div className="flex items-start gap-2 text-sm">
-                    <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">{quantity}x</div>
-                    <div>
-                        <span className="text-gray-700 font-medium block">{productName}{variant}</span>
-                        {serials.length > 0 && (
-                            <div className="text-xs text-green-600 bg-green-50 px-1 py-0.5 rounded mt-1 font-mono break-all">
-                                S/N: {serials.join(', ')}
-                            </div>
-                        )}
-                    </div>
-                </div>
-                {/* Botão para atribuir S/N se for um produto de inventário */}
-                {products.some(p => p.publicProductId === item.productId) && (
-                    <button 
-                        onClick={() => handleOpenAssignSerials(item, idx)}
-                        className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold flex items-center gap-1"
-                    >
-                        <QrCode size={12} /> {serials.length > 0 ? 'Editar S/N' : 'Atribuir S/N'}
-                    </button>
-                )}
-            </div>
+      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & Origem</h4>
+      <ul className="space-y-3">
+        {selectedOrderDetails.items.map((item, idx) => {
+          // Fix: Handle both legacy string items and new OrderItem objects safely
+          const isString = typeof item === 'string';
+          const itemString = isString ? (item as unknown as string) : '';
+          const itemObject = !isString ? (item as OrderItem) : null;
+          
+          const itemNameClean = isString
+            ? itemString.replace(/^\d+x\s/, '').trim().split('(')[0].trim()
+            : (itemObject?.name || '').trim();
 
-            {relatedInventoryItem && (
-                <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem">
-                    <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
-                    <div className="text-xs"><span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span><span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span></div>
+          const relatedInventoryItem = products.find(p => 
+            (p.name.includes(itemNameClean) || itemNameClean.includes(p.name)) && 
+            (p.supplierName || p.supplierOrderId)
+          );
+
+          if (isString) {
+            return (
+              <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
+                <div className="flex items-start gap-2 text-sm">
+                  <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">1x</div>
+                  <span className="text-gray-700 font-medium">{itemString}</span>
                 </div>
-            )}
-        </li>
-      );
-      })}</ul></div>
+                {relatedInventoryItem && (
+                  <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem">
+                    <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
+                      <span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          }
+
+          // Handle OrderItem Object
+          const productName = itemObject?.name || 'Produto';
+          const variant = itemObject?.selectedVariant ? ` (${itemObject.selectedVariant})` : '';
+          const quantity = itemObject?.quantity || 1;
+          const serials = itemObject?.serialNumbers || [];
+
+          return (
+            <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
+              <div className="flex justify-between items-start">
+                <div className="flex items-start gap-2 text-sm">
+                  <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">{quantity}x</div>
+                  <div>
+                    <span className="text-gray-700 font-medium block">{productName}{variant}</span>
+                    {serials.length > 0 && (
+                      <div className="text-xs text-green-600 bg-green-50 px-1 py-0.5 rounded mt-1 font-mono break-all">
+                        S/N: {serials.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {itemObject && products.some(p => p.publicProductId === itemObject.productId) && (
+                  <button
+                    onClick={() => handleOpenAssignSerials(itemObject, idx)}
+                    className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold flex items-center gap-1"
+                  >
+                    <QrCode size={12} /> {serials.length > 0 ? 'Editar S/N' : 'Atribuir S/N'}
+                  </button>
+                )}
+              </div>
+
+              {relatedInventoryItem && (
+                <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem">
+                  <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
+                  <div className="text-xs">
+                    <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
+                    <span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span>
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      </div>
       <div className="flex justify-between items-center pt-4 border-t border-gray-100"><span className="text-gray-500 font-medium">Total do Pedido</span><span className="text-2xl font-bold text-indigo-600">{formatCurrency(selectedOrderDetails.total)}</span></div></div><div className="p-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setSelectedOrderDetails(null)} className="px-6 py-2 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-100">Fechar</button></div></div></div>}
     </div>
   );
