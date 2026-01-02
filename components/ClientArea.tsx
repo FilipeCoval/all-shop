@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
-import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon } from '../types';
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard } from 'lucide-react';
-import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS, PRODUCTS } from '../constants';
+import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem } from '../types';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode } from 'lucide-react';
+import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
@@ -13,6 +12,7 @@ interface ClientAreaProps {
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
+  publicProducts: Product[];
 }
 
 type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
@@ -49,7 +49,7 @@ const CircularProgress: React.FC<{ progress: number; size: number; strokeWidth: 
     );
 };
 
-const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart }) => {
+const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   
   // State for Profile Form
@@ -215,7 +215,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   };
 
   // Wishlist Products Logic
-  const favoriteProducts = PRODUCTS.filter(p => wishlist.includes(p.id));
+  const favoriteProducts = publicProducts.filter(p => wishlist.includes(p.id));
 
   // Função para Gerar o Documento de Garantia/Comprovativo
   const handlePrintOrder = (order: Order) => {
@@ -270,6 +270,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           th { text-align: left; padding: 12px 10px; border-bottom: 2px solid #eee; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
           td { padding: 16px 10px; border-bottom: 1px solid #eee; font-size: 14px; color: #333; }
           
+          .serial-numbers { font-size: 11px; color: #666; margin-top: 4px; font-family: monospace; background: #f9f9f9; padding: 4px; border-radius: 4px; display: inline-block; }
+
           .total-row td { border-top: 2px solid #333; border-bottom: none; padding-top: 20px; }
           .total-label { font-weight: bold; font-size: 14px; text-transform: uppercase; }
           .total-amount { font-weight: bold; font-size: 20px; color: #2563eb; }
@@ -334,13 +336,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               </tr>
             </thead>
             <tbody>
-              ${order.items.map(item => `
-                <tr>
-                  <td>${item}</td>
-                  <td style="text-align: right;">1</td>
-                  <td style="text-align: right;">Novo</td>
-                </tr>
-              `).join('')}
+              ${order.items.map(item => {
+                 const itemName = typeof item === 'string' ? item : item.name;
+                 const itemQty = typeof item === 'string' ? 1 : item.quantity;
+                 const itemVariant = typeof item !== 'string' && item.selectedVariant ? ` (${item.selectedVariant})` : '';
+                 const serials = (typeof item !== 'string' && item.serialNumbers && item.serialNumbers.length > 0) 
+                    ? `<br/><div class="serial-numbers">S/N: ${item.serialNumbers.join(', ')}</div>` 
+                    : '';
+
+                 return `
+                  <tr>
+                    <td>
+                        ${itemName}${itemVariant}
+                        ${serials}
+                    </td>
+                    <td style="text-align: right;">${itemQty}</td>
+                    <td style="text-align: right;">Novo</td>
+                  </tr>
+                 `;
+              }).join('')}
               <tr class="total-row">
                 <td colspan="2" class="total-label" style="text-align: right;">TOTAL PAGO</td>
                 <td class="total-amount" style="text-align: right;">${totalFormatted}</td>
@@ -355,6 +369,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             <br/><br/>
             Para acionar a garantia, basta apresentar este documento e o número do pedido (${order.id}).
             A garantia cobre defeitos de fabrico. Não cobre danos por mau uso, humidade ou alterações de software não oficiais.
+            <br/><br/>
+            <strong>Nota:</strong> Guarde os números de série apresentados acima (S/N) para identificação única do seu equipamento.
           </div>
 
           <div class="footer">
@@ -487,7 +503,13 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <p className="font-bold text-primary">{displayOrderId(orders[0].id)}</p>
-                                <p className="text-sm text-gray-500">{orders[0].items.join(', ')}</p>
+                                <p className="text-sm text-gray-500">
+                                    {orders[0].items.map(item => {
+                                        const name = typeof item === 'string' ? item : item.name;
+                                        const qty = typeof item === 'string' ? 1 : item.quantity;
+                                        return `${qty}x ${name}`;
+                                    }).join(', ')}
+                                </p>
                             </div>
                             <div className="flex items-center gap-4">
                                 <span className="font-bold text-lg">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(orders[0].total)}</span>
@@ -520,6 +542,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th className="px-6 py-4 font-medium">ID / Data</th>
+                        <th className="px-6 py-4 font-medium">Itens</th>
                         <th className="px-6 py-4 font-medium">Estado</th>
                         <th className="px-6 py-4 font-medium">Rastreio</th>
                         <th className="px-6 py-4 font-medium">Total</th>
@@ -532,6 +555,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         <td className="px-6 py-4">
                             <span className="font-bold text-gray-900 block">{displayOrderId(order.id)}</span>
                             <span className="text-xs text-gray-500">{new Date(order.date).toLocaleDateString()}</span>
+                        </td>
+                        <td className="px-6 py-4 max-w-xs">
+                           <ul className="text-xs text-gray-600 space-y-1">
+                               {order.items.slice(0, 2).map((item, idx) => (
+                                   <li key={idx} className="truncate">
+                                       {typeof item === 'string' ? item : (
+                                           <>
+                                            <span className="font-semibold">{item.quantity}x {item.name}</span>
+                                            {item.serialNumbers && item.serialNumbers.length > 0 && (
+                                                <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 w-fit px-1 rounded mt-0.5 border border-green-100">
+                                                    <QrCode size={10} /> S/N Atribuído
+                                                </div>
+                                            )}
+                                           </>
+                                       )}
+                                   </li>
+                               ))}
+                               {order.items.length > 2 && <li className="text-gray-400 italic">...e mais {order.items.length - 2} itens</li>}
+                           </ul>
                         </td>
                         <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
@@ -602,9 +644,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             </div>
           )}
 
-          {/* --- POINTS & REWARDS TAB --- */}
+          {/* ... [RESTO DO CÓDIGO PERMANECE IGUAL] ... */}
+          {/* Omitido o resto do componente por brevidade, já que não sofreu alterações funcionais relevantes para esta task, apenas o bloco de tabs 'points', 'wishlist', 'profile', 'addresses' */}
           {activeTab === 'points' && (
               <div className="animate-fade-in space-y-8">
+                  {/* ... Conteúdo Points ... */}
                   <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 text-white relative overflow-hidden">
                       <div className="relative z-10">
                           <div className="flex justify-between items-start mb-6">
@@ -699,7 +743,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               </div>
           )}
 
-          {/* --- WISHLIST TAB --- */}
           {activeTab === 'wishlist' && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
                  <div className="p-6 border-b border-gray-100 bg-gray-50/50">
@@ -746,7 +789,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             </div>
           )}
 
-          {/* --- PROFILE TAB --- */}
           {activeTab === 'profile' && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
                  <div className="p-6 border-b border-gray-100 bg-gray-50/50">
@@ -811,7 +853,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             </div>
           )}
 
-          {/* --- ADDRESSES TAB --- */}
           {activeTab === 'addresses' && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
                  <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
