@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
+import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem } from '../types';
 import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
@@ -104,27 +104,40 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       setCheckoutStep('platform');
   };
 
+  const createOrderObject = (): Order => {
+    return {
+        id: currentOrderId,
+        date: new Date().toISOString(),
+        total: finalTotal,
+        status: 'Processamento',
+        items: cartItems.map(item => ({
+          productId: item.id,
+          name: item.name,
+          price: item.price,
+          image: item.image,
+          description: item.description || '',
+          quantity: item.quantity,
+          selectedVariant: item.selectedVariant || '',
+          serialNumbers: [], // Inicializa vazio
+          unitIds: [],
+          cartItemId: item.cartItemId,
+          addedAt: new Date().toISOString()
+        })),
+        userId: user?.uid,
+        shippingInfo: userInfo
+    };
+  };
+
   const handleFinalizeOrder = async () => {
       if (isFinalizing) return;
       setIsFinalizing(true);
       
-      const newOrder: Order = {
-          id: currentOrderId,
-          date: new Date().toISOString(),
-          total: finalTotal,
-          status: 'Processamento',
-          items: cartItems.map(item => `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`),
-          userId: user?.uid,
-          shippingInfo: userInfo
-      };
-
+      const newOrder = createOrderObject();
       onCheckout(newOrder);
 
       if (platform === 'whatsapp') {
           window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
           onClose();
-      } else {
-          // Telegram flow is handled separately now
       }
       setIsFinalizing(false);
   };
@@ -133,16 +146,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       if (isFinalizing) return;
       setIsFinalizing(true);
       
-      const newOrder: Order = {
-          id: currentOrderId,
-          date: new Date().toISOString(),
-          total: finalTotal,
-          status: 'Processamento',
-          items: cartItems.map(item => `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`),
-          userId: user?.uid,
-          shippingInfo: userInfo
-      };
-
+      const newOrder = createOrderObject();
       onCheckout(newOrder);
       window.open(TELEGRAM_LINK, '_blank');
       
@@ -205,7 +209,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         <input type="text" required placeholder="Morada Completa (Rua, Nº, Andar...)" value={userInfo.address} onChange={e => setUserInfo({...userInfo, address: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <input type="tel" required placeholder="Telemóvel" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <div className="space-y-2">
-                            {['MB Way', 'Transferência', 'Cobrança'].map(m => (
+                            {(['MB Way', 'Transferência', 'Cobrança'] as const).map(m => (
                                 <label key={m} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${userInfo.paymentMethod === m ? 'border-primary bg-blue-50 text-primary' : 'border-gray-100'}`}>
                                     <input type="radio" checked={userInfo.paymentMethod === m} onChange={() => setUserInfo({...userInfo, paymentMethod: m})} className="hidden" />
                                     <span className="font-bold text-sm">{m}</span>
