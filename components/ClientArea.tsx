@@ -54,10 +54,10 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   
   // State for Profile Form
   const [profileForm, setProfileForm] = useState({
-    name: user.name,
-    email: user.email,
-    phone: user.phone || '',
-    nif: user.nif || ''
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    nif: user?.nif || ''
   });
   const [profileSaved, setProfileSaved] = useState(false);
 
@@ -91,7 +91,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   };
 
   const handleDeleteAddress = (id: string) => {
-    const updatedAddresses = user.addresses.filter(a => a.id !== id);
+    const updatedAddresses = (user.addresses || []).filter(a => a.id !== id);
     onUpdateUser({ ...user, addresses: updatedAddresses });
   };
 
@@ -206,16 +206,18 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   }
 
   // Stats
-  const totalSpent = orders.reduce((acc, order) => acc + (order.status !== 'Cancelado' ? order.total : 0), 0);
-  const totalOrders = orders.filter(o => o.status !== 'Cancelado').length;
+  const safeOrders = orders || [];
+  const totalSpent = safeOrders.reduce((acc, order) => acc + (order.status !== 'Cancelado' ? (order.total || 0) : 0), 0);
+  const totalOrders = safeOrders.filter(o => o.status !== 'Cancelado').length;
 
   const displayOrderId = (id: string) => {
+      if (!id) return '#???';
       if (id.startsWith('#')) return id;
       return `#${id.slice(-6).toUpperCase()}`;
   };
 
   // Wishlist Products Logic
-  const favoriteProducts = publicProducts.filter(p => wishlist.includes(p.id));
+  const favoriteProducts = publicProducts.filter(p => (wishlist || []).includes(p.id));
 
   // Função para Gerar o Documento de Garantia/Comprovativo
   const handlePrintOrder = (order: Order) => {
@@ -226,7 +228,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
     
-    const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total);
+    const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0);
 
     // Defensive check for items
     const safeItems = order.items || [];
@@ -403,7 +405,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         <aside className="w-full md:w-1/4 space-y-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
             <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative">
-              {user.name.charAt(0).toUpperCase()}
+              {(user.name || 'C').charAt(0).toUpperCase()}
               
               <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
                 ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
@@ -412,7 +414,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               </div>
             </div>
             
-            <h2 className="font-bold text-xl text-gray-900">{user.name}</h2>
+            <h2 className="font-bold text-xl text-gray-900">{user.name || 'Cliente'}</h2>
             <div className="inline-block px-3 py-1 rounded-full bg-blue-50 text-primary text-xs font-bold mt-1 mb-4">
                 {user.loyaltyPoints || 0} AllPoints
             </div>
@@ -453,7 +455,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           {/* --- OVERVIEW TAB --- */}
           {activeTab === 'overview' && (
             <div className="animate-fade-in space-y-6">
-                <h2 className="text-2xl font-bold text-gray-800">Olá, {user.name.split(' ')[0]}! 👋</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Olá, {user.name ? user.name.split(' ')[0] : 'Cliente'}! 👋</h2>
                 
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -502,7 +504,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 </div>
 
                 {/* Last Order Panel */}
-                {orders.length > 0 && (
+                {orders && orders.length > 0 && (
                      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                         <h3 className="font-bold text-gray-800 mb-4">Última Encomenda</h3>
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -510,7 +512,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 <p className="font-bold text-primary">{displayOrderId(orders[0].id)}</p>
                                 <p className="text-sm text-gray-500">
                                     {(orders[0].items || []).map(item => {
-                                        // Defensive coding for legacy data (string vs object)
                                         const itemAny = item as any;
                                         const name = typeof itemAny === 'string' ? itemAny : itemAny.name;
                                         const qty = typeof itemAny === 'string' ? 1 : itemAny.quantity;
@@ -519,7 +520,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 </p>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span className="font-bold text-lg">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(orders[0].total)}</span>
+                                <span className="font-bold text-lg">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(orders[0].total || 0)}</span>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
                                     ${orders[0].status === 'Entregue' ? 'bg-green-100 text-green-800' : 
                                     orders[0].status === 'Enviado' ? 'bg-blue-100 text-blue-800' : 
@@ -557,7 +558,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                    {orders.map((order) => (
+                    {(orders || []).map((order) => (
                         <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                             <span className="font-bold text-gray-900 block">{displayOrderId(order.id)}</span>
@@ -566,18 +567,20 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         <td className="px-6 py-4 max-w-xs">
                            <ul className="text-xs text-gray-600 space-y-1">
                                {(order.items || []).slice(0, 2).map((item, idx) => {
-                                   const itemAny = item as any;
+                                   // Fix: Handle both legacy string items and new OrderItem objects safely to avoid ReactNode errors
+                                   if (typeof item === 'string') {
+                                       return <li key={idx} className="truncate">{item}</li>;
+                                   }
+                                   
+                                   const itemObject = item as OrderItem;
                                    return (
                                    <li key={idx} className="truncate">
-                                       {typeof itemAny === 'string' ? itemAny : (
-                                           <>
-                                            <span className="font-semibold">{itemAny.quantity}x {itemAny.name}</span>
-                                            {itemAny.serialNumbers && itemAny.serialNumbers.length > 0 && (
-                                                <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 w-fit px-1 rounded mt-0.5 border border-green-100">
-                                                    <QrCode size={10} /> S/N Atribuído
-                                                </div>
-                                            )}
-                                           </>
+                                       <span className="font-semibold">{itemObject.quantity}x {itemObject.name}</span>
+                                       {itemObject.selectedVariant && <span className="text-gray-500"> ({itemObject.selectedVariant})</span>}
+                                       {itemObject.serialNumbers && itemObject.serialNumbers.length > 0 && (
+                                           <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 w-fit px-1 rounded mt-0.5 border border-green-100">
+                                               <QrCode size={10} /> S/N Atribuído
+                                           </div>
                                        )}
                                    </li>
                                )})}
@@ -608,7 +611,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             )}
                         </td>
                         <td className="px-6 py-4 font-bold text-gray-900">
-                            {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total)}
+                            {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0)}
                         </td>
                         <td className="px-6 py-4 text-right flex justify-end gap-2">
                             {order.status !== 'Cancelado' && (
@@ -636,7 +639,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 </table>
                 </div>
                 
-                {orders.length === 0 && (
+                {(!orders || orders.length === 0) && (
                 <div className="p-12 text-center flex flex-col items-center justify-center">
                     <div className="bg-gray-100 p-4 rounded-full mb-4">
                         <Package size={32} className="text-gray-400" />
@@ -653,8 +656,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             </div>
           )}
 
-          {/* ... [RESTO DO CÓDIGO PERMANECE IGUAL] ... */}
-          {/* Omitido o resto do componente por brevidade, já que não sofreu alterações funcionais relevantes para esta task, apenas o bloco de tabs 'points', 'wishlist', 'profile', 'addresses' */}
           {activeTab === 'points' && (
               <div className="animate-fade-in space-y-8">
                   {/* ... Conteúdo Points ... */}
