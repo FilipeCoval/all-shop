@@ -228,6 +228,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total);
 
+    // Defensive check for items
+    const safeItems = order.items || [];
+
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt">
@@ -336,12 +339,14 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               </tr>
             </thead>
             <tbody>
-              ${order.items.map(item => {
-                 const itemName = typeof item === 'string' ? item : item.name;
-                 const itemQty = typeof item === 'string' ? 1 : item.quantity;
-                 const itemVariant = typeof item !== 'string' && item.selectedVariant ? ` (${item.selectedVariant})` : '';
-                 const serials = (typeof item !== 'string' && item.serialNumbers && item.serialNumbers.length > 0) 
-                    ? `<br/><div class="serial-numbers">S/N: ${item.serialNumbers.join(', ')}</div>` 
+              ${safeItems.map(item => {
+                 // Cast to any to handle potential legacy string data gracefully
+                 const itemAny = item as any;
+                 const itemName = typeof itemAny === 'string' ? itemAny : itemAny.name;
+                 const itemQty = typeof itemAny === 'string' ? 1 : itemAny.quantity;
+                 const itemVariant = typeof itemAny !== 'string' && itemAny.selectedVariant ? ` (${itemAny.selectedVariant})` : '';
+                 const serials = (typeof itemAny !== 'string' && itemAny.serialNumbers && itemAny.serialNumbers.length > 0) 
+                    ? `<br/><div class="serial-numbers">S/N: ${itemAny.serialNumbers.join(', ')}</div>` 
                     : '';
 
                  return `
@@ -504,9 +509,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             <div>
                                 <p className="font-bold text-primary">{displayOrderId(orders[0].id)}</p>
                                 <p className="text-sm text-gray-500">
-                                    {orders[0].items.map(item => {
-                                        const name = typeof item === 'string' ? item : item.name;
-                                        const qty = typeof item === 'string' ? 1 : item.quantity;
+                                    {(orders[0].items || []).map(item => {
+                                        // Defensive coding for legacy data (string vs object)
+                                        const itemAny = item as any;
+                                        const name = typeof itemAny === 'string' ? itemAny : itemAny.name;
+                                        const qty = typeof itemAny === 'string' ? 1 : itemAny.quantity;
                                         return `${qty}x ${name}`;
                                     }).join(', ')}
                                 </p>
@@ -558,12 +565,14 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         </td>
                         <td className="px-6 py-4 max-w-xs">
                            <ul className="text-xs text-gray-600 space-y-1">
-                               {order.items.slice(0, 2).map((item, idx) => (
+                               {(order.items || []).slice(0, 2).map((item, idx) => {
+                                   const itemAny = item as any;
+                                   return (
                                    <li key={idx} className="truncate">
-                                       {typeof item === 'string' ? item : (
+                                       {typeof itemAny === 'string' ? itemAny : (
                                            <>
-                                            <span className="font-semibold">{item.quantity}x {item.name}</span>
-                                            {item.serialNumbers && item.serialNumbers.length > 0 && (
+                                            <span className="font-semibold">{itemAny.quantity}x {itemAny.name}</span>
+                                            {itemAny.serialNumbers && itemAny.serialNumbers.length > 0 && (
                                                 <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 w-fit px-1 rounded mt-0.5 border border-green-100">
                                                     <QrCode size={10} /> S/N Atribuído
                                                 </div>
@@ -571,8 +580,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                            </>
                                        )}
                                    </li>
-                               ))}
-                               {order.items.length > 2 && <li className="text-gray-400 italic">...e mais {order.items.length - 2} itens</li>}
+                               )})}
+                               {(order.items || []).length > 2 && <li className="text-gray-400 italic">...e mais {(order.items || []).length - 2} itens</li>}
                            </ul>
                         </td>
                         <td className="px-6 py-4">
