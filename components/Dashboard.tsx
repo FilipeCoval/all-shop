@@ -441,7 +441,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       
       // 1. Atualizar o item da encomenda
       updatedItems[targetOrderItemIndex] = {
-          ...updatedItems[targetOrderItemIndex],
+          ...updatedItems[targetOrderItemIndex] as OrderItem,
           serialNumbers: selectedUnitsForOrder
       };
 
@@ -478,9 +478,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                        // Update sold count too? Maybe complex for batch. 
                        // For simplicity, we just mark unit status. 
                        // A robust system would increment quantitySold too.
-                       
-                       // Hack: Since we can't easily increment counters in batch with array mapping logic mixed in without reading, 
-                       // we'll just update the units array. Ideally we update quantitySold too.
                        
                        // Nota: Isto sobrescreve, num cenário real com concorrência seria perigoso.
                        // Para este projeto pequeno, é aceitável.
@@ -552,10 +549,11 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
                      <div>
                          <h3 className="text-xl font-bold flex items-center gap-2"><QrCode /> Atribuir Números de Série</h3>
                          <p className="opacity-90 mt-1 text-xs">
-                             {typeof selectedOrderDetails.items[targetOrderItemIndex] === 'string' 
-                                 ? selectedOrderDetails.items[targetOrderItemIndex] 
-                                 : (selectedOrderDetails.items[targetOrderItemIndex] as OrderItem).name
-                             }
+                             {(() => {
+                                 const item = selectedOrderDetails.items[targetOrderItemIndex];
+                                 // Safely handle both string and OrderItem types
+                                 return typeof item === 'string' ? item : item.name;
+                             })()}
                          </p>
                      </div>
                      <button onClick={() => setIsAssignSerialOpen(false)}><X size={24} /></button>
