@@ -19,38 +19,41 @@ service cloud.firestore {
 
     // --- Collections Rules ---
 
-    // Publicly readable collections. No auth required.
+    // SECURED: Inventory should only be readable by admins to protect costs.
+    // The useStock hook is designed to handle permission errors for public users.
     match /products_inventory/{docId} {
-      allow get, list: if true;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
+
     match /reviews/{docId} {
       allow get, list, create: if true;
       allow update, delete: if isAdmin();
     }
+    
+    // UPDATED: Allow users to create coupons that are rewards.
     match /coupons/{docId} {
       allow get, list: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
+      allow update, delete: if isAdmin();
+    }
+
+    match /newsletter_subscriptions/{docId} {
+      allow create: if true;
+      allow read, write, delete: if isAdmin();
     }
 
     // User-specific data
     match /users/{userId} {
-      // A user can read/write their own document.
       allow read, write: if request.auth.uid == userId;
     }
 
+    // UPDATED: Allow admins to list all orders, and users to update their own.
     match /orders/{orderId} {
       allow create: if true;
-      
-      // Users can get their own orders, admins can get any.
-      allow get: if (request.auth.uid == resource.data.userId) || isAdmin();
-      
-      // Users can query for their own orders. Admins can query for all.
-      // Firestore's security rules will enforce that a user's query must include `where('userId', '==', request.auth.uid)`.
-      allow list: if isSignedIn();
-      
-      // Only admins can update or delete.
-      allow update, delete: if isAdmin();
+      allow get: if isAdmin() || (request.auth.uid == resource.data.userId);
+      allow list: if isAdmin() || (isSignedIn() && request.query.where.get('userId') == request.auth.uid);
+      allow update: if isAdmin() || (request.auth.uid == resource.data.userId);
+      allow delete: if isAdmin();
     }
 
     // Other collections
