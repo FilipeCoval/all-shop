@@ -6,11 +6,12 @@ import {
     Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
-import { PRODUCTS, STORE_NAME } from '../constants';
+import { STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
   product: Product;
+  allProducts: Product[];
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
   reviews: Review[];
   onAddReview: (review: Review) => void;
@@ -21,7 +22,7 @@ interface ProductDetailsProps {
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
-  product, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist
+  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist
 }) => {
   const [selectedImage, setSelectedImage] = useState(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(
@@ -29,7 +30,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   );
   const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared'>('idle');
   
-  // State para Alertas de Stock
   const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
   const [alertStatus, setAlertStatus] = useState<'idle' | 'loading' | 'success'>('idle');
 
@@ -65,7 +65,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
 
-  const relatedProducts = PRODUCTS
+  // A CORREÇÃO ESTÁ AQUI
+  const relatedProducts = (allProducts || [])
     .filter(p => p.category === product.category && p.id !== product.id)
     .slice(0, 4);
 
@@ -240,18 +241,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                    {isUnavailable ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') : 'Comprar Agora'}
                </button>
            </div>
-
-           <div className="mb-8 p-4 border border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center gap-3">
-               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Pagamento 100% Seguro</p>
-               <div className="flex gap-2 items-center flex-wrap justify-center">
-                    <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-6 object-contain" />
-                    <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-6 object-contain" />
-                    <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-6 object-contain" />
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-6 object-contain" />
-                    <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-6 object-contain" />
-               </div>
-           </div>
-
+           
            <div className="space-y-6 text-gray-600 leading-relaxed">
                <p className="text-lg">{product.description}</p>
                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
@@ -266,7 +256,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         </div>
       </div>
 
-      {/* Fix: use the correct prop onAddReview instead of the non-existent handleAddReview */}
       <ReviewSection productId={product.id} reviews={reviews} onAddReview={onAddReview} currentUser={currentUser} />
 
       {product.category === 'TV & Streaming' && (
@@ -313,7 +302,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   ))}
               </div>
           </div>
-      )}
     </div>
   );
 };
