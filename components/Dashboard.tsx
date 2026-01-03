@@ -436,7 +436,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       const orderRef = db.collection('orders').doc(selectedOrderDetails.id);
       
-      // Criar cópia segura dos items da encomenda
       const updatedItems = [...selectedOrderDetails.items];
       const targetItem = updatedItems[targetOrderItemIndex];
 
@@ -450,47 +449,60 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       try {
           const batch = db.batch();
-
-          // 1. Atualiza a encomenda com os novos S/N
           batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
 
-          // 2. Itera sobre os produtos de inventário e atualiza o estado das unidades
-          const inventoryUpdates = new Map<string, ProductUnit[]>();
-          const originalStates = new Map<string, ProductUnit[]>();
-
-          // Encontra todas as unidades relacionadas ao produto do item da encomenda
-          const relatedInventory = products.filter(p => {
-              const matchId = p.publicProductId === targetItem.productId;
-              const matchVariant = targetItem.selectedVariant ? p.variant === targetItem.selectedVariant : !p.variant;
-              return matchId && matchVariant;
-          });
-
-          relatedInventory.forEach(invProd => {
-              if (invProd.units) {
-                  originalStates.set(invProd.id, invProd.units);
-                  const newUnits = invProd.units.map(unit => {
-                      // Se esta unidade foi selecionada, marca como VENDIDA
-                      if (selectedUnitsForOrder.includes(unit.id)) {
-                          return { ...unit, status: 'SOLD' };
-                      }
-                      // Se esta unidade estava atribuída antes mas foi desmarcada, volta a DISPONÍVEL
-                      if (targetItem.serialNumbers?.includes(unit.id) && !selectedUnitsForOrder.includes(unit.id)) {
-                          return { ...unit, status: 'AVAILABLE' };
-                      }
-                      return unit;
-                  });
-                  inventoryUpdates.set(invProd.id, newUnits);
+          // Mapa para agrupar S/N por ID de produto de inventário
+          const inventoryUnitMap = new Map<string, string[]>();
+          selectedUnitsForOrder.forEach(unitId => {
+              const assignmentInfo = availableUnitsForAssignment.find(a => a.unitId === unitId);
+              if (assignmentInfo) {
+                  if (!inventoryUnitMap.has(assignmentInfo.inventoryProductId)) {
+                      inventoryUnitMap.set(assignmentInfo.inventoryProductId, []);
+                  }
+                  inventoryUnitMap.get(assignmentInfo.inventoryProductId)!.push(unitId);
               }
           });
-          
-          inventoryUpdates.forEach((newUnits, invId) => {
+
+          // Itera sobre cada lote de inventário afetado
+          for (const [invId, unitsToSell] of inventoryUnitMap.entries()) {
               const productRef = db.collection('products_inventory').doc(invId);
-              batch.update(productRef, { units: newUnits });
-          });
+              const originalProduct = products.find(p => p.id === invId);
+              if (!originalProduct) continue;
+
+              // Atualiza o estado das unidades
+              const newUnits = (originalProduct.units || []).map(unit => {
+                  if (unitsToSell.includes(unit.id)) return { ...unit, status: 'SOLD' };
+                  return unit;
+              });
+
+              // Cria um registo de venda para este lote, a partir da encomenda
+              const newSaleRecord: SaleRecord = {
+                  id: `ORDER-${selectedOrderDetails.id}-${targetItem.productId}`,
+                  date: selectedOrderDetails.date,
+                  quantity: unitsToSell.length,
+                  unitPrice: targetItem.price,
+                  notes: `Venda Online - Pedido ${selectedOrderDetails.id}`
+              };
+
+              // Calcula o novo estado do lote
+              const newQuantitySold = newUnits.filter(u => u.status === 'SOLD').length;
+              let newStatus: ProductStatus = 'IN_STOCK';
+              if (originalProduct.quantityBought > 0 && newQuantitySold >= originalProduct.quantityBought) {
+                  newStatus = 'SOLD';
+              } else if (newQuantitySold > 0) {
+                  newStatus = 'PARTIAL';
+              }
+              
+              batch.update(productRef, { 
+                  units: newUnits,
+                  quantitySold: newQuantitySold,
+                  salesHistory: [...(originalProduct.salesHistory || []), newSaleRecord],
+                  status: newStatus
+              });
+          }
 
           await batch.commit();
           
-          // Atualiza o estado local para refletir as mudanças imediatamente
           setSelectedOrderDetails({ ...selectedOrderDetails, items: updatedItems, status: 'Enviado' });
           setIsAssignSerialOpen(false);
           alert("Números de série atribuídos e stock atualizado com sucesso!");
@@ -501,24 +513,98 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   };
 
-
   const handleAddCoupon = async (e: React.FormEvent) => { e.preventDefault(); if (!newCoupon.code) return; try { await db.collection('coupons').add({ ...newCoupon, code: newCoupon.code.toUpperCase().trim() }); setNewCoupon({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 }); alert("Cupão criado!"); } catch (err) { console.error(err); alert("Erro ao criar cupão"); } };
   const handleToggleCoupon = async (coupon: Coupon) => { if (!coupon.id) return; try { await db.collection('coupons').doc(coupon.id).update({ isActive: !coupon.isActive }); } catch(err) { console.error(err); } };
   const handleDeleteCoupon = async (id?: string) => { if (!id || !window.confirm("Apagar cupão?")) return; try { await db.collection('coupons').doc(id).delete(); } catch(err) { console.error(err); } };
-  const handleOrderStatusChange = async (orderId: string, newStatus: string) => { let trackingNumber: string | undefined; const order = allOrders.find(o => o.id === orderId); if (newStatus === 'Enviado') { const input = window.prompt("Insira o Número de Rastreio (Ex: DA123456789PT):"); if (input) trackingNumber = input.trim(); } try { const updateData: any = { status: newStatus }; if (trackingNumber) updateData.trackingNumber = trackingNumber; await db.collection('orders').doc(orderId).update(updateData); if (newStatus === 'Entregue' && order && !order.pointsAwarded && order.userId) { const userRef = db.collection('users').doc(order.userId); const userSnap = await userRef.get(); if (userSnap.exists) { const userData = userSnap.data() as UserType; const currentTier = userData.tier || 'Bronze'; let multiplier = LOYALTY_TIERS.BRONZE.multiplier; if (currentTier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier; if (currentTier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier; const pointsEarned = Math.floor(order.total * multiplier); const newHistoryItem: PointHistory = { id: Date.now().toString(), date: new Date().toISOString(), amount: pointsEarned, reason: `Compra ${order.id} (${multiplier}x)`, orderId: order.id }; await userRef.update({ loyaltyPoints: (userData.loyaltyPoints || 0) + pointsEarned, pointsHistory: [newHistoryItem, ...(userData.pointsHistory || [])] }); await db.collection('orders').doc(orderId).update({ pointsAwarded: true }); alert(`Pontos atribuídos!\nCliente ganhou ${pointsEarned} pontos.\nNível atual: ${currentTier}`); } } } catch (error) { console.error(error); alert("Erro ao atualizar (Verifique consola)."); } };
+  const handleOrderStatusChange = async (orderId: string, newStatus: string) => { 
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) return;
+
+      let trackingNumber: string | undefined; 
+      if (newStatus === 'Enviado') { 
+          const input = window.prompt("Insira o Número de Rastreio (Ex: DA123456789PT):"); 
+          if (input) trackingNumber = input.trim(); 
+      } 
+      
+      try {
+          const batch = db.batch();
+          const orderRef = db.collection('orders').doc(orderId);
+
+          const updateData: any = { status: newStatus }; 
+          if (trackingNumber) updateData.trackingNumber = trackingNumber; 
+          batch.update(orderRef, updateData);
+
+          // LÓGICA DE CANCELAMENTO E REPOSIÇÃO DE STOCK
+          if (newStatus === 'Cancelado' && order.status !== 'Cancelado') {
+              for (const item of order.items) {
+                  if (typeof item === 'object' && item.serialNumbers && item.serialNumbers.length > 0) {
+                      const saleRecordId = `ORDER-${order.id}-${item.productId}`;
+                      
+                      const invQuery = await db.collection('products_inventory')
+                          .where('publicProductId', '==', item.productId)
+                          .where('variant', '==', item.selectedVariant || null)
+                          .get();
+
+                      for (const doc of invQuery.docs) {
+                          const invProd = { id: doc.id, ...doc.data() } as InventoryProduct;
+                          let productWasUpdated = false;
+
+                          const newUnits = (invProd.units || []).map(u => {
+                              if (item.serialNumbers!.includes(u.id)) {
+                                  productWasUpdated = true;
+                                  return { ...u, status: 'AVAILABLE' };
+                              }
+                              return u;
+                          });
+
+                          if (productWasUpdated) {
+                              const newSalesHistory = (invProd.salesHistory || []).filter(s => s.id !== saleRecordId);
+                              const newQuantitySold = newUnits.filter(u => u.status === 'SOLD').length;
+                              let newProdStatus: ProductStatus = 'IN_STOCK';
+                              if (invProd.quantityBought > 0 && newQuantitySold >= invProd.quantityBought) newProdStatus = 'SOLD';
+                              else if (newQuantitySold > 0) newProdStatus = 'PARTIAL';
+                              
+                              batch.update(doc.ref, { 
+                                  units: newUnits, 
+                                  salesHistory: newSalesHistory, 
+                                  quantitySold: newQuantitySold, 
+                                  status: newProdStatus 
+                              });
+                          }
+                      }
+                  }
+              }
+          }
+
+          // LÓGICA DE ATRIBUIÇÃO DE PONTOS
+          if (newStatus === 'Entregue' && order && !order.pointsAwarded && order.userId) { 
+              const userRef = db.collection('users').doc(order.userId); 
+              const userSnap = await userRef.get(); 
+              if (userSnap.exists) { 
+                  const userData = userSnap.data() as UserType; 
+                  const currentTier = userData.tier || 'Bronze'; 
+                  let multiplier = LOYALTY_TIERS.BRONZE.multiplier; 
+                  if (currentTier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier; 
+                  if (currentTier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier; 
+                  const pointsEarned = Math.floor(order.total * multiplier); 
+                  const newHistoryItem: PointHistory = { id: Date.now().toString(), date: new Date().toISOString(), amount: pointsEarned, reason: `Compra ${order.id} (${multiplier}x)`, orderId: order.id }; 
+                  batch.update(userRef, { loyaltyPoints: (userData.loyaltyPoints || 0) + pointsEarned, pointsHistory: [newHistoryItem, ...(userData.pointsHistory || [])] });
+                  batch.update(orderRef, { pointsAwarded: true }); 
+                  alert(`Pontos atribuídos!\nCliente ganhou ${pointsEarned} pontos.\nNível atual: ${currentTier}`); 
+              } 
+          }
+
+          await batch.commit();
+      } catch (error) { 
+          console.error(error); 
+          alert("Erro ao atualizar (Verifique consola)."); 
+      } 
+  };
   const handleDeleteOrder = async (orderId: string) => { if (!window.confirm("ATENÇÃO: Tem a certeza que quer APAGAR esta encomenda para sempre? Isto é útil para limpar duplicados.")) return; try { await db.collection('orders').doc(orderId).delete(); } catch (e) { console.error(e); alert("Erro ao apagar encomenda"); } };
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { console.error(e); alert("Erro ao gravar rastreio"); } };
   const handleCopy = (text: string) => navigator.clipboard.writeText(text);
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
-  const chartData = useMemo(() => { const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); 
-// Fix: Use `.toString()` method for converting number to string instead of calling `String` as a function.
-const month = (d.getMonth() + 1).toString().padStart(2, '0'); 
-// Fix: Use `.toString()` method for converting number to string instead of calling `String` as a function.
-const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const days = []; const today = new Date(); let totalPeriod = 0; for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); 
-// Fix: Use `.toString()` method for converting number to string instead of calling `String` as a function.
-const month = (d.getMonth() + 1).toString().padStart(2, '0'); 
-// Fix: Use `.toString()` method for converting number to string instead of calling `String` as a function.
-const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; }, [allOrders, products]);
+  const chartData = useMemo(() => { const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const days = []; const today = new Date(); let totalPeriod = 0; for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; }, [allOrders, products]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = p.purchasePrice * p.quantityBought; totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else revenue = p.quantitySold * p.salePrice; realizedRevenue += revenue; const cogs = p.quantitySold * p.purchasePrice; const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; const remainingStock = p.quantityBought - p.quantitySold; if (remainingStock > 0 && p.targetSalePrice) potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock; }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus }); setModalUnits(product.units || []); setIsModalOpen(true); };
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', targetSalePrice: '', cashbackValue: '', cashbackStatus: 'NONE' }); setModalUnits([]); setIsModalOpen(true); };
@@ -531,7 +617,12 @@ if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD';
 else if (currentSold > 0) productStatus = 'PARTIAL';
 const payload: any = { name: formData.name, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: safeSalesHistory, purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, units: modalUnits, status: productStatus }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setIsSaleModalOpen(true); };
-  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = Number(saleForm.quantity); const price = Number(saleForm.unitPrice); const shipping = Number(saleForm.shippingCost) || 0; if (qty <= 0) return alert("Quantidade deve ser maior que 0"); const remaining = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold; if (qty > remaining) return alert(`Erro: Só tem ${remaining} unidades em stock.`); const newSale: SaleRecord = { id: Date.now().toString(), date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes || '' }; const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale]; const newQuantitySold = selectedProductForSale.quantitySold + qty; const totalRevenue = updatedHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = updatedHistory.reduce((acc, s) => acc + s.quantity, 0); const averageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let status: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= selectedProductForSale.quantityBought) status = 'SOLD'; else if (newQuantitySold > 0) status = 'PARTIAL'; try { await updateProduct(selectedProductForSale.id, { quantitySold: newQuantitySold, salePrice: averageSalePrice, salesHistory: updatedHistory, status, supplierName: saleForm.supplierName, supplierOrderId: saleForm.supplierOrderId }); setIsSaleModalOpen(false); } catch (err) { alert("Erro ao registar venda"); console.error(err); } };
+  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = Number(saleForm.quantity); const price = Number(saleForm.unitPrice); const shipping = Number(saleForm.shippingCost) || 0; if (qty <= 0) return alert("Quantidade deve ser maior que 0"); const remaining = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold; if (qty > remaining) return alert(`Erro: Só tem ${remaining} unidades em stock.`); const newSale: SaleRecord = { id: Date.now().toString(), date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes || '' }; const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale]; const newQuantitySold = selectedProductForSale.quantitySold + qty; const totalRevenue = updatedHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = updatedHistory.reduce((acc, s) => acc + s.quantity, 0); const averageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; 
+// Fix: Renamed `status` to `productStatus` to avoid a TypeScript type inference collision with the `ProductUnit.status` property.
+let productStatus: ProductStatus = 'IN_STOCK';
+if (newQuantitySold >= selectedProductForSale.quantityBought) productStatus = 'SOLD';
+else if (newQuantitySold > 0) productStatus = 'PARTIAL';
+ try { await updateProduct(selectedProductForSale.id, { quantitySold: newQuantitySold, salePrice: averageSalePrice, salesHistory: updatedHistory, status: productStatus, supplierName: saleForm.supplierName, supplierOrderId: saleForm.supplierOrderId }); setIsSaleModalOpen(false); } catch (err) { alert("Erro ao registar venda"); console.error(err); } };
   const handleDeleteSale = async (saleId: string) => { if (!editingId) return; const product = products.find(p => p.id === editingId); if (!product || !product.salesHistory) return; const saleToDelete = product.salesHistory.find(s => s.id === saleId); if (!saleToDelete) return; if (!window.confirm(`Tem a certeza que quer cancelar esta venda de ${saleToDelete.quantity} unidade(s)? O stock será reposto.`)) return; const newHistory = product.salesHistory.filter(s => s.id !== saleId); const newQuantitySold = product.quantitySold - saleToDelete.quantity; const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0); const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let newStatus: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD'; else if (newQuantitySold > 0) newStatus = 'PARTIAL'; try { await updateProduct(product.id, { salesHistory: newHistory, quantitySold: Math.max(0, newQuantitySold), salePrice: newAverageSalePrice, status: newStatus }); alert("Venda anulada e stock reposto com sucesso!"); } catch (err) { console.error(err); alert("Erro ao anular venda."); } };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Tem a certeza absoluta que quer apagar este registo? Esta ação não pode ser desfeita.')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro ao apagar: " + (error.message || "Permissão negada")); } } };
   const filteredProducts = products.filter(p => { const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierOrderId?.toLowerCase().includes(searchTerm.toLowerCase()); let matchesStatus = true; if (statusFilter === 'IN_STOCK') matchesStatus = p.status !== 'SOLD'; if (statusFilter === 'SOLD') matchesStatus = p.status === 'SOLD'; let matchesCashback = true; if (cashbackFilter !== 'ALL') matchesCashback = p.cashbackStatus === cashbackFilter; return matchesSearch && matchesStatus && matchesCashback; });
