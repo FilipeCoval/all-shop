@@ -4,6 +4,7 @@ import {
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
   History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw
 } from 'lucide-react';
+import firebase from "firebase/compat/app";
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
@@ -58,8 +59,6 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
             ];
             hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
 
-            // Fix: The constructor for this version of @zxing/library expects a number for `timeBetweenScansMillis` as the second argument, not an options object.
-            // Using the value from `delayBetweenScanAttempts`.
             codeReaderRef.current = new BrowserMultiFormatReader(hints, 100);
 
             try {
@@ -101,11 +100,9 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
             const track = streamRef.current.getVideoTracks()[0];
             const capabilities = track.getCapabilities();
             
-            // Fix: Property 'torch' does not exist on type 'MediaTrackCapabilities'. Cast to `any` to access this property as it may not be in the default TS lib definitions.
             if ((capabilities as any).torch) {
                 try {
                     await track.applyConstraints({
-                        // Fix: Property 'torch' does not exist in type 'MediaTrackConstraintSet'. Cast constraint to `any` to apply it.
                         advanced: [{ torch: !isTorchOn } as any]
                     });
                     setIsTorchOn(!isTorchOn);
@@ -451,7 +448,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           const batch = db.batch();
           batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
 
-          // Mapa para agrupar S/N por ID de produto de inventário
           const inventoryUnitMap = new Map<string, string[]>();
           selectedUnitsForOrder.forEach(unitId => {
               const assignmentInfo = availableUnitsForAssignment.find(a => a.unitId === unitId);
@@ -463,19 +459,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               }
           });
 
-          // Itera sobre cada lote de inventário afetado
           for (const [invId, unitsToSell] of inventoryUnitMap.entries()) {
               const productRef = db.collection('products_inventory').doc(invId);
               const originalProduct = products.find(p => p.id === invId);
               if (!originalProduct) continue;
 
-              // Atualiza o estado das unidades
               const newUnits = (originalProduct.units || []).map(unit => {
                   if (unitsToSell.includes(unit.id)) return { ...unit, status: 'SOLD' };
                   return unit;
               });
 
-              // Cria um registo de venda para este lote, a partir da encomenda
               const newSaleRecord: SaleRecord = {
                   id: `ORDER-${selectedOrderDetails.id}-${targetItem.productId}`,
                   date: selectedOrderDetails.date,
@@ -484,7 +477,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   notes: `Venda Online - Pedido ${selectedOrderDetails.id}`
               };
 
-              // Calcula o novo estado do lote
               const newQuantitySold = newUnits.filter(u => u.status === 'SOLD').length;
               let newStatus: ProductStatus = 'IN_STOCK';
               if (originalProduct.quantityBought > 0 && newQuantitySold >= originalProduct.quantityBought) {
@@ -496,7 +488,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               batch.update(productRef, { 
                   units: newUnits,
                   quantitySold: newQuantitySold,
-                  salesHistory: [...(originalProduct.salesHistory || []), newSaleRecord],
+                  salesHistory: firebase.firestore.FieldValue.arrayUnion(newSaleRecord),
                   status: newStatus
               });
           }
@@ -534,7 +526,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           if (trackingNumber) updateData.trackingNumber = trackingNumber; 
           batch.update(orderRef, updateData);
 
-          // LÓGICA DE CANCELAMENTO E REPOSIÇÃO DE STOCK
           if (newStatus === 'Cancelado' && order.status !== 'Cancelado') {
               for (const item of order.items) {
                   if (typeof item === 'object' && item.serialNumbers && item.serialNumbers.length > 0) {
@@ -542,22 +533,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                       
                       const invQuery = await db.collection('products_inventory')
                           .where('publicProductId', '==', item.productId)
-                          .where('variant', '==', item.selectedVariant || null)
                           .get();
 
                       for (const doc of invQuery.docs) {
                           const invProd = { id: doc.id, ...doc.data() } as InventoryProduct;
-                          let productWasUpdated = false;
+                          
+                          const hasMatchingSn = (invProd.units || []).some(u => item.serialNumbers!.includes(u.id));
 
-                          const newUnits = (invProd.units || []).map(u => {
-                              if (item.serialNumbers!.includes(u.id)) {
-                                  productWasUpdated = true;
-                                  return { ...u, status: 'AVAILABLE' };
-                              }
-                              return u;
-                          });
+                          if (hasMatchingSn) {
+                              const newUnits = (invProd.units || []).map(u => {
+                                  if (item.serialNumbers!.includes(u.id)) {
+                                      return { ...u, status: 'AVAILABLE' as const };
+                                  }
+                                  return u;
+                              });
 
-                          if (productWasUpdated) {
                               const newSalesHistory = (invProd.salesHistory || []).filter(s => s.id !== saleRecordId);
                               const newQuantitySold = newUnits.filter(u => u.status === 'SOLD').length;
                               let newProdStatus: ProductStatus = 'IN_STOCK';
@@ -570,13 +560,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                   quantitySold: newQuantitySold, 
                                   status: newProdStatus 
                               });
+                              // Break here because we found the correct inventory batch for this item
+                              break; 
                           }
                       }
                   }
               }
           }
 
-          // LÓGICA DE ATRIBUIÇÃO DE PONTOS
           if (newStatus === 'Entregue' && order && !order.pointsAwarded && order.userId) { 
               const userRef = db.collection('users').doc(order.userId); 
               const userSnap = await userRef.get(); 
@@ -611,14 +602,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { 
       const publicProd = PRODUCTS.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
   const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) { alert("Este produto tem variantes. Por favor selecione qual variante está a registar."); return; } const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : []; const currentSalePrice = existingProduct ? existingProduct.salePrice : 0; 
-// Fix: Renamed `status` to `productStatus` to avoid scope collision with the `status` property of `ProductUnit`, which was causing a TypeScript type inference error.
 let productStatus: ProductStatus = 'IN_STOCK';
 if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD';
 else if (currentSold > 0) productStatus = 'PARTIAL';
 const payload: any = { name: formData.name, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: safeSalesHistory, purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, units: modalUnits, status: productStatus }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setIsSaleModalOpen(true); };
   const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = Number(saleForm.quantity); const price = Number(saleForm.unitPrice); const shipping = Number(saleForm.shippingCost) || 0; if (qty <= 0) return alert("Quantidade deve ser maior que 0"); const remaining = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold; if (qty > remaining) return alert(`Erro: Só tem ${remaining} unidades em stock.`); const newSale: SaleRecord = { id: Date.now().toString(), date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes || '' }; const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale]; const newQuantitySold = selectedProductForSale.quantitySold + qty; const totalRevenue = updatedHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = updatedHistory.reduce((acc, s) => acc + s.quantity, 0); const averageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; 
-// Fix: Renamed `status` to `productStatus` to avoid a TypeScript type inference collision with the `ProductUnit.status` property.
 let productStatus: ProductStatus = 'IN_STOCK';
 if (newQuantitySold >= selectedProductForSale.quantityBought) productStatus = 'SOLD';
 else if (newQuantitySold > 0) productStatus = 'PARTIAL';
