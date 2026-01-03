@@ -27,7 +27,7 @@ export interface Order {
   date: string;
   total: number;
   status: 'Processamento' | 'Enviado' | 'Entregue' | 'Cancelado';
-  items: OrderItem[]; // Removido "| string" para forçar estrutura
+  items: (OrderItem | string)[]; // ACEITA DADOS ANTIGOS (string) E NOVOS (OrderItem)
   userId?: string;
   shippingInfo: UserCheckoutInfo;
   trackingNumber?: string;
