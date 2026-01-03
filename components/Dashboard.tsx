@@ -212,7 +212,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 });
   
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit'>('search');
+  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
   
@@ -230,6 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   // States for Sale Modal
   const [linkedOrderId, setLinkedOrderId] = useState<string>('');
   const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
+  const [manualUnitSelect, setManualUnitSelect] = useState('');
 
   const [formData, setFormData] = useState({
     name: '', category: '', publicProductId: '' as string, variant: '',
@@ -340,6 +341,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setModalUnits(prev => [...prev, newUnit]);
   };
   const handleRemoveUnit = (id: string) => setModalUnits(prev => prev.filter(u => u.id !== id));
+
+  const handleSelectUnitForSale = (code: string) => {
+    if (!selectedProductForSale) return;
+    const unit = selectedProductForSale.units?.find(u => u.id === code);
+    if (!unit) {
+        alert("Erro: Este S/N não pertence a este lote de produto.");
+        return;
+    }
+    if (unit.status !== 'AVAILABLE') {
+        alert("Erro: Este S/N já foi vendido ou está reservado.");
+        return;
+    }
+    if (selectedUnitsForSale.includes(code)) {
+        alert("Aviso: Este S/N já foi adicionado a esta venda.");
+        return;
+    }
+    setSelectedUnitsForSale(prev => [...prev, code]);
+  };
 
   const handleNotifySubscribers = (productId: number, productName: string, variantName?: string) => {
     const alertsForProduct = stockAlerts.filter(a => 
@@ -594,7 +613,15 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
       
       {showToast && <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right"><div className="bg-white border-l-4 border-green-500 shadow-2xl rounded-r-lg p-4 flex items-start gap-3 w-80"><div className="text-green-500 bg-green-50 p-2 rounded-full"><DollarSign size={24} /></div><div className="flex-1"><h4 className="font-bold text-gray-900">Nova Venda Online!</h4><p className="text-sm text-gray-600 mt-1">Pedido {showToast.id.startsWith('#') ? '' : '#'}{showToast.id.toUpperCase()}</p><p className="text-lg font-bold text-green-600 mt-1">{formatCurrency(showToast.total)}</p></div><button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button></div></div>}
-      {isScannerOpen && <BarcodeScanner onCodeSubmit={(code) => { if(scannerMode === 'search') setSearchTerm(code); else handleAddUnit(code); setIsScannerOpen(false); }} onClose={() => setIsScannerOpen(false)} />}
+      {isScannerOpen && <BarcodeScanner 
+          onCodeSubmit={(code) => { 
+              if(scannerMode === 'search') setSearchTerm(code); 
+              else if(scannerMode === 'add_unit') handleAddUnit(code);
+              else if(scannerMode === 'sell_unit') handleSelectUnitForSale(code);
+              setIsScannerOpen(false); 
+          }} 
+          onClose={() => setIsScannerOpen(false)} 
+      />}
 
       {notificationModalData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -725,17 +752,37 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                         {selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (
                           <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                             <label className="block text-xs font-bold text-purple-800 uppercase mb-2">Selecionar Unidades / S/N para Vender</label>
-                            <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                              {selectedProductForSale.units.filter(u => u.status === 'AVAILABLE').map(unit => (
-                                <label key={unit.id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${selectedUnitsForSale.includes(unit.id) ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                                  <input type="checkbox" checked={selectedUnitsForSale.includes(unit.id)} onChange={() => {
-                                    setSelectedUnitsForSale(prev => prev.includes(unit.id) ? prev.filter(id => id !== unit.id) : [...prev, unit.id]);
-                                  }} className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500" />
-                                  <span className="font-mono font-bold text-gray-700">{unit.id}</span>
-                                </label>
-                              ))}
+                            
+                            <button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg mb-4">
+                                <Camera size={18} /> Escanear Unidade
+                            </button>
+
+                            <div className="text-center text-xs text-gray-400 mb-2">ou adicione manualmente:</div>
+
+                            <div className="flex gap-2 mb-4">
+                               <select value={manualUnitSelect} onChange={e => setManualUnitSelect(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg text-sm">
+                                  <option value="">-- Selecione um S/N --</option>
+                                  {selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (
+                                    <option key={u.id} value={u.id}>{u.id}</option>
+                                  ))}
+                               </select>
+                               <button type="button" onClick={() => { if(manualUnitSelect) handleSelectUnitForSale(manualUnitSelect); setManualUnitSelect(''); }} className="bg-gray-200 hover:bg-gray-300 px-3 rounded-lg font-bold">+</button>
                             </div>
-                            <p className="text-xs text-purple-700 mt-2">Qtd. selecionada: {selectedUnitsForSale.length}</p>
+                            
+                            {selectedUnitsForSale.length > 0 && (
+                               <div>
+                                  <p className="text-xs font-bold text-gray-600 mb-2">Unidades selecionadas ({selectedUnitsForSale.length}):</p>
+                                  <div className="flex flex-wrap gap-2">
+                                     {selectedUnitsForSale.map(unitId => (
+                                        <div key={unitId} className="bg-white border border-purple-200 text-purple-800 text-xs font-mono px-2 py-1 rounded-full flex items-center gap-2">
+                                           <span>{unitId}</span>
+                                           <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(id => id !== unitId))} className="text-red-400 hover:text-red-600"><X size={12} /></button>
+                                        </div>
+                                     ))}
+                                  </div>
+                               </div>
+                            )}
+
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 gap-4">
