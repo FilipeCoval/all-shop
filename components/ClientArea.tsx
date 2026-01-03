@@ -227,8 +227,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       return `#${id.slice(-6).toUpperCase()}`;
   };
 
-  // Wishlist Products Logic
-  const favoriteProducts = publicProducts.filter(p => (wishlist || []).includes(p.id));
+  // Wishlist Products Logic - A CORREÇÃO ESTÁ AQUI
+  const favoriteProducts = (publicProducts || []).filter(p => (wishlist || []).includes(p.id));
 
   // Função para Gerar o Documento de Garantia/Comprovativo
   const handlePrintOrder = (order: Order) => {
