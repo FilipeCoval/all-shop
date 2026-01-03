@@ -398,16 +398,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleOpenAssignSerials = (orderItem: OrderItem, index: number) => {
       setTargetOrderItemIndex(index);
       
-      // Encontrar produtos de inventário compatíveis
       const matchingInventory = products.filter(inv => {
           const matchId = inv.publicProductId === orderItem.productId;
           const matchVariant = orderItem.selectedVariant 
              ? (inv.variant === orderItem.selectedVariant) 
-             : true; // Se não houver variante no pedido, aceita qualquer (ou sem) variante
+             : !inv.variant;
           return matchId && matchVariant;
       });
 
-      // Extrair unidades disponíveis
       const units: { unitId: string, inventoryProductId: string }[] = [];
       matchingInventory.forEach(inv => {
           if (inv.units) {
@@ -426,9 +424,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const handleToggleUnitSelection = (unitId: string) => {
       setSelectedUnitsForOrder(prev => {
-          if (prev.includes(unitId)) return prev.filter(u => u !== unitId);
-          // Permite selecionar apenas até à quantidade pedida? 
-          // Para já deixamos livre, o admin decide
+          if (prev.includes(unitId)) {
+              return prev.filter(u => u !== unitId);
+          }
           return [...prev, unitId];
       });
   };
@@ -437,65 +435,69 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (!selectedOrderDetails || targetOrderItemIndex === null) return;
 
       const orderRef = db.collection('orders').doc(selectedOrderDetails.id);
-      const updatedItems = [...selectedOrderDetails.items];
       
-      // 1. Atualizar o item da encomenda
-      updatedItems[targetOrderItemIndex] = {
-          ...updatedItems[targetOrderItemIndex] as OrderItem,
-          serialNumbers: selectedUnitsForOrder
-      };
+      // Criar cópia segura dos items da encomenda
+      const updatedItems = [...selectedOrderDetails.items];
+      const targetItem = updatedItems[targetOrderItemIndex];
+
+      if (typeof targetItem === 'string') {
+          alert("Não é possível atribuir S/N a um item de uma encomenda antiga.");
+          return;
+      }
+      
+      const newOrderItem: OrderItem = { ...targetItem, serialNumbers: selectedUnitsForOrder };
+      updatedItems[targetOrderItemIndex] = newOrderItem;
 
       try {
           const batch = db.batch();
 
-          // Update Order
-          batch.update(orderRef, { items: updatedItems });
+          // 1. Atualiza a encomenda com os novos S/N
+          batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
 
-          // Update Inventory Units to SOLD
-          // Precisamos saber de que Inventory Product veio cada unitId selecionada
-          for (const unitId of selectedUnitsForOrder) {
-               // Encontrar o produto de inventário dono desta unit
-               // Otimização: availableUnitsForAssignment tem o map
-               const map = availableUnitsForAssignment.find(m => m.unitId === unitId);
-               
-               // Se não estiver na lista "Available" (ex: já estava atribuído antes), 
-               // precisamos procurar em todos os produtos
-               let invId = map?.inventoryProductId;
-               
-               if (!invId) {
-                   // Fallback search
-                   const productOwner = products.find(p => p.units?.some(u => u.id === unitId));
-                   invId = productOwner?.id;
-               }
+          // 2. Itera sobre os produtos de inventário e atualiza o estado das unidades
+          const inventoryUpdates = new Map<string, ProductUnit[]>();
+          const originalStates = new Map<string, ProductUnit[]>();
 
-               if (invId) {
-                   const productRef = db.collection('products_inventory').doc(invId);
-                   const productDoc = products.find(p => p.id === invId);
-                   if (productDoc && productDoc.units) {
-                       const newUnits = productDoc.units.map(u => 
-                           u.id === unitId ? { ...u, status: 'SOLD' } : u
-                       );
-                       // Update sold count too? Maybe complex for batch. 
-                       // For simplicity, we just mark unit status. 
-                       // A robust system would increment quantitySold too.
-                       
-                       // Nota: Isto sobrescreve, num cenário real com concorrência seria perigoso.
-                       // Para este projeto pequeno, é aceitável.
-                       batch.update(productRef, { units: newUnits }); 
-                   }
-               }
-          }
+          // Encontra todas as unidades relacionadas ao produto do item da encomenda
+          const relatedInventory = products.filter(p => {
+              const matchId = p.publicProductId === targetItem.productId;
+              const matchVariant = targetItem.selectedVariant ? p.variant === targetItem.selectedVariant : !p.variant;
+              return matchId && matchVariant;
+          });
+
+          relatedInventory.forEach(invProd => {
+              if (invProd.units) {
+                  originalStates.set(invProd.id, invProd.units);
+                  const newUnits = invProd.units.map(unit => {
+                      // Se esta unidade foi selecionada, marca como VENDIDA
+                      if (selectedUnitsForOrder.includes(unit.id)) {
+                          return { ...unit, status: 'SOLD' };
+                      }
+                      // Se esta unidade estava atribuída antes mas foi desmarcada, volta a DISPONÍVEL
+                      if (targetItem.serialNumbers?.includes(unit.id) && !selectedUnitsForOrder.includes(unit.id)) {
+                          return { ...unit, status: 'AVAILABLE' };
+                      }
+                      return unit;
+                  });
+                  inventoryUpdates.set(invProd.id, newUnits);
+              }
+          });
+          
+          inventoryUpdates.forEach((newUnits, invId) => {
+              const productRef = db.collection('products_inventory').doc(invId);
+              batch.update(productRef, { units: newUnits });
+          });
 
           await batch.commit();
           
-          // Update local state
-          setSelectedOrderDetails({ ...selectedOrderDetails, items: updatedItems });
+          // Atualiza o estado local para refletir as mudanças imediatamente
+          setSelectedOrderDetails({ ...selectedOrderDetails, items: updatedItems, status: 'Enviado' });
           setIsAssignSerialOpen(false);
-          alert("Números de série atribuídos e stock atualizado!");
+          alert("Números de série atribuídos e stock atualizado com sucesso!");
 
       } catch (error) {
           console.error("Erro ao atribuir S/N:", error);
-          alert("Erro ao guardar.");
+          alert("Erro ao guardar. Verifique a consola para mais detalhes.");
       }
   };
 
@@ -522,7 +524,12 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', targetSalePrice: '', cashbackValue: '', cashbackStatus: 'NONE' }); setModalUnits([]); setIsModalOpen(true); };
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { 
       const publicProd = PRODUCTS.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
-  const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) { alert("Este produto tem variantes. Por favor selecione qual variante está a registar."); return; } const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : []; const currentSalePrice = existingProduct ? existingProduct.salePrice : 0; let status: ProductStatus = 'IN_STOCK'; if (currentSold >= qBought && qBought > 0) status = 'SOLD'; else if (currentSold > 0) status = 'PARTIAL'; const payload: any = { name: formData.name, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: safeSalesHistory, purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, units: modalUnits, status }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); } };
+  const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) { alert("Este produto tem variantes. Por favor selecione qual variante está a registar."); return; } const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : []; const currentSalePrice = existingProduct ? existingProduct.salePrice : 0; 
+// Fix: Renamed `status` to `productStatus` to avoid scope collision with the `status` property of `ProductUnit`, which was causing a TypeScript type inference error.
+let productStatus: ProductStatus = 'IN_STOCK';
+if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD';
+else if (currentSold > 0) productStatus = 'PARTIAL';
+const payload: any = { name: formData.name, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: safeSalesHistory, purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, units: modalUnits, status: productStatus }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setIsSaleModalOpen(true); };
   const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = Number(saleForm.quantity); const price = Number(saleForm.unitPrice); const shipping = Number(saleForm.shippingCost) || 0; if (qty <= 0) return alert("Quantidade deve ser maior que 0"); const remaining = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold; if (qty > remaining) return alert(`Erro: Só tem ${remaining} unidades em stock.`); const newSale: SaleRecord = { id: Date.now().toString(), date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes || '' }; const updatedHistory = [...(selectedProductForSale.salesHistory || []), newSale]; const newQuantitySold = selectedProductForSale.quantitySold + qty; const totalRevenue = updatedHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = updatedHistory.reduce((acc, s) => acc + s.quantity, 0); const averageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let status: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= selectedProductForSale.quantityBought) status = 'SOLD'; else if (newQuantitySold > 0) status = 'PARTIAL'; try { await updateProduct(selectedProductForSale.id, { quantitySold: newQuantitySold, salePrice: averageSalePrice, salesHistory: updatedHistory, status, supplierName: saleForm.supplierName, supplierOrderId: saleForm.supplierOrderId }); setIsSaleModalOpen(false); } catch (err) { alert("Erro ao registar venda"); console.error(err); } };
   const handleDeleteSale = async (saleId: string) => { if (!editingId) return; const product = products.find(p => p.id === editingId); if (!product || !product.salesHistory) return; const saleToDelete = product.salesHistory.find(s => s.id === saleId); if (!saleToDelete) return; if (!window.confirm(`Tem a certeza que quer cancelar esta venda de ${saleToDelete.quantity} unidade(s)? O stock será reposto.`)) return; const newHistory = product.salesHistory.filter(s => s.id !== saleId); const newQuantitySold = product.quantitySold - saleToDelete.quantity; const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0); const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let newStatus: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD'; else if (newQuantitySold > 0) newStatus = 'PARTIAL'; try { await updateProduct(product.id, { salesHistory: newHistory, quantitySold: Math.max(0, newQuantitySold), salePrice: newAverageSalePrice, status: newStatus }); alert("Venda anulada e stock reposto com sucesso!"); } catch (err) { console.error(err); alert("Erro ao anular venda."); } };
@@ -541,7 +548,6 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
       {showToast && <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right"><div className="bg-white border-l-4 border-green-500 shadow-2xl rounded-r-lg p-4 flex items-start gap-3 w-80"><div className="text-green-500 bg-green-50 p-2 rounded-full"><DollarSign size={24} /></div><div className="flex-1"><h4 className="font-bold text-gray-900">Nova Venda Online!</h4><p className="text-sm text-gray-600 mt-1">Pedido {showToast.id.startsWith('#') ? '' : '#'}{showToast.id.toUpperCase()}</p><p className="text-lg font-bold text-green-600 mt-1">{formatCurrency(showToast.total)}</p></div><button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button></div></div>}
       {isScannerOpen && <BarcodeScanner onCodeSubmit={(code) => { if(scannerMode === 'search') setSearchTerm(code); else handleAddUnit(code); setIsScannerOpen(false); }} onClose={() => setIsScannerOpen(false)} />}
       
-      {/* S/N Assignment Modal */}
       {isAssignSerialOpen && selectedOrderDetails && targetOrderItemIndex !== null && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
@@ -551,8 +557,9 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
                          <p className="opacity-90 mt-1 text-xs">
                              {(() => {
                                  const item = selectedOrderDetails.items[targetOrderItemIndex];
-                                 // Safely handle both string and OrderItem types
-                                 return typeof item === 'string' ? item : item.name;
+                                 if (typeof item === 'string') return item;
+                                 const itemObj = item as OrderItem;
+                                 return `${itemObj.quantity}x ${itemObj.name}${itemObj.selectedVariant ? ` (${itemObj.selectedVariant})` : ''}`;
                              })()}
                          </p>
                      </div>
@@ -566,7 +573,7 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
                              Nenhuma unidade disponível encontrada no inventário para este produto/variante.
                          </div>
                      ) : (
-                         <div className="space-y-2">
+                         <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
                              {availableUnitsForAssignment.map(unit => (
                                  <label key={unit.unitId} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${selectedUnitsForOrder.includes(unit.unitId) ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
                                      <input 
@@ -583,7 +590,7 @@ const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-
 
                      <div className="mt-6 flex gap-3">
                          <button onClick={() => setIsAssignSerialOpen(false)} className="px-4 py-2 border rounded-lg text-gray-600">Cancelar</button>
-                         <button onClick={handleSaveSerials} className="flex-1 bg-purple-600 text-white font-bold py-2 rounded-lg hover:bg-purple-700">Guardar Atribuição</button>
+                         <button onClick={handleSaveSerials} className="flex-1 bg-purple-600 text-white font-bold py-2 rounded-lg hover:bg-purple-700">Guardar e Marcar como Enviado</button>
                      </div>
                  </div>
              </div>
@@ -690,84 +697,45 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
       {isSaleModalOpen && selectedProductForSale && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-green-600 p-6 text-white shrink-0"><h3 className="text-xl font-bold flex items-center gap-2"><DollarSign /> Registar Venda</h3><p className="opacity-90 mt-1 text-sm">{selectedProductForSale.name}</p><div className="mt-2 text-xs bg-green-700 inline-block px-2 py-1 rounded">Stock Atual: {selectedProductForSale.quantityBought - selectedProductForSale.quantitySold}</div></div><div className="overflow-y-auto p-6"><form onSubmit={handleSaleSubmit} className="space-y-6"><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label><input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Unitário (€)</label><input type="number" step="0.01" required className="w-full p-3 border border-gray-300 rounded-lg text-lg" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label><input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} /><p className="text-[10px] text-gray-400 mt-1">Se ofereceu portes, deixe 0. Se pagou CTT, coloque aqui o custo.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Venda</label><input type="date" required className="w-full p-3 border border-gray-300 rounded-lg" value={saleForm.date} onChange={e => setSaleForm({...saleForm, date: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas (Cliente/Origem)</label><input type="text" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ex: Vendido no OLX ao Rui" value={saleForm.notes} onChange={e => setSaleForm({...saleForm, notes: e.target.value})} /></div><div className="bg-gray-50 p-4 rounded-xl border border-gray-200"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Atualizar Origem / Garantia</h4><div className="space-y-3"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fornecedor</label><input type="text" className="w-full p-2 border border-gray-300 rounded-lg text-sm" placeholder="Ex: Temu, AliExpress" value={saleForm.supplierName} onChange={e => setSaleForm({...saleForm, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID da Encomenda (Origem)</label><input type="text" className="w-full p-2 border border-gray-300 rounded-lg text-sm" placeholder="Ex: PO-2023-9999" value={saleForm.supplierOrderId} onChange={e => setSaleForm({...saleForm, supplierOrderId: e.target.value})} /><p className="text-[10px] text-gray-400 mt-1">Ao preencher, atualiza automaticamente o registo do produto.</p></div></div></div><div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsSaleModalOpen(false)} className="px-4 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar Venda</button></div></form></div></div></div>}
       
-      {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p><div className="flex items-start gap-1"><MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-700">{selectedOrderDetails.shippingInfo?.address}</span></div></div></div>
+      {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p><div className="flex items-start gap-1"><MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-700">{selectedOrderDetails.shippingInfo?.address}</span></div></div></div>
       <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
-      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & Origem</h4>
+      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & S/N</h4>
       <ul className="space-y-3">
         {selectedOrderDetails.items.map((item, idx) => {
-          // Fix: Handle both legacy string items and new OrderItem objects safely
-          const isString = typeof item === 'string';
-          const itemString = isString ? (item as unknown as string) : '';
-          const itemObject = !isString ? (item as OrderItem) : null;
-          
-          const itemNameClean = isString
-            ? itemString.replace(/^\d+x\s/, '').trim().split('(')[0].trim()
-            : (itemObject?.name || '').trim();
-
-          const relatedInventoryItem = products.find(p => 
-            (p.name.includes(itemNameClean) || itemNameClean.includes(p.name)) && 
-            (p.supplierName || p.supplierOrderId)
-          );
-
-          if (isString) {
+          if (typeof item === 'string') {
             return (
               <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-                <div className="flex items-start gap-2 text-sm">
-                  <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">1x</div>
-                  <span className="text-gray-700 font-medium">{itemString}</span>
-                </div>
-                {relatedInventoryItem && (
-                  <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem">
-                    <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
-                    <div className="text-xs">
-                      <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
-                      <span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span>
-                    </div>
-                  </div>
-                )}
+                <span className="text-gray-700 font-medium text-sm">{item}</span>
+                <span className="text-xs text-gray-400 italic ml-2">(Encomenda antiga)</span>
               </li>
             );
           }
-
-          // Handle OrderItem Object
-          const productName = itemObject?.name || 'Produto';
-          const variant = itemObject?.selectedVariant ? ` (${itemObject.selectedVariant})` : '';
-          const quantity = itemObject?.quantity || 1;
-          const serials = itemObject?.serialNumbers || [];
-
+          const itemObject = item as OrderItem;
           return (
             <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-              <div className="flex justify-between items-start">
-                <div className="flex items-start gap-2 text-sm">
-                  <div className="bg-indigo-50 text-indigo-600 p-1 rounded font-bold text-xs min-w-[24px] text-center">{quantity}x</div>
-                  <div>
-                    <span className="text-gray-700 font-medium block">{productName}{variant}</span>
-                    {serials.length > 0 && (
-                      <div className="text-xs text-green-600 bg-green-50 px-1 py-0.5 rounded mt-1 font-mono break-all">
-                        S/N: {serials.join(', ')}
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold text-xs">{itemObject.quantity}x</div>
+                    <span className="text-gray-800 font-bold">{itemObject.name}</span>
+                  </div>
+                  {itemObject.selectedVariant && <p className="text-xs text-gray-500 ml-8 mt-1">({itemObject.selectedVariant})</p>}
+                  {itemObject.serialNumbers && itemObject.serialNumbers.length > 0 && (
+                      <div className="mt-2 ml-8 bg-green-50 text-green-700 text-xs p-2 rounded-lg border border-green-100">
+                          <p className="font-bold mb-1">S/N Atribuídos:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {itemObject.serialNumbers.map(sn => <span key={sn} className="font-mono bg-white px-1.5 py-0.5 rounded border border-green-200">{sn}</span>)}
+                          </div>
                       </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {itemObject && products.some(p => p.publicProductId === itemObject.productId) && (
-                  <button
+                <button
                     onClick={() => handleOpenAssignSerials(itemObject, idx)}
-                    className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold flex items-center gap-1"
+                    className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md hover:bg-purple-200 font-bold flex items-center gap-1.5 shrink-0"
                   >
-                    <QrCode size={12} /> {serials.length > 0 ? 'Editar S/N' : 'Atribuir S/N'}
-                  </button>
-                )}
+                    <QrCode size={14} /> {itemObject.serialNumbers && itemObject.serialNumbers.length > 0 ? 'Editar S/N' : 'Atribuir S/N'}
+                </button>
               </div>
-
-              {relatedInventoryItem && (
-                <div className="mt-2 ml-8 bg-green-50 border border-green-100 p-2 rounded-md flex items-start gap-2 group cursor-pointer hover:bg-green-100 transition-colors" onClick={() => relatedInventoryItem.supplierOrderId && handleCopy(relatedInventoryItem.supplierOrderId)} title="Clique para copiar ID de Origem">
-                  <CheckCircle size={14} className="text-green-600 mt-0.5 shrink-0" />
-                  <div className="text-xs">
-                    <span className="font-bold text-green-700 block">Origem Detetada: {relatedInventoryItem.supplierName}</span>
-                    <span className="text-green-600 flex items-center gap-1">ID Encomenda: {relatedInventoryItem.supplierOrderId || 'N/A'}{relatedInventoryItem.supplierOrderId && <Copy size={10} className="opacity-50 group-hover:opacity-100" />}</span>
-                  </div>
-                </div>
-              )}
             </li>
           );
         })}
