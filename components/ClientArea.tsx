@@ -71,7 +71,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [isRedeeming, setIsRedeeming] = useState<string | null>(null);
 
   // --- FUNÇÃO AUXILIAR DE SEGURANÇA (A VACINA ANTI-CRASH) ---
-  const getSafeItems = (items: any): any[] => {
+  const getSafeItems = (items: any): (OrderItem | string)[] => {
       if (!items) return [];
       // Se já for array, devolve o array
       if (Array.isArray(items)) return items;
@@ -493,10 +493,13 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 {/* VACINA ANTI-CRASH APLICADA AQUI: getSafeItems */}
                                 <p className="text-sm text-gray-500">
                                     {getSafeItems(orders[0].items).map(item => {
-                                        const itemAny = item as any;
-                                        const name = typeof itemAny === 'string' ? itemAny : itemAny.name;
-                                        const qty = typeof itemAny === 'string' ? 1 : itemAny.quantity;
-                                        return `${qty}x ${name}`;
+                                        // AQUI ESTÁ A VERIFICAÇÃO INTELIGENTE
+                                        if (typeof item === 'string') {
+                                            return item; // Se for texto antigo, mostra o texto
+                                        }
+                                        // Se for um objeto novo, formata corretamente
+                                        const itemObject = item as OrderItem;
+                                        return `${itemObject.quantity}x ${itemObject.name}`;
                                     }).join(', ')}
                                 </p>
                             </div>
