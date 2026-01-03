@@ -65,7 +65,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
 
-  // A CORREÇÃO ESTÁ AQUI
   const relatedProducts = (allProducts || [])
     .filter(p => p.category === product.category && p.id !== product.id)
     .slice(0, 4);
@@ -302,6 +301,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   ))}
               </div>
           </div>
+      )}
     </div>
   );
 };
