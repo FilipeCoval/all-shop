@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -17,7 +15,7 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS, LOGO_URL } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
@@ -375,12 +373,12 @@ const App: React.FC = () => {
     }
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} />;
+      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={PRODUCTS} />;
     }
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = PRODUCTS.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        if (product) return <ProductDetails product={product} allProducts={PRODUCTS} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -417,7 +415,7 @@ const App: React.FC = () => {
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
-            <div className="flex flex-col items-center md:items-start"><h4 className="text-white font-bold text-lg mb-4">Allshop</h4><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
+            <div className="flex flex-col items-center md:items-start"><div className="flex items-center gap-2 mb-4">{LOGO_URL ? <img src={LOGO_URL} alt={STORE_NAME} className="h-10 invert brightness-0" /> : <h3 className="text-xl font-bold text-white">{STORE_NAME}</h3>}</div><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
             <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
             <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
             <div className="flex flex-col items-center md:items-start">
@@ -449,7 +447,7 @@ const App: React.FC = () => {
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
-      <AIChat />
+      <AIChat products={PRODUCTS} />
     </div>
   );
 };
