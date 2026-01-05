@@ -18,6 +18,7 @@ export interface Address {
   id: string;
   alias: string;
   street: string;
+  doorNumber: string;
   city: string;
   zip: string;
 }
@@ -50,9 +51,13 @@ export interface OrderItem {
 
 export interface UserCheckoutInfo {
   name: string;
-  address: string;
-  paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança';
+  street: string;
+  doorNumber: string;
+  zip: string;
+  city: string;
   phone: string;
+  nif?: string;
+  paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança';
 }
 
 export interface CartItem {
