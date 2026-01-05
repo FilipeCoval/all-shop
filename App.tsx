@@ -15,10 +15,11 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS, LOGO_URL } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
+import { usePublicProducts } from './hooks/usePublicProducts';
 import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
@@ -46,6 +47,7 @@ const App: React.FC = () => {
   const [route, setRoute] = useState(window.location.hash || '#/');
   
   // Hooks
+  const { products: publicProducts, loading: productsLoading } = usePublicProducts();
   const { getStockForProduct } = useStock();
 
   const isAdmin = useMemo(() => {
@@ -360,9 +362,9 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (authLoading) {
+    if (authLoading || productsLoading) {
         return (
-            <div className="flex-grow flex items-center justify-center">
+            <div className="flex-grow flex items-center justify-center h-[calc(100vh-80px)]">
                 <Loader2 className="animate-spin text-primary" size={48} />
             </div>
         );
@@ -373,12 +375,12 @@ const App: React.FC = () => {
     }
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={PRODUCTS} />;
+      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={publicProducts} />;
     }
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
-        const product = PRODUCTS.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={PRODUCTS} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        const product = publicProducts.find(p => p.id === id);
+        if (product) return <ProductDetails product={product} allProducts={publicProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -387,7 +389,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
-        default: return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+        default: return <Home products={publicProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
     }
   };
 
@@ -447,7 +449,7 @@ const App: React.FC = () => {
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
-      <AIChat products={PRODUCTS} />
+      <AIChat products={publicProducts} />
     </div>
   );
 };
