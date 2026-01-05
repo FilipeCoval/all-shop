@@ -15,11 +15,9 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
-import { useStock } from './hooks/useStock'; 
-import { usePublicProducts } from './hooks/usePublicProducts';
 import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
@@ -46,15 +44,19 @@ const App: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
   
-  // Hooks
-  const { products: publicProducts, loading: productsLoading } = usePublicProducts();
-  const { getStockForProduct } = useStock();
-
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
-    const userEmail = user.email.trim().toLowerCase();
+    const userEmail = (user.email || '').trim().toLowerCase();
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
+
+  const [publicProducts, setPublicProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+
+  useEffect(() => {
+    setPublicProducts(PRODUCTS);
+    setProductsLoading(false);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -249,7 +251,7 @@ const App: React.FC = () => {
   };
 
   const addToCart = (product: Product, variant?: ProductVariant) => {
-    const currentStock = getStockForProduct(product.id, variant?.name);
+    const currentStock = product.stock;
     if (currentStock <= 0) {
         alert("Desculpe, este produto acabou de esgotar!");
         return;
@@ -278,10 +280,12 @@ const App: React.FC = () => {
     setCartItems(prev => prev.map(item => {
       if (item.cartItemId === cartItemId) {
         const newQty = item.quantity + delta;
+        
         if (delta > 0) {
-            const currentStock = getStockForProduct(item.id, item.selectedVariant);
-            if (newQty > currentStock) { 
-                alert(`Máximo: ${currentStock}`); 
+            const product = publicProducts.find(p => p.id === item.id);
+            const stock = product ? product.stock : 0;
+            if (newQty > stock) { 
+                alert(`Máximo: ${stock}`); 
                 return item; 
             }
         }
@@ -380,7 +384,7 @@ const App: React.FC = () => {
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = publicProducts.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={publicProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        if (product) return <ProductDetails product={product} allProducts={publicProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -389,7 +393,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
-        default: return <Home products={publicProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+        default: return <Home products={publicProducts} onAddToCart={addToCart} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
     }
   };
 
