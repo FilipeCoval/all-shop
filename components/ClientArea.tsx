@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem } from '../types';
+import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo } from '../types';
 import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db } from '../services/firebaseConfig';
@@ -64,7 +64,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   // State for Address Form
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState<Address>({
-    id: '', alias: '', street: '', city: '', zip: ''
+    id: '', alias: '', street: '', doorNumber: '', city: '', zip: ''
   });
 
   // State for Rewards
@@ -98,7 +98,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     const updatedAddresses = [...(user.addresses || []), addressToAdd];
     onUpdateUser({ ...user, addresses: updatedAddresses });
     setIsAddingAddress(false);
-    setNewAddress({ id: '', alias: '', street: '', city: '', zip: '' });
+    setNewAddress({ id: '', alias: '', street: '', doorNumber: '', city: '', zip: '' });
   };
 
   const handleDeleteAddress = (id: string) => {
@@ -230,7 +230,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   // Wishlist Products Logic - A CORREÇÃO ESTÁ AQUI
   const favoriteProducts = (publicProducts || []).filter(p => (wishlist || []).includes(p.id));
 
-  // Função para Gerar o Documento de Garantia/Comprovativo
   const handlePrintOrder = (order: Order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -240,9 +239,19 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     });
     
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0);
-
-    // Defensive check using the helper
     const safeItems = getSafeItems(order.items);
+
+    // Lógica de retrocompatibilidade para a morada
+    const shippingInfo = order.shippingInfo as any;
+    let deliveryAddress = '<p>Morada não disponível</p>';
+    if (shippingInfo) {
+      if (shippingInfo.street) { // Novo formato estruturado
+        deliveryAddress = `<p>${shippingInfo.street}, ${shippingInfo.doorNumber || ''}</p><p>${shippingInfo.zip} ${shippingInfo.city}</p>`;
+      } else if (shippingInfo.address) { // Formato antigo (string única)
+        deliveryAddress = `<p>${shippingInfo.address}</p>`;
+      }
+    }
+
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -259,7 +268,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             background-color: #f0f0f0; 
             -webkit-print-color-adjust: exact; 
           }
-          /* ... (estilos omitidos para brevidade, iguais ao anterior) ... */
           .sheet { width: 210mm; min-height: 297mm; padding: 20mm; margin: 10mm auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; }
           .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 40px; }
           .logo { font-size: 28px; font-weight: bold; color: #2563eb; }
@@ -308,6 +316,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             <div class="box">
               <h3>Cliente</h3>
               <p><strong>${user.name}</strong></p>
+              ${deliveryAddress}
               <p>${user.email}</p>
               <p>${user.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
               <p>${user.phone || ''}</p>
@@ -376,6 +385,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
+
 
   return (
     <div className="container mx-auto px-4 py-12 animate-fade-in">
@@ -878,11 +888,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
                 <div className="p-8">
                     {isAddingAddress ? (
-                        <form onSubmit={handleAddAddress} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6">
+                        <form onSubmit={handleAddAddress} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6 animate-fade-in">
                             <h4 className="font-bold text-gray-900 mb-4">Adicionar Nova Morada</h4>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local (Alias)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local (Ex: Casa)</label>
                                     <input 
                                         type="text" 
                                         placeholder="Ex: Casa, Trabalho"
@@ -897,32 +907,48 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                     <input 
                                         type="text" 
                                         required
+                                        placeholder="Rua das Flores"
                                         value={newAddress.street}
                                         onChange={e => setNewAddress({...newAddress, street: e.target.value})}
                                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="sm:col-span-1">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nº Porta</label>
+                                        <input 
+                                            type="text" 
+                                            required
+                                            placeholder="123, 1º Esq."
+                                            value={newAddress.doorNumber}
+                                            onChange={e => setNewAddress({...newAddress, doorNumber: e.target.value})}
+                                            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
                                         <input 
                                             type="text" 
                                             required
+                                            placeholder="1234-567"
                                             value={newAddress.zip}
+                                            pattern="\d{4}-\d{3}"
+                                            title="Formato: 1234-567"
                                             onChange={e => setNewAddress({...newAddress, zip: e.target.value})}
                                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-                                        <input 
-                                            type="text" 
-                                            required
-                                            value={newAddress.city}
-                                            onChange={e => setNewAddress({...newAddress, city: e.target.value})}
-                                            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
-                                        />
-                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Cidade / Localidade</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        placeholder="Lisboa"
+                                        value={newAddress.city}
+                                        onChange={e => setNewAddress({...newAddress, city: e.target.value})}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
+                                    />
                                 </div>
                             </div>
                             <div className="flex gap-3 mt-6">
@@ -942,7 +968,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                                 </div>
                                                 <div>
                                                     <h5 className="font-bold text-gray-900">{addr.alias}</h5>
-                                                    <p className="text-gray-600 text-sm mt-1">{addr.street}</p>
+                                                    <p className="text-gray-600 text-sm mt-1">{addr.street}, {addr.doorNumber}</p>
                                                     <p className="text-gray-500 text-sm">{addr.zip} {addr.city}</p>
                                                 </div>
                                             </div>
