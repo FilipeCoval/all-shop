@@ -53,6 +53,7 @@ export const PRODUCTS: Product[] = [
     description: "Auriculares de última geração com Bluetooth 5.4 para uma conexão ultra-estável. Incluem redução de ruído por IA para chamadas cristalinas e uma bateria de longa duração com carregamento rápido. Design leve e ergonómico.",
     category: "Audio",
     comingSoon: true,
+    stock: 0,
     image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S697d3f549e66498fbd43dddce27314a1C.jpg_960x960q75.jpg_.avif"),
     images: [
       proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S5f439034a59e41aeae77f667f32d5314Q.jpg_960x960q75.jpg_.avif"),
@@ -75,6 +76,7 @@ export const PRODUCTS: Product[] = [
     description: "Auriculares originais Lenovo com design ultra-leve, Bluetooth 5.0 e controlo tátil. Som estéreo de alta fidelidade e resistência ao suor, ideais para desporto e uso diário. Nota: As novas versões poderão vir com a marca 'thinkplus' em vez de 'Lenovo', mantendo a mesma qualidade e fabricante.",
     category: "Audio",
     comingSoon: true,
+    stock: 0,
     image: proxyImg("https://img.kwcdn.com/product/fancy/25abdacb-27d9-4a63-8103-13d3d01a5ce8.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
       proxyImg("https://img.kwcdn.com/product/fancy/697e1a4e-72a9-40a0-afd9-38aba3645c78.jpg?imageView2/2/w/800/q/70/format/avif"),
@@ -97,6 +99,7 @@ export const PRODUCTS: Product[] = [
     description: "O rato gaming mais vendido do mundo. Equipado com o sensor óptico HERO 25K para máxima precisão, 11 botões programáveis e pesos ajustáveis para uma experiência personalizada.",
     category: "Acessórios",
     comingSoon: true,
+    stock: 0,
     image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S03f27e919ec04bc08d82d6152d4ccc969.jpg_960x960q75.jpg_.avif"),
     images: [
       proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sdbf942f2734b45e38592e870c27452f3I.jpg_960x960q75.jpg_.avif"),
@@ -112,6 +115,7 @@ export const PRODUCTS: Product[] = [
     description: "Grande tapete de mesa com design Sports Car. Superfície estendida de alta precisão de 900x400mm com base antiderrapante.",
     category: "Acessórios",
     comingSoon: true,
+    stock: 0,
     image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sda4625e2048542d4b9be0a13a15342eeH.png_960x960.png_.avif"),
     variantLabel: "Escolha o Design",
     variants: [
@@ -126,6 +130,7 @@ export const PRODUCTS: Product[] = [
     price: 51.49,
     description: "A elite do streaming. Salto de 130% em performance gráfica e 32GB de armazenamento. Ideal para quem quer a box mais fluída do mercado com Wi-Fi 6.",
     category: "TV & Streaming",
+    stock: 50,
     image: proxyImg("https://imiland.ir/wp-content/uploads/2025/05/1748368235_68_Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png"),
     images: [
         proxyImg("https://androidpctv.com/wp-content/uploads/2025/04/Xiaomi-TV-Box-S-3rd-gen-review-p012.jpg")
@@ -135,9 +140,10 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração) - 4K Ultra HD",
-    price: 45.00,
+    price: 42.50,
     description: "A clássica e fiável. Certificada para todos os serviços oficiais com Dolby Vision e HDR10+. Excelente custo-benefício para streaming oficial.",
     category: "TV & Streaming",
+    stock: 0,
     image: proxyImg("https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img-eu.kwcdn.com/local-goods-img/9e2a8bf4/181dba50-df8c-40d7-8f55-113ff7035b0c/d0cdc06c38e740afc67072e21df0ac74.jpeg?imageView2/2/w/800/q/70/format/avif")
@@ -147,9 +153,10 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2 - Android 13",
-    price: 35.00,
+    price: 29.95,
     description: "Liberdade total. Android 13 'puro' com 64GB de espaço. Perfeita para IPTV e aplicações externas (APKs) devido ao seu sistema aberto.",
     category: "TV & Streaming",
+    stock: 50,
     image: proxyImg("https://img.kwcdn.com/product/fancy/d53c3efc-59aa-4ac2-bd40-201b43f0cc98.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img.kwcdn.com/product/fancy/ac195306-fbbf-4116-8b1a-ff0d85fbdcfd.jpg?imageView2/2/w/800/q/70/format/avif")
@@ -162,6 +169,7 @@ export const PRODUCTS: Product[] = [
     price: 14.99,
     description: "Carregador original Xiaomi disponível em 33W e 67W. Ideal para carregamento rápido (Turbo Charge) de modelos Redmi Note, POCO e Mi. Inclui cabo USB-C de 6A robusto.",
     category: "Acessórios",
+    stock: 50,
     image: proxyImg("https://ae01.alicdn.com/kf/S39f8f02511234451b329c5c8860fb790m.jpg"),
     images: [
         proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/S555171f359404ae89c4d848cc2fe87d9k.jpg_960x960q75.jpg_.avif")
@@ -179,6 +187,7 @@ export const PRODUCTS: Product[] = [
     price: 6.99,
     description: "A qualidade máxima de imagem. Essencial para PS5, Xbox Series X e TVs 4K/8K para tirar proveito de 120Hz.",
     category: "Cabos",
+    stock: 50,
     image: proxyImg("https://img.kwcdn.com/product/fancy/0f34dd80-9343-4437-a5e2-b8f09672f205.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img.kwcdn.com/product/fancy/eba4ff93-b8ef-4e88-ab42-0d39cd20dfbe.jpg?imageView2/2/w/800/q/70/format/avif")
@@ -191,6 +200,7 @@ export const PRODUCTS: Product[] = [
     price: 12.50,
     description: "Internet sem falhas. O cabo mais rápido do mercado, blindado contra interferências. Perfeito para gaming e streaming pesado.",
     category: "Cabos",
+    stock: 50,
     image: proxyImg("https://img.kwcdn.com/product/fancy/e6cfaa4a-9144-462c-ab3c-ebcd3d4f014b.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img.kwcdn.com/product/fancy/e2ee21d8-ceb2-4d98-9292-68834046f810.jpg?imageView2/2/w/800/q/70/format/avif")
@@ -203,6 +213,7 @@ export const PRODUCTS: Product[] = [
     price: 3.99,
     description: "Cabo original para HyperCharge 120W da Xiaomi. Ideal para tirar o máximo proveito dos carregadores turbo originais.",
     category: "Cabos",
+    stock: 50,
     image: proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Scd9ec99f95dc4efb8b3f82634c835943C.jpg_960x960q75.jpg_.avif"),
     images: [
         proxyImg("https://ae-pic-a1.aliexpress-media.com/kf/Sad41e1921649498fb062d77d60d4824dg.jpg_220x220q75.jpg_.avif")
@@ -215,6 +226,7 @@ export const PRODUCTS: Product[] = [
     price: 5.99,
     description: "Carregamento ultra-rápido compatível com Xiaomi e outras marcas. Disponível em várias potências para se adaptar ao seu modelo. Inclui cabo USB-C Turbo de 6A.",
     category: "Acessórios",
+    stock: 50,
     image: proxyImg("https://s.alicdn.com/@sc04/kf/Hac03a0dd00374cf9a345b52b8c6a446dq.jpg?avif=close&webp=close"),
     images: [
         proxyImg("https://s.alicdn.com/@sc04/kf/H449959a037d9422aa3d28f242af3d0bel.jpg")
@@ -233,6 +245,7 @@ export const PRODUCTS: Product[] = [
     price: 7.00,
     description: "Conectividade fiável. Adicione uma porta de rede Gigabit ao seu portátil ou PC via USB com a qualidade Acer.",
     category: "Adaptadores",
+    stock: 50,
     image: proxyImg("https://img.kwcdn.com/product/fancy/769740de-1fd9-4a79-a1d9-de36003c9316.jpg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img.kwcdn.com/product/fancy/ee3ca530-c421-47db-80b2-a2b74dbd7709.jpg?imageView2/2/w/800/q/70/format/avif")
