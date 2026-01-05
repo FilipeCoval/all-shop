@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem } from '../types';
-import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -19,7 +19,7 @@ interface CartDrawerProps {
 const CartDrawer: React.FC<CartDrawerProps> = ({ 
   isOpen, onClose, cartItems, onRemoveItem, onUpdateQuantity, total, onCheckout, user, onOpenLogin
 }) => {
-  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform'>('cart');
+  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'login-prompt' | 'info' | 'platform'>('cart');
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [isCopied, setIsCopied] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -32,7 +32,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
-    name: '', address: '', paymentMethod: 'MB Way', phone: ''
+    name: '', street: '', doorNumber: '', zip: '', city: '', phone: '', nif: '', paymentMethod: 'MB Way'
   });
 
   const SHIPPING_THRESHOLD = 50;
@@ -53,16 +53,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-      if (user) {
+      if (user && (checkoutStep === 'info' || isOpen)) {
           const firstAddr = user.addresses?.[0];
           setUserInfo(prev => ({ 
               ...prev, 
               name: user.name || '', 
               phone: user.phone || prev.phone,
-              address: firstAddr ? `${firstAddr.street}, ${firstAddr.zip} ${firstAddr.city}` : prev.address
+              nif: user.nif || prev.nif,
+              street: firstAddr?.street || prev.street,
+              doorNumber: firstAddr?.doorNumber || prev.doorNumber,
+              zip: firstAddr?.zip || prev.zip,
+              city: firstAddr?.city || prev.city,
           }));
       }
-  }, [user, isOpen]);
+  }, [user, isOpen, checkoutStep]);
 
   const shippingCost = total >= SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
   const paymentFee = userInfo.paymentMethod === 'Cobrança' ? COD_FEE : 0;
@@ -71,10 +75,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const remainingForFreeShipping = SHIPPING_THRESHOLD - total;
   const progressPercentage = (total / SHIPPING_THRESHOLD) * 100;
 
+  const fullAddress = `${userInfo.street}, ${userInfo.doorNumber}, ${userInfo.zip} ${userInfo.city}`;
+
   const orderMessage = useMemo(() => {
     const itemsList = cartItems.map(item => `• ${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`).join('\n');
-    return `🛍️ *${STORE_NAME}* - Pedido ${currentOrderId}\n👤 Cliente: ${userInfo.name}\n📍 Morada: ${userInfo.address}\n📱 Tel: ${userInfo.phone}\n💳 Pagamento: ${userInfo.paymentMethod}\n\n🛒 Artigos:\n${itemsList}\n\n💰 TOTAL: ${finalTotal.toFixed(2)}€`.trim();
-  }, [cartItems, userInfo, finalTotal, currentOrderId]);
+    return `🛍️ *${STORE_NAME}* - Pedido ${currentOrderId}\n👤 Cliente: ${userInfo.name}\n${userInfo.nif ? `🧾 NIF: ${userInfo.nif}\n` : ''}📍 Morada: ${fullAddress}\n📱 Tel: ${userInfo.phone}\n💳 Pagamento: ${userInfo.paymentMethod}\n\n🛒 Artigos:\n${itemsList}\n\n💰 TOTAL: ${finalTotal.toFixed(2)}€`.trim();
+  }, [cartItems, userInfo, finalTotal, currentOrderId, fullAddress]);
+
 
   const handleApplyCoupon = async () => {
       const code = couponCode.trim().toUpperCase();
@@ -95,7 +102,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   
   const handleProceedToPlatform = (e: React.FormEvent) => {
       e.preventDefault();
-      if (!userInfo.name || !userInfo.address || !userInfo.phone) {
+      if (!userInfo.name || !userInfo.street || !userInfo.doorNumber || !userInfo.zip || !userInfo.city || !userInfo.phone) {
           alert("Por favor, preencha todos os dados de envio.");
           return;
       }
@@ -163,6 +170,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       });
   };
 
+  const handleGoBack = () => {
+      if(checkoutStep === 'platform') setCheckoutStep('info');
+      else if (checkoutStep === 'info') user ? setCheckoutStep('cart') : setCheckoutStep('login-prompt');
+      else if (checkoutStep === 'login-prompt') setCheckoutStep('cart');
+      else setCheckoutStep('cart');
+  };
+
   return (
     <>
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
@@ -170,8 +184,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-2">
-              {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep(checkoutStep === 'platform' ? 'info' : 'cart')} className="p-1 hover:bg-gray-100 rounded-full mr-1"><ChevronLeft size={20}/></button>}
-              <h2 className="text-xl font-bold text-gray-900">{checkoutStep === 'cart' ? 'O seu Carrinho' : checkoutStep === 'info' ? 'Dados de Envio' : 'Confirmar Pedido'}</h2>
+              {checkoutStep !== 'cart' && <button onClick={handleGoBack} className="p-1 hover:bg-gray-100 rounded-full mr-1"><ChevronLeft size={20}/></button>}
+              <h2 className="text-xl font-bold text-gray-900">
+                {checkoutStep === 'cart' && 'O seu Carrinho'}
+                {checkoutStep === 'login-prompt' && 'Identificação'}
+                {checkoutStep === 'info' && 'Dados de Envio'}
+                {checkoutStep === 'platform' && 'Confirmar Pedido'}
+              </h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
         </div>
@@ -202,13 +221,41 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
             )}
 
+            {checkoutStep === 'login-prompt' && (
+                <div className="p-4 space-y-6 text-center animate-fade-in">
+                    <UserIcon size={48} className="mx-auto text-primary" />
+                    <h3 className="text-2xl font-bold">Como deseja continuar?</h3>
+                    <button onClick={onOpenLogin} className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2"><LogIn size={20}/> Entrar na minha conta</button>
+                    <button onClick={() => setCheckoutStep('info')} className="text-gray-600 font-bold hover:underline">Continuar como convidado</button>
+                    
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mt-6 text-left">
+                        <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2"><Award size={18} className="text-yellow-500"/> Vantagens de criar conta:</h4>
+                        <ul className="space-y-2 text-sm text-gray-600">
+                            <li className="flex items-center gap-2"><Coins size={14} className="text-primary"/> Acumule <strong>AllPoints</strong> para descontos.</li>
+                            <li className="flex items-center gap-2"><Check size={14} className="text-green-500"/> Checkout mais rápido no futuro.</li>
+                            <li className="flex items-center gap-2"><UserIcon size={14} className="text-gray-500"/> Aceda ao seu histórico de compras.</li>
+                        </ul>
+                    </div>
+                </div>
+            )}
+
             {checkoutStep === 'info' && (
                 <form id="infoForm" onSubmit={handleProceedToPlatform} className="space-y-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4">
                         <input type="text" required placeholder="Nome Completo" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                        <input type="text" required placeholder="Morada Completa (Rua, Nº, Andar...)" value={userInfo.address} onChange={e => setUserInfo({...userInfo, address: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <input type="tel" required placeholder="Telemóvel" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                        <div className="space-y-2">
+                        <input type="text" placeholder="NIF (Opcional, para fatura)" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        
+                        <div className="pt-2 border-t border-gray-100">
+                            <input type="text" required placeholder="Rua / Avenida" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary mt-2" />
+                            <div className="flex gap-4 mt-4">
+                                <input type="text" required placeholder="Nº Porta" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} className="w-1/3 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                                <input type="text" required placeholder="Código Postal" pattern="\d{4}-\d{3}" title="Formato: 1234-567" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <input type="text" required placeholder="Localidade / Cidade" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary mt-4" />
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t border-gray-100">
                             {(['MB Way', 'Transferência', 'Cobrança'] as const).map(m => (
                                 <label key={m} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${userInfo.paymentMethod === m ? 'border-primary bg-blue-50 text-primary' : 'border-gray-100'}`}>
                                     <input type="radio" checked={userInfo.paymentMethod === m} onChange={() => setUserInfo({...userInfo, paymentMethod: m})} className="hidden" />
@@ -301,16 +348,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                       {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
                     </div>
-                    <button onClick={() => cartItems.length > 0 && (user ? setCheckoutStep('info') : onOpenLogin())} disabled={cartItems.length === 0} className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg disabled:opacity-50">Continuar Compra</button>
+                    <button onClick={() => cartItems.length > 0 && (user ? setCheckoutStep('info') : setCheckoutStep('login-prompt'))} disabled={cartItems.length === 0} className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg disabled:opacity-50">Continuar Compra</button>
                  </>
             ) : checkoutStep === 'info' ? (
                 <button form="infoForm" type="submit" className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg shadow-lg">Seguinte</button>
-            ) : (
-                platform === 'whatsapp' &&
+            ) : checkoutStep === 'platform' && platform === 'whatsapp' ? (
                 <button onClick={handleFinalizeOrder} disabled={isFinalizing} className="w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 text-white bg-green-600">
                     {isFinalizing ? <Loader2 className="animate-spin" /> : <Send />} Finalizar no WhatsApp
                 </button>
-            )}
+            ) : null}
         </div>
       </div>
     </>
