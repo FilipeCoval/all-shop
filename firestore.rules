@@ -20,9 +20,15 @@ service cloud.firestore {
     // --- Collections Rules ---
 
     // SECURED: Inventory should only be readable by admins to protect costs.
-    // The useStock hook is designed to handle permission errors for public users.
     match /products_inventory/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // PUBLIC: Products must be readable by everyone for the store to work.
+    // Writing is restricted to admins (via the dashboard).
+    match /products_public/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /reviews/{docId} {
@@ -30,13 +36,14 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
-    // UPDATED: Allow users to create coupons that are rewards.
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
 
+    // Allows ANYONE (even unauthenticated) to create a subscription.
+    // Reading is still protected for admins.
     match /newsletter_subscriptions/{docId} {
       allow create: if true;
       allow read, write, delete: if isAdmin();
@@ -47,7 +54,6 @@ service cloud.firestore {
       allow read, write: if request.auth.uid == userId;
     }
 
-    // UPDATED: Allow admins to list all orders, and users to update their own.
     match /orders/{orderId} {
       allow create: if true;
       allow get: if isAdmin() || (request.auth.uid == resource.data.userId);
