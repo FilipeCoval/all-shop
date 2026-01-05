@@ -12,6 +12,13 @@ import { PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 
+// Helper function to safely handle old and new order item formats
+const getSafeItems = (items: any): (OrderItem | string)[] => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    if (typeof items === 'string') return [items];
+    return [];
+};
 
 // Utility para formatação de moeda
 const formatCurrency = (value: number) => 
@@ -433,7 +440,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           batch.update(orderRef, updateData);
 
           if (newStatus === 'Cancelado' && order.status !== 'Cancelado') {
-              for (const item of order.items) {
+              for (const item of getSafeItems(order.items)) {
                   if (typeof item === 'object' && item.serialNumbers && item.serialNumbers.length > 0) {
                       const saleRecordId = `ORDER-${order.id}-${item.productId}`;
                       
@@ -578,7 +585,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
         const orderToUpdate = allOrders.find(o => o.id === linkedOrderId);
 
         if (orderToUpdate) {
-            const updatedItems = orderToUpdate.items.map(item => {
+            const updatedItems = getSafeItems(orderToUpdate.items).map(item => {
                 if (typeof item === 'object' && item.productId === selectedProductForSale.publicProductId && (!item.selectedVariant || item.selectedVariant === selectedProductForSale.variant)) {
                     const existingSerials = item.serialNumbers || [];
                     return { ...item, serialNumbers: [...existingSerials, ...selectedUnitsForSale] };
@@ -811,8 +818,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
         </div>
       )}
       
-      {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p>{/* Fix: Handle both new (structured) and old (single 'address' string) shipping info formats. */}
-<div className="flex items-start gap-1">
+      {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p><div className="flex items-start gap-1">
   <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" />
   <span className="text-gray-700">
     {(selectedOrderDetails.shippingInfo?.street
@@ -824,7 +830,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
       <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & S/N</h4>
       <ul className="space-y-3">
-        {selectedOrderDetails.items.map((item, idx) => {
+        {getSafeItems(selectedOrderDetails.items).map((item, idx) => {
           if (typeof item === 'string') {
             return (
               <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
