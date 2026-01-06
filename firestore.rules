@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -19,9 +18,13 @@ service cloud.firestore {
 
     // --- Collections Rules ---
 
-    // SECURED: Inventory should only be readable by admins to protect costs.
+    // CUIDADO: Leitura pública está ativa para que o site possa consultar o stock real.
+    // Isto expõe TODOS os campos do inventário, incluindo preços de custo.
+    // A solução ideal a longo prazo seria usar uma Cloud Function para sincronizar
+    // o stock agregado para uma coleção pública.
     match /products_inventory/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // PUBLIC: Products must be readable by everyone for the store to work.
