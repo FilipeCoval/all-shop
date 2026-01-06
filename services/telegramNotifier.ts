@@ -1,7 +1,6 @@
 
-
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, STORE_NAME } from '../constants';
-import { Order } from '../types';
+import { Order, OrderItem } from '../types';
 
 export const notifyNewOrder = async (order: Order, customerName: string, targetChatId: string = TELEGRAM_CHAT_ID) => {
     if (!TELEGRAM_BOT_TOKEN || !targetChatId) {
@@ -13,8 +12,24 @@ export const notifyNewOrder = async (order: Order, customerName: string, targetC
     const dateFormatted = new Date(order.date).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeFormatted = new Date(order.date).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 
-    // Ícones para cada item
-    const itemsList = order.items.map(i => `▫️ ${i}`).join('\n');
+    // SOLUÇÃO DEFINITIVA: Processamento seguro da lista de itens.
+    // Isto garante que a notificação funciona para encomendas novas (com objetos)
+    // e antigas (com strings), eliminando o erro '[object Object]'.
+    const itemsList = Array.isArray(order.items) ? order.items.map(item => {
+        // Caso #1: Item é uma string simples (formato antigo)
+        if (typeof item === 'string') {
+            return `▫️ ${item}`;
+        }
+        // Caso #2: Item é um objeto (formato novo)
+        if (typeof item === 'object' && item !== null && 'name' in item && 'quantity' in item) {
+            const orderItem = item as OrderItem;
+            const variantText = orderItem.selectedVariant ? ` (${orderItem.selectedVariant})` : '';
+            return `▫️ ${orderItem.quantity}x ${orderItem.name}${variantText}`;
+        }
+        // Fallback para qualquer formato inesperado
+        return '▫️ (Item inválido)';
+    }).join('\n') : '▫️ (Lista de itens indisponível)';
+
 
     // Layout Estilo Fatura
     const message = `
