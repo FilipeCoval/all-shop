@@ -204,7 +204,7 @@ const App: React.FC = () => {
                         localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
                     }
                 } else {
-                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0 };
+                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0, pointsHistory: [] };
                     setUser(basicUser);
                 }
                 setAuthLoading(false);
@@ -459,3 +459,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
