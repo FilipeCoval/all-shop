@@ -4,7 +4,8 @@ import {
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
   History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw
 } from 'lucide-react';
-import firebase from "firebase/compat/app";
+// FIX: Import firebase to resolve UMD global errors for FieldValue
+import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
