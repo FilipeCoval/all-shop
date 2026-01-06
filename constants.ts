@@ -140,10 +140,10 @@ export const PRODUCTS: Product[] = [
   {
     id: 1,
     name: "Xiaomi TV Box S (2ª Geração) - 4K Ultra HD",
-    price: 42.50,
+    price: 45.00,
     description: "A clássica e fiável. Certificada para todos os serviços oficiais com Dolby Vision e HDR10+. Excelente custo-benefício para streaming oficial.",
     category: "TV & Streaming",
-    stock: 0,
+    stock: 50,
     image: proxyImg("https://img-eu.kwcdn.com/local-goods-img/1264551a/41694471-1dc9-46fa-a4c5-321128414baa/68ed8f290bfd34e1ddf65e3bd07b44ee.jpeg?imageView2/2/w/800/q/70/format/avif"),
     images: [
         proxyImg("https://img-eu.kwcdn.com/local-goods-img/9e2a8bf4/181dba50-df8c-40d7-8f55-113ff7035b0c/d0cdc06c38e740afc67072e21df0ac74.jpeg?imageView2/2/w/800/q/70/format/avif")
@@ -153,7 +153,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2 - Android 13",
-    price: 29.95,
+    price: 35.00,
     description: "Liberdade total. Android 13 'puro' com 64GB de espaço. Perfeita para IPTV e aplicações externas (APKs) devido ao seu sistema aberto.",
     category: "TV & Streaming",
     stock: 50,
