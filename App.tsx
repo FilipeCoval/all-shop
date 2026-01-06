@@ -15,11 +15,11 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, PRODUCTS } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, PRODUCTS, LOYALTY_TIERS, LOGO_URL } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
+import { useStock } from './hooks/useStock'; 
 import { notifyNewOrder } from './services/telegramNotifier';
-import { useStock } from './hooks/useStock';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -45,25 +45,14 @@ const App: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
   
+  // Hooks
+  const { getStockForProduct } = useStock();
+
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
-    const userEmail = (user.email || '').trim().toLowerCase();
+    const userEmail = user.email.trim().toLowerCase();
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
-
-  const { getStockForProduct, loading: stockLoading } = useStock();
-
-  const productsWithRealStock = useMemo(() => {
-    if (stockLoading) {
-      // Enquanto o stock carrega, podemos usar o stock do ficheiro constants como fallback
-      // ou mostrar um estado de loading, mas para evitar bloqueios, usamos o fallback.
-      return PRODUCTS;
-    }
-    return PRODUCTS.map(p => ({
-      ...p,
-      stock: getStockForProduct(p.id)
-    }));
-  }, [stockLoading, getStockForProduct]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -211,7 +200,7 @@ const App: React.FC = () => {
                         localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
                     }
                 } else {
-                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0, pointsHistory: [] };
+                    const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email || '', addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0 };
                     setUser(basicUser);
                 }
                 setAuthLoading(false);
@@ -287,12 +276,10 @@ const App: React.FC = () => {
     setCartItems(prev => prev.map(item => {
       if (item.cartItemId === cartItemId) {
         const newQty = item.quantity + delta;
-        
         if (delta > 0) {
-            const product = productsWithRealStock.find(p => p.id === item.id);
-            const stock = product ? getStockForProduct(product.id, item.selectedVariant) : 0;
-            if (newQty > stock) { 
-                alert(`Máximo: ${stock}`); 
+            const currentStock = getStockForProduct(item.id, item.selectedVariant);
+            if (newQty > currentStock) { 
+                alert(`Máximo: ${currentStock}`); 
                 return item; 
             }
         }
@@ -373,9 +360,9 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (authLoading || stockLoading) {
+    if (authLoading) {
         return (
-            <div className="flex-grow flex items-center justify-center h-[calc(100vh-80px)]">
+            <div className="flex-grow flex items-center justify-center">
                 <Loader2 className="animate-spin text-primary" size={48} />
             </div>
         );
@@ -386,12 +373,12 @@ const App: React.FC = () => {
     }
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={productsWithRealStock} />;
+      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={PRODUCTS} />;
     }
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
-        const product = productsWithRealStock.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={productsWithRealStock} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        const product = PRODUCTS.find(p => p.id === id);
+        if (product) return <ProductDetails product={product} allProducts={PRODUCTS} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -400,7 +387,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
-        default: return <Home products={productsWithRealStock} onAddToCart={addToCart} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+        default: return <Home products={PRODUCTS} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
     }
   };
 
@@ -460,7 +447,7 @@ const App: React.FC = () => {
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
-      <AIChat products={productsWithRealStock} />
+      <AIChat products={PRODUCTS} />
     </div>
   );
 };
