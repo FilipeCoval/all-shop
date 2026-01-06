@@ -61,7 +61,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               phone: user.phone || prev.phone,
               nif: user.nif || prev.nif,
               street: firstAddr?.street || prev.street,
-              doorNumber: firstAddr?.doorNumber || prev.doorNumber,
               zip: firstAddr?.zip || prev.zip,
               city: firstAddr?.city || prev.city,
           }));
