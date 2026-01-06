@@ -64,7 +64,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   // State for Address Form
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState<Address>({
-    id: '', alias: '', street: '', doorNumber: '', city: '', zip: ''
+    id: '', alias: '', street: '', city: '', zip: ''
   });
 
   // State for Rewards
@@ -98,7 +98,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     const updatedAddresses = [...(user.addresses || []), addressToAdd];
     onUpdateUser({ ...user, addresses: updatedAddresses });
     setIsAddingAddress(false);
-    setNewAddress({ id: '', alias: '', street: '', doorNumber: '', city: '', zip: '' });
+    setNewAddress({ id: '', alias: '', street: '', city: '', zip: '' });
   };
 
   const handleDeleteAddress = (id: string) => {
@@ -888,11 +888,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
                 <div className="p-8">
                     {isAddingAddress ? (
-                        <form onSubmit={handleAddAddress} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6 animate-fade-in">
+                        <form onSubmit={handleAddAddress} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6">
                             <h4 className="font-bold text-gray-900 mb-4">Adicionar Nova Morada</h4>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local (Ex: Casa)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local (Alias)</label>
                                     <input 
                                         type="text" 
                                         placeholder="Ex: Casa, Trabalho"
@@ -907,48 +907,32 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                     <input 
                                         type="text" 
                                         required
-                                        placeholder="Rua das Flores"
                                         value={newAddress.street}
                                         onChange={e => setNewAddress({...newAddress, street: e.target.value})}
                                         className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
                                     />
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="sm:col-span-1">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nº Porta</label>
-                                        <input 
-                                            type="text" 
-                                            required
-                                            placeholder="123, 1º Esq."
-                                            value={newAddress.doorNumber}
-                                            onChange={e => setNewAddress({...newAddress, doorNumber: e.target.value})}
-                                            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
-                                        />
-                                    </div>
-                                    <div className="sm:col-span-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
                                         <input 
                                             type="text" 
                                             required
-                                            placeholder="1234-567"
                                             value={newAddress.zip}
-                                            pattern="\d{4}-\d{3}"
-                                            title="Formato: 1234-567"
                                             onChange={e => setNewAddress({...newAddress, zip: e.target.value})}
                                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
                                         />
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Cidade / Localidade</label>
-                                    <input 
-                                        type="text" 
-                                        required
-                                        placeholder="Lisboa"
-                                        value={newAddress.city}
-                                        onChange={e => setNewAddress({...newAddress, city: e.target.value})}
-                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
-                                    />
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                                        <input 
+                                            type="text" 
+                                            required
+                                            value={newAddress.city}
+                                            onChange={e => setNewAddress({...newAddress, city: e.target.value})}
+                                            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex gap-3 mt-6">
@@ -968,7 +952,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                                 </div>
                                                 <div>
                                                     <h5 className="font-bold text-gray-900">{addr.alias}</h5>
-                                                    <p className="text-gray-600 text-sm mt-1">{addr.street}, {addr.doorNumber}</p>
+                                                    <p className="text-gray-600 text-sm mt-1">{addr.street}</p>
                                                     <p className="text-gray-500 text-sm">{addr.zip} {addr.city}</p>
                                                 </div>
                                             </div>
