@@ -18,7 +18,6 @@ export interface Address {
   id: string;
   alias: string;
   street: string;
-  doorNumber: string;
   city: string;
   zip: string;
 }
