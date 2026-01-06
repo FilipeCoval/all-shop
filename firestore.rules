@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -18,20 +19,10 @@ service cloud.firestore {
 
     // --- Collections Rules ---
 
-    // CUIDADO: Leitura pública está ativa para que o site possa consultar o stock real.
-    // Isto expõe TODOS os campos do inventário, incluindo preços de custo.
-    // A solução ideal a longo prazo seria usar uma Cloud Function para sincronizar
-    // o stock agregado para uma coleção pública.
+    // SECURED: Inventory should only be readable by admins to protect costs.
+    // The useStock hook is designed to handle permission errors for public users.
     match /products_inventory/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // PUBLIC: Products must be readable by everyone for the store to work.
-    // Writing is restricted to admins (via the dashboard).
-    match /products_public/{productId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     match /reviews/{docId} {
@@ -39,14 +30,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
+    // UPDATED: Allow users to create coupons that are rewards.
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
 
-    // Allows ANYONE (even unauthenticated) to create a subscription.
-    // Reading is still protected for admins.
+    // *** A CORREÇÃO CRÍTICA ESTÁ AQUI ***
+    // Permite que QUALQUER pessoa (mesmo não autenticada) crie uma subscrição.
+    // A leitura continua protegida para admins.
     match /newsletter_subscriptions/{docId} {
       allow create: if true;
       allow read, write, delete: if isAdmin();
@@ -57,6 +50,7 @@ service cloud.firestore {
       allow read, write: if request.auth.uid == userId;
     }
 
+    // UPDATED: Allow admins to list all orders, and users to update their own.
     match /orders/{orderId} {
       allow create: if true;
       allow get: if isAdmin() || (request.auth.uid == resource.data.userId);
