@@ -19,6 +19,7 @@ import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, PRODUCTS } from './c
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { notifyNewOrder } from './services/telegramNotifier';
+import { useStock } from './hooks/useStock';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -50,13 +51,19 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  const [publicProducts, setPublicProducts] = useState<Product[]>([]);
-  const [productsLoading, setProductsLoading] = useState(true);
+  const { getStockForProduct, loading: stockLoading } = useStock();
 
-  useEffect(() => {
-    setPublicProducts(PRODUCTS);
-    setProductsLoading(false);
-  }, []);
+  const productsWithRealStock = useMemo(() => {
+    if (stockLoading) {
+      // Enquanto o stock carrega, podemos usar o stock do ficheiro constants como fallback
+      // ou mostrar um estado de loading, mas para evitar bloqueios, usamos o fallback.
+      return PRODUCTS;
+    }
+    return PRODUCTS.map(p => ({
+      ...p,
+      stock: getStockForProduct(p.id)
+    }));
+  }, [stockLoading, getStockForProduct]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -251,7 +258,7 @@ const App: React.FC = () => {
   };
 
   const addToCart = (product: Product, variant?: ProductVariant) => {
-    const currentStock = product.stock;
+    const currentStock = getStockForProduct(product.id, variant?.name);
     if (currentStock <= 0) {
         alert("Desculpe, este produto acabou de esgotar!");
         return;
@@ -282,8 +289,8 @@ const App: React.FC = () => {
         const newQty = item.quantity + delta;
         
         if (delta > 0) {
-            const product = publicProducts.find(p => p.id === item.id);
-            const stock = product ? product.stock : 0;
+            const product = productsWithRealStock.find(p => p.id === item.id);
+            const stock = product ? getStockForProduct(product.id, item.selectedVariant) : 0;
             if (newQty > stock) { 
                 alert(`Máximo: ${stock}`); 
                 return item; 
@@ -366,7 +373,7 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (authLoading || productsLoading) {
+    if (authLoading || stockLoading) {
         return (
             <div className="flex-grow flex items-center justify-center h-[calc(100vh-80px)]">
                 <Loader2 className="animate-spin text-primary" size={48} />
@@ -379,12 +386,12 @@ const App: React.FC = () => {
     }
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={publicProducts} />;
+      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={productsWithRealStock} />;
     }
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
-        const product = publicProducts.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={publicProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        const product = productsWithRealStock.find(p => p.id === id);
+        if (product) return <ProductDetails product={product} allProducts={productsWithRealStock} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -393,7 +400,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
-        default: return <Home products={publicProducts} onAddToCart={addToCart} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+        default: return <Home products={productsWithRealStock} onAddToCart={addToCart} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
     }
   };
 
@@ -453,7 +460,7 @@ const App: React.FC = () => {
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
-      <AIChat products={publicProducts} />
+      <AIChat products={productsWithRealStock} />
     </div>
   );
 };
