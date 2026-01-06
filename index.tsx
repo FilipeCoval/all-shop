@@ -2,7 +2,6 @@ import React, { Component, ReactNode, ErrorInfo } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Error Boundary para capturar crashes e evitar ecrã branco
 interface ErrorBoundaryProps {
   children?: ReactNode;
 }
@@ -12,12 +11,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Fix: Use Component directly from React and ensure state/props are correctly inherited and recognized.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Explicitly declare the props and state property to resolve "Property 'props/state' does not exist on type 'ErrorBoundary'" errors.
-  public props: ErrorBoundaryProps;
-  public state: ErrorBoundaryState;
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -35,7 +29,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
-    // Fix: Accessing state inherited from Component.
     if (this.state.hasError) {
       return (
         <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'sans-serif', marginTop: '50px' }}>
@@ -50,7 +43,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fix: Accessing props inherited from Component.
     return this.props.children;
   }
 }
@@ -60,7 +52,6 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// --- LIMPEZA DE SEGURANÇA ---
 // Garante que o container está vazio antes de iniciar o React.
 // Essencial para evitar duplicação em ambientes como Vercel/Netlify.
 rootElement.innerHTML = ''; 
