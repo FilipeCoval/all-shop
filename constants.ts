@@ -153,7 +153,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 2,
     name: "TV Box H96 Max M2 - Android 13",
-    price: 29.50,
+    price: 29.95,
     description: "Liberdade total. Android 13 'puro' com 64GB de espaço. Perfeita para IPTV e aplicações externas (APKs) devido ao seu sistema aberto.",
     category: "TV & Streaming",
     stock: 50,
