@@ -1,7 +1,6 @@
-
 import { Product, ProductVariant } from '../types';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
 import ProductList from './ProductList';
 import { db } from '../services/firebaseConfig';
 
@@ -22,8 +21,8 @@ const Home: React.FC<HomeProps> = ({
     getStock, 
     wishlist, 
     onToggleWishlist, 
-    searchTerm,
-    selectedCategory,
+    searchTerm, 
+    selectedCategory, 
     onCategoryChange
 }) => {
   const [email, setEmail] = useState('');
@@ -68,22 +67,81 @@ const Home: React.FC<HomeProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false); 
 
+  // Efeito de arrastar para navegar
+  useEffect(() => {
+    const slider = scrollContainerRef.current;
+    if (!slider) return;
+
+    let isDown = false;
+    let startX: number;
+    let scrollLeft: number;
+
+    const mouseDownListener = (e: MouseEvent) => {
+        isDown = true;
+        isDragging.current = false; // Reset on new interaction
+        slider.classList.add('active:cursor-grabbing');
+        startX = e.pageX - slider.offsetLeft;
+        scrollLeft = slider.scrollLeft;
+    };
+
+    const mouseLeaveListener = () => {
+        isDown = false;
+        slider.classList.remove('active:cursor-grabbing');
+    };
+
+    const mouseUpListener = () => {
+        isDown = false;
+        slider.classList.remove('active:cursor-grabbing');
+    };
+
+    const mouseMoveListener = (e: MouseEvent) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - slider.offsetLeft;
+        const walk = (x - startX) * 2; // Multiplier for faster scrolling
+        slider.scrollLeft = scrollLeft - walk;
+        if(Math.abs(walk) > 5) { // If moved more than 5px, it's a drag
+          isDragging.current = true;
+        }
+    };
+    
+    slider.addEventListener('mousedown', mouseDownListener);
+    slider.addEventListener('mouseleave', mouseLeaveListener);
+    slider.addEventListener('mouseup', mouseUpListener);
+    slider.addEventListener('mousemove', mouseMoveListener);
+    
+    return () => {
+        slider.removeEventListener('mousedown', mouseDownListener);
+        slider.removeEventListener('mouseleave', mouseLeaveListener);
+        slider.removeEventListener('mouseup', mouseUpListener);
+        slider.removeEventListener('mousemove', mouseMoveListener);
+    };
+  }, []);
+
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
     setSubStatus('loading');
+    
     try {
+      // A verificação de duplicados foi removida para resolver o erro de permissão
+      // para utilizadores não autenticados, garantindo a segurança.
+      const normalizedEmail = email.trim().toLowerCase();
+      
       await db.collection('newsletter_subscriptions').add({
-        email: email,
+        email: normalizedEmail,
         date: new Date().toISOString(),
         source: 'website_home'
       });
+
       setSubStatus('success');
-      setEmail('');
-      setTimeout(() => setSubStatus('idle'), 5000);
+      setEmail(''); // Limpa o campo apenas em caso de sucesso
+    
     } catch (error) {
       console.error(error);
       setSubStatus('error');
+      setTimeout(() => setSubStatus('idle'), 4000); // Reset after showing message
     }
   };
 
@@ -181,7 +239,7 @@ const Home: React.FC<HomeProps> = ({
       <section className="py-4 bg-gray-50 border-b border-gray-200/50">
           <div className="container mx-auto px-2 md:px-4 max-w-4xl">
               <div className="grid grid-cols-3 gap-2 md:gap-6">
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-blue-100 p-1.5 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform"><Star fill="currentColor" size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Qualidade</h3><p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">Garantida</p></div></div>
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-blue-100 p-1.5 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform"><StarIcon fill="currentColor" size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Qualidade</h3><p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">Garantida</p></div></div>
                   <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-green-100 p-1.5 md:p-2.5 rounded-full text-green-600 shrink-0 group-hover:scale-110 transition-transform"><Truck size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Envio Grátis</h3><p className="text-[9px] md:text-xs text-gray-500 block">acima de 50€</p></div></div>
                   <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-purple-100 p-1.5 md:p-2.5 rounded-full text-purple-600 shrink-0 group-hover:scale-110 transition-transform"><ShieldCheck size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Segurança</h3><p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">100% Seguro</p></div></div>
               </div>
@@ -195,16 +253,42 @@ const Home: React.FC<HomeProps> = ({
               <div className="inline-flex items-center justify-center p-2 bg-white/10 rounded-full mb-3"><Mail className="text-primary" size={18} /></div>
               <h2 className="text-xl font-bold mb-2">Fique a par das novidades</h2>
               <p className="text-gray-300 mb-4 max-w-xl mx-auto text-xs md:text-sm">Inscreva-se para receber ofertas exclusivas e cupões de desconto.</p>
-              {subStatus === 'success' ? (
-                <div className="max-md mx-auto bg-green-500/20 border border-green-500/50 rounded-xl p-3 flex flex-col items-center animate-fade-in-up">
-                    <CheckCircle className="text-green-400 mb-1" size={20} /><h3 className="text-base font-bold text-white mb-0.5">Inscrição Confirmada!</h3><p className="text-green-200 text-xs">Obrigado.</p>
-                </div>
-              ) : (
-                <form className="max-w-md mx-auto flex flex-col sm:flex-row gap-2" onSubmit={handleSubscribe}>
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="O seu email" className="flex-1 px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-all backdrop-blur-sm text-sm" disabled={subStatus === 'loading'} />
-                    <button type="submit" disabled={subStatus === 'loading'} className="bg-primary hover:bg-blue-600 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 text-sm">{subStatus === 'loading' ? <Loader2 className="animate-spin" size={16} /> : 'Assinar'}</button>
-                </form>
-              )}
+              
+              <div className="max-w-md mx-auto">
+                {subStatus === 'success' ? (
+                  <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-3 flex flex-col items-center animate-fade-in-up">
+                      <CheckCircle className="text-green-400 mb-1" size={20} />
+                      <h3 className="text-base font-bold text-white mb-0.5">Inscrição Confirmada!</h3>
+                      <p className="text-green-200 text-xs">Obrigado.</p>
+                  </div>
+                ) : (
+                  <>
+                    <form className="flex flex-col sm:flex-row gap-2" onSubmit={handleSubscribe}>
+                        <input 
+                          type="email" 
+                          required 
+                          value={email} 
+                          onChange={(e) => setEmail(e.target.value)} 
+                          placeholder="O seu email" 
+                          className="flex-1 px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-all backdrop-blur-sm text-sm" 
+                          disabled={subStatus === 'loading'} 
+                        />
+                        <button 
+                          type="submit" 
+                          disabled={subStatus === 'loading'} 
+                          className="bg-primary hover:bg-blue-600 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 text-sm"
+                        >
+                            {subStatus === 'loading' ? <Loader2 className="animate-spin" size={16} /> : 'Assinar'}
+                        </button>
+                    </form>
+                    {subStatus === 'error' && (
+                        <p className="text-red-400 text-xs mt-2 animate-fade-in flex items-center justify-center gap-1">
+                            <AlertTriangle size={12} /> Ocorreu um erro. Tente novamente.
+                        </p>
+                    )}
+                  </>
+                )}
+              </div>
           </div>
       </section>
     </>
