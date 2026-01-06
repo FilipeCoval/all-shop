@@ -1,7 +1,7 @@
-
-import firebase from "firebase/compat/app";
-import "firebase/compat/auth";
-import "firebase/compat/firestore";
+// FIX: Import firebase to resolve UMD global errors
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
 
 // Configuração do Firebase da Allshop Store
 // Estas chaves são públicas e necessárias para o browser comunicar com o Firebase.
