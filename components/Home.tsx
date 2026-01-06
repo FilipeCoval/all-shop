@@ -1,6 +1,6 @@
 import { Product, ProductVariant } from '../types';
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
 import ProductList from './ProductList';
 import { db } from '../services/firebaseConfig';
 
@@ -64,60 +64,6 @@ const Home: React.FC<HomeProps> = ({
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false); 
-
-  // Efeito de arrastar para navegar
-  useEffect(() => {
-    const slider = scrollContainerRef.current;
-    if (!slider) return;
-
-    let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
-
-    const mouseDownListener = (e: MouseEvent) => {
-        isDown = true;
-        isDragging.current = false; // Reset on new interaction
-        slider.classList.add('active:cursor-grabbing');
-        startX = e.pageX - slider.offsetLeft;
-        scrollLeft = slider.scrollLeft;
-    };
-
-    const mouseLeaveListener = () => {
-        isDown = false;
-        slider.classList.remove('active:cursor-grabbing');
-    };
-
-    const mouseUpListener = () => {
-        isDown = false;
-        slider.classList.remove('active:cursor-grabbing');
-    };
-
-    const mouseMoveListener = (e: MouseEvent) => {
-        if (!isDown) return;
-        e.preventDefault();
-        const x = e.pageX - slider.offsetLeft;
-        const walk = (x - startX) * 2; // Multiplier for faster scrolling
-        slider.scrollLeft = scrollLeft - walk;
-        if(Math.abs(walk) > 5) { // If moved more than 5px, it's a drag
-          isDragging.current = true;
-        }
-    };
-    
-    slider.addEventListener('mousedown', mouseDownListener);
-    slider.addEventListener('mouseleave', mouseLeaveListener);
-    slider.addEventListener('mouseup', mouseUpListener);
-    slider.addEventListener('mousemove', mouseMoveListener);
-    
-    return () => {
-        slider.removeEventListener('mousedown', mouseDownListener);
-        slider.removeEventListener('mouseleave', mouseLeaveListener);
-        slider.removeEventListener('mouseup', mouseUpListener);
-        slider.removeEventListener('mousemove', mouseMoveListener);
-    };
-  }, []);
-
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,18 +111,12 @@ const Home: React.FC<HomeProps> = ({
       });
       
       const uniqueFinal = mapCats(uniqueCats);
-      return [...uniqueFinal, ...uniqueFinal, ...uniqueFinal]; // Infinito falso
+      // Duplicar a lista uma vez é essencial para a animação 'marquee' ser contínua
+      return [...uniqueFinal, ...uniqueFinal];
   }, [products]);
 
-  const scroll = (direction: 'left' | 'right') => {
-      if (scrollContainerRef.current) {
-          const scrollAmount = 300; 
-          scrollContainerRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
-      }
-  };
 
   const handleCategoryClick = (cat: string) => {
-      if (isDragging.current) return;
       onCategoryChange(cat);
       setTimeout(() => {
         document.getElementById('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -219,21 +159,20 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </section>
 
-      <section className="pt-6 pb-2 bg-gray-50 relative group overflow-hidden select-none border-b border-gray-100">
-        <div className="w-full relative">
-            <button onClick={() => scroll('left')} className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-2 md:p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm" aria-label="Anterior"><ChevronLeft size={20} /></button>
-            <button onClick={() => scroll('right')} className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white p-2 md:p-3 rounded-full shadow-lg text-gray-700 hover:text-primary transition-all md:opacity-0 md:group-hover:opacity-100 backdrop-blur-sm" aria-label="Próximo"><ChevronRight size={20} /></button>
-            <div ref={scrollContainerRef} className="flex gap-4 md:gap-8 overflow-x-auto py-4 md:py-8 px-4 md:px-12 justify-start w-full cursor-grab active:cursor-grabbing no-scrollbar snap-x snap-mandatory">
-                {categoryVisuals.map((cat, idx) => (
-                    <div key={idx} onClick={(e) => { e.preventDefault(); handleCategoryClick(cat.name); }} draggable={false} className="flex flex-col items-center gap-3 min-w-[100px] md:min-w-[140px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95 snap-center">
-                        <div className={`w-20 h-20 md:w-32 md:h-32 rounded-full p-1 border-4 transition-all duration-300 overflow-hidden relative shadow-md bg-white pointer-events-none ${selectedCategory === cat.name ? 'border-primary ring-4 ring-primary/20 scale-105 shadow-xl z-10' : 'border-white group-hover/item:border-primary group-hover/item:shadow-lg group-hover/item:scale-105'}`}>
-                            <img src={cat.image} alt={cat.name} draggable={false} className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50 select-none" />
-                        </div>
-                        <span className={`text-xs md:text-base font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap pointer-events-none select-none ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 group-hover/item:text-primary'}`}>{cat.name}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
+      <section className="py-8 bg-gray-50 border-b border-gray-100 select-none overflow-hidden group">
+          <div 
+            className="flex gap-4 md:gap-8 animate-marquee group-hover:[animation-play-state:paused]"
+            style={{ willChange: 'transform' }}
+          >
+              {categoryVisuals.map((cat, idx) => (
+                  <div key={idx} onClick={() => handleCategoryClick(cat.name)} className="flex flex-col items-center gap-3 min-w-[100px] md:min-w-[140px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95">
+                      <div className={`w-20 h-20 md:w-32 md:h-32 rounded-full p-1 border-4 transition-all duration-300 overflow-hidden relative shadow-md bg-white ${selectedCategory === cat.name ? 'border-primary ring-4 ring-primary/20 scale-105 shadow-xl z-10' : 'border-white group-hover/item:border-primary group-hover/item:shadow-lg group-hover/item:scale-105'}`}>
+                          <img src={cat.image} alt={cat.name} draggable={false} className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50 select-none" />
+                      </div>
+                      <span className={`text-xs md:text-base font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 group-hover/item:text-primary'}`}>{cat.name}</span>
+                  </div>
+              ))}
+          </div>
       </section>
 
       <section className="py-4 bg-gray-50 border-b border-gray-200/50">
