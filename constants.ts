@@ -111,7 +111,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 13,
     name: "Tapete Gaming Mouse Pad XL - Sports Car Edition",
-    price: 1.00,
+    price: 12.99,
     description: "Grande tapete de mesa com design Sports Car. Superfície estendida de alta precisão de 900x400mm com base antiderrapante.",
     category: "Acessórios",
     comingSoon: true,
