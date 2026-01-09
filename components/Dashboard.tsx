@@ -73,6 +73,7 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                 BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, 
                 BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, 
                 BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+                BarcodeFormat.QR_CODE,
             ];
             hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
 
@@ -110,7 +111,7 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
         };
-    }, []);
+    }, [onCodeSubmit]);
 
     const toggleTorch = async () => {
         if (streamRef.current) {
@@ -229,7 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 });
   
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit'>('search');
+  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
   
@@ -444,19 +445,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (!order) return;
       
       if (newStatus === 'Cancelado' && !window.confirm("Tem a certeza que quer cancelar esta encomenda? Esta ação é irreversível e irá repor o stock se aplicável.")) return;
-
-      let trackingNumber: string | undefined; 
-      if (newStatus === 'Enviado' && !order.trackingNumber) { 
-          const input = window.prompt("Insira o Número de Rastreio (Ex: DA123456789PT):"); 
-          if (input) trackingNumber = input.trim(); 
-      } 
       
       try {
           const batch = db.batch();
           const orderRef = db.collection('orders').doc(orderId);
 
           const updateData: any = { status: newStatus }; 
-          if (trackingNumber) updateData.trackingNumber = trackingNumber; 
           batch.update(orderRef, updateData);
 
           if (newStatus === 'Cancelado' && order.status !== 'Cancelado') {
@@ -518,6 +512,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           }
 
           await batch.commit();
+
+          if (newStatus === 'Enviado' && !order.trackingNumber) {
+              setSelectedOrderDetails(order);
+          }
       } catch (error) { 
           console.error(error); 
           alert("Erro ao atualizar (Verifique consola)."); 
@@ -781,6 +779,9 @@ const payload: any = { name: formData.name, category: formData.category, publicP
               if(scannerMode === 'search') setSearchTerm(code); 
               else if(scannerMode === 'add_unit') handleAddUnit(code);
               else if(scannerMode === 'sell_unit') handleSelectUnitForSale(code);
+              else if(scannerMode === 'tracking' && selectedOrderDetails) {
+                  setSelectedOrderDetails({ ...selectedOrderDetails, trackingNumber: code });
+              }
               setIsScannerOpen(false); 
           }} 
           onClose={() => setIsScannerOpen(false)} 
@@ -992,7 +993,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       'Morada não disponível'}
   </span>
 </div></div></div>
-      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
+      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button type="button" onClick={() => { setScannerMode('tracking'); setIsScannerOpen(true); }} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200" title="Escanear Código"><Camera size={18} /></button><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
       <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & S/N</h4>
       <ul className="space-y-3">
         {getSafeItems(selectedOrderDetails.items).map((item, idx) => {
