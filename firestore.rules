@@ -54,7 +54,9 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if true;
       allow get: if isAdmin() || (request.auth.uid == resource.data.userId);
-      allow list: if isAdmin() || (isSignedIn() && request.query.where.get('userId') == request.auth.uid);
+      allow list: if isAdmin() || 
+                    (isSignedIn() && request.query.where.get('userId') == request.auth.uid) ||
+                    (isSignedIn() && request.query.where.get('shippingInfo.email') == request.auth.token.email);
       allow update: if isAdmin() || (request.auth.uid == resource.data.userId);
       allow delete: if isAdmin();
     }
