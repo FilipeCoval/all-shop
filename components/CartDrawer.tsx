@@ -11,7 +11,7 @@ interface CartDrawerProps {
   onRemoveItem: (cartItemId: string) => void;
   onUpdateQuantity: (cartItemId: string, delta: number) => void;
   total: number;
-  onCheckout: (order: Order) => void;
+  onCheckout: (order: Order) => Promise<boolean>;
   user: User | null;
   onOpenLogin: () => void;
 }
@@ -139,26 +139,31 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       setIsFinalizing(true);
       
       const newOrder = createOrderObject();
-      onCheckout(newOrder);
+      const success = await onCheckout(newOrder);
 
-      if (platform === 'whatsapp') {
-          window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
+      if (success) {
+          if (platform === 'whatsapp') {
+              window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
+          }
           onClose();
       }
+      // Se não for sucesso, o utilizador já foi alertado pela função onCheckout.
       setIsFinalizing(false);
   };
   
-  const handleTelegramCheckout = () => {
+  const handleTelegramCheckout = async () => {
       if (isFinalizing) return;
       setIsFinalizing(true);
       
       const newOrder = createOrderObject();
-      onCheckout(newOrder);
-      window.open(TELEGRAM_LINK, '_blank');
-      
-      setTimeout(() => {
-          onClose();
-      }, 500);
+      const success = await onCheckout(newOrder);
+
+      if (success) {
+          window.open(TELEGRAM_LINK, '_blank');
+          setTimeout(() => {
+              onClose();
+          }, 500);
+      }
       setIsFinalizing(false);
   };
 
