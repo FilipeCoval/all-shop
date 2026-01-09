@@ -302,13 +302,19 @@ const App: React.FC = () => {
     catch (error) { console.error("Logout error", error); }
   };
 
-  const handleCheckout = async (newOrder: Order) => {
-      setOrders(prev => [newOrder, ...prev]);
-      setCartItems([]); 
+  const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
+          // A notificação pode ser rápida, mas a gravação na DB é mais crítica.
+          // Primeiro, tentamos gravar a encomenda.
           await db.collection("orders").doc(newOrder.id).set(newOrder);
-          notifyNewOrder(newOrder, user ? user.name : 'Cliente Anónimo');
           
+          // Se a gravação for bem-sucedida, atualizamos o estado local e notificamos.
+          setOrders(prev => [newOrder, ...prev]);
+          setCartItems([]);
+          
+          notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
+          
+          // Lógica para atualizar o total gasto do utilizador (se logado)
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
@@ -319,22 +325,18 @@ const App: React.FC = () => {
               const newTotalSpent = (userData.totalSpent || 0) + newOrder.total;
               
               let newTier: UserTier = userData.tier || 'Bronze';
-              if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) {
-                newTier = 'Ouro';
-              } else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) {
-                newTier = 'Prata';
-              }
+              if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
+              else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
               
-              transaction.update(userRef, {
-                totalSpent: newTotalSpent,
-                tier: newTier
-              });
-            }).catch(e => {
-              console.error("Falha na transação de total gasto: ", e);
+              transaction.update(userRef, { totalSpent: newTotalSpent, tier: newTier });
             });
           }
-
-      } catch (e) { console.error("Erro checkout:", e); }
+          return true; // Sucesso
+      } catch (e) {
+          console.error("Erro CRÍTICO no checkout:", e);
+          alert("Ocorreu um erro ao guardar a sua encomenda. Por favor, tente novamente ou contacte o suporte se o erro persistir.");
+          return false; // Falha
+      }
   };
 
   const handleAddReview = async (newReview: Review) => {
@@ -453,4 +455,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
