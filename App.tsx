@@ -125,7 +125,31 @@ const App: React.FC = () => {
         userUnsubscribe();
         ordersUnsubscribe();
 
-        if (firebaseUser) {
+        if (firebaseUser && firebaseUser.email) {
+            
+            // --- ROTINA DE MIGRAÇÃO DE ENCOMENDAS ---
+            // Procura encomendas de "convidado" com o mesmo email e associa-as ao user logado.
+            const guestOrdersQuery = db.collection('orders')
+                .where('shippingInfo.email', '==', firebaseUser.email)
+                .where('userId', '==', null);
+
+            try {
+                const guestOrdersSnapshot = await guestOrdersQuery.get();
+                if (!guestOrdersSnapshot.empty) {
+                    const batch = db.batch();
+                    guestOrdersSnapshot.forEach(doc => {
+                        const orderRef = db.collection('orders').doc(doc.id);
+                        batch.update(orderRef, { userId: firebaseUser.uid });
+                    });
+                    await batch.commit();
+                    console.log(`Migradas ${guestOrdersSnapshot.size} encomendas de convidado para o utilizador ${firebaseUser.uid}.`);
+                }
+            } catch (migrationError) {
+                console.error("Erro na migração de encomendas:", migrationError);
+            }
+
+
+            // --- SINCRONIZAÇÃO DE PONTOS E GASTOS ---
             try {
                 const userDocRef = db.collection("users").doc(firebaseUser.uid);
                 const ordersQuery = db.collection("orders").where("userId", "==", firebaseUser.uid);
