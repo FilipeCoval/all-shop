@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -21,6 +21,14 @@ const getSafeItems = (items: any): (OrderItem | string)[] => {
     if (typeof items === 'string') return [items];
     return [];
 };
+
+// --- Tipos Locais para o Dashboard ---
+interface ManualOrderItem extends Product {
+    quantity: number;
+    selectedVariant: string; // Vazio se não houver variante
+    finalPrice: number;
+}
+
 
 // Utility para formatação de moeda
 const formatCurrency = (value: number) => 
@@ -243,16 +251,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   // --- STATE FOR MANUAL ORDER MODAL ---
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
-  const initialManualOrderForm = {
-      customerName: '',
-      customerEmail: '', // Opcional, para ligar à conta de cliente
-      orderTotal: '',
-      orderDate: new Date().toISOString().split('T')[0],
-      items: '', // Textarea simples para colar os itens
-      shippingInfo: '', // Textarea simples para morada, etc
-      paymentMethod: 'MB Way',
-  };
-  const [manualOrderForm, setManualOrderForm] = useState(initialManualOrderForm);
+  const [manualOrderItems, setManualOrderItems] = useState<ManualOrderItem[]>([]);
+  const [manualOrderCustomer, setManualOrderCustomer] = useState({ name: '', email: '' });
+  const [manualOrderShipping, setManualOrderShipping] = useState('');
+  const [manualOrderPayment, setManualOrderPayment] = useState('MB Way');
 
 
   const [formData, setFormData] = useState({
@@ -440,6 +442,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleOrderStatusChange = async (orderId: string, newStatus: string) => { 
       const order = allOrders.find(o => o.id === orderId);
       if (!order) return;
+      
+      if (newStatus === 'Cancelado' && !window.confirm("Tem a certeza que quer cancelar esta encomenda? Esta ação é irreversível e irá repor o stock se aplicável.")) return;
 
       let trackingNumber: string | undefined; 
       if (newStatus === 'Enviado' && !order.trackingNumber) { 
@@ -519,7 +523,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           alert("Erro ao atualizar (Verifique consola)."); 
       } 
   };
-  const handleDeleteOrder = async (orderId: string) => { if (!window.confirm("ATENÇÃO: Tem a certeza que quer APAGAR esta encomenda para sempre? Isto é útil para limpar duplicados.")) return; try { await db.collection('orders').doc(orderId).delete(); } catch (e) { console.error(e); alert("Erro ao apagar encomenda"); } };
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { console.error(e); alert("Erro ao gravar rastreio"); } };
   const handleCopy = (text: string) => navigator.clipboard.writeText(text);
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
@@ -627,48 +630,136 @@ const payload: any = { name: formData.name, category: formData.category, publicP
   const filteredProducts = products.filter(p => { const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierOrderId?.toLowerCase().includes(searchTerm.toLowerCase()); let matchesStatus = true; if (statusFilter === 'IN_STOCK') matchesStatus = p.status !== 'SOLD'; if (statusFilter === 'SOLD') matchesStatus = p.status === 'SOLD'; let matchesCashback = true; if (cashbackFilter !== 'ALL') matchesCashback = p.cashbackStatus === cashbackFilter; return matchesSearch && matchesStatus && matchesCashback; });
   const countInStock = products.filter(p => p.status !== 'SOLD').length;
   const countSold = products.filter(p => p.status === 'SOLD').length;
+  
+  const productsForSelect = useMemo(() => {
+    return PRODUCTS.filter(p => !p.comingSoon).flatMap(p => {
+        if (p.variants && p.variants.length > 0) {
+            return p.variants.map(v => ({
+                value: `${p.id}|${v.name}`,
+                label: `${p.name} - ${v.name}`,
+            }));
+        }
+        return {
+            value: `${p.id}|`,
+            label: p.name,
+        };
+    });
+  }, []);
+
+  const addProductToManualOrder = (value: string) => {
+      if (!value) return;
+      const [idStr, variantName] = value.split('|');
+      const productId = Number(idStr);
+      
+      const product = PRODUCTS.find(p => p.id === productId);
+      if (!product) return;
+
+      const key = `${product.id}|${variantName}`;
+
+      setManualOrderItems(prev => {
+          const existing = prev.find(item => `${item.id}|${item.selectedVariant}` === key);
+          if (existing) {
+              return prev.map(item => (`${item.id}|${item.selectedVariant}` === key) ? { ...item, quantity: item.quantity + 1 } : item);
+          }
+          
+          let finalPrice = product.price;
+          if (variantName) {
+              const variant = product.variants?.find(v => v.name === variantName);
+              if (variant) finalPrice = variant.price;
+          }
+
+          const newItem: ManualOrderItem = {
+              ...product,
+              quantity: 1,
+              selectedVariant: variantName,
+              finalPrice: finalPrice,
+          };
+          return [...prev, newItem];
+      });
+  };
+
+  const updateManualOrderItemQuantity = (key: string, delta: number) => {
+      setManualOrderItems(prev => prev.map(item => {
+          if (`${item.id}|${item.selectedVariant}` === key) {
+              const newQuantity = item.quantity + delta;
+              return newQuantity > 0 ? { ...item, quantity: newQuantity } : item;
+          }
+          return item;
+      }).filter(item => item.quantity > 0));
+  };
+
 
   const handleManualOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { customerEmail, customerName, orderTotal, orderDate, items, shippingInfo, paymentMethod } = manualOrderForm;
-
-    if (!customerName || !orderTotal || !items) {
-        alert("Preencha o nome, total e itens.");
+    if (manualOrderItems.length === 0) {
+        alert("Adicione pelo menos um produto à encomenda.");
         return;
     }
 
     try {
-        let userId: string | undefined;
-        if (customerEmail) {
-            const userQuery = await db.collection('users').where('email', '==', customerEmail.trim().toLowerCase()).limit(1).get();
-            if (!userQuery.empty) {
-                userId = userQuery.docs[0].id;
+        await db.runTransaction(async (transaction) => {
+            let userId: string | null = null;
+            if (manualOrderCustomer.email) {
+                const userQuery = await db.collection('users').where('email', '==', manualOrderCustomer.email.trim().toLowerCase()).limit(1).get();
+                if (!userQuery.empty) {
+                    userId = userQuery.docs[0].id;
+                }
             }
-        }
 
-        const newOrder: Order = {
-            id: `#MANUAL-${Date.now().toString().slice(-6)}`,
-            date: new Date(orderDate).toISOString(),
-            total: parseFloat(orderTotal),
-            status: 'Processamento',
-            items: items.split('\n').filter(line => line.trim() !== ''),
-            userId,
-            shippingInfo: {
-                name: customerName,
-                street: shippingInfo,
-                doorNumber: '', // Simplified for manual entry
-                zip: '',
-                city: '',
-                phone: '', // Can be added to shippingInfo textarea
-                paymentMethod: paymentMethod as any,
-            },
-        };
+            const total = manualOrderItems.reduce((acc, item) => acc + item.finalPrice * item.quantity, 0);
 
-        await db.collection('orders').doc(newOrder.id).set(newOrder);
+            const newOrder: Order = {
+                id: `MANUAL-${Date.now().toString().slice(-6)}`,
+                date: new Date().toISOString(),
+                total,
+                status: 'Processamento',
+                items: manualOrderItems.map(item => ({
+                    productId: item.id,
+                    name: item.name,
+                    price: item.finalPrice,
+                    quantity: item.quantity,
+                    selectedVariant: item.selectedVariant || '',
+                    addedAt: new Date().toISOString()
+                })),
+                userId: userId,
+                shippingInfo: {
+                    name: manualOrderCustomer.name,
+                    street: manualOrderShipping,
+                    doorNumber: '', city: '', zip: '', phone: '',
+                    paymentMethod: manualOrderPayment as any,
+                },
+            };
 
-        alert('Encomenda manual criada com sucesso!');
+            const orderRef = db.collection('orders').doc(newOrder.id);
+            transaction.set(orderRef, newOrder);
+
+            for (const item of manualOrderItems) {
+                const invQuery = db.collection('products_inventory').where('publicProductId', '==', item.id);
+                // Adicionar filtro de variante se existir
+                const finalQuery = item.selectedVariant ? invQuery.where('variant', '==', item.selectedVariant) : invQuery;
+
+                const invSnapshot = await finalQuery.get();
+                
+                if (!invSnapshot.empty) {
+                    const invDoc = invSnapshot.docs[0];
+                    const invData = invDoc.data() as InventoryProduct;
+                    const newQuantitySold = invData.quantitySold + item.quantity;
+                    let newStatus: ProductStatus = invData.status;
+                    if (newQuantitySold >= invData.quantityBought) newStatus = 'SOLD';
+                    
+                    transaction.update(invDoc.ref, { 
+                        quantitySold: newQuantitySold,
+                        status: newStatus 
+                    });
+                }
+            }
+        });
+
+        alert('Encomenda manual criada e stock deduzido com sucesso!');
         setIsManualOrderModalOpen(false);
-        setManualOrderForm(initialManualOrderForm);
+        setManualOrderItems([]);
+        setManualOrderCustomer({ name: '', email: '' });
+        setManualOrderShipping('');
 
     } catch (error) {
         console.error("Erro ao criar encomenda manual:", error);
@@ -787,7 +878,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
               </button>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in"><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação (7 Dias)</h3><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button><button onClick={() => handleDeleteOrder(order.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded" title="Apagar Duplicado / Remover Encomenda"><Trash2 size={16} /></button></td></tr>)}</tbody></table></div></div></div>}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button><button onClick={() => handleOrderStatusChange(order.id, 'Cancelado')} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded" title="Cancelar Encomenda"><Trash2 size={16} /></button></td></tr>)}</tbody></table></div></div></div>}
         {activeTab === 'coupons' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3><form onSubmit={handleAddCoupon} className="space-y-4"><div><label className="text-xs font-bold text-gray-500 uppercase">Código</label><input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-gray-500 uppercase">Tipo</label><select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded"><option value="PERCENTAGE">Percentagem (%)</option><option value="FIXED">Valor Fixo (€)</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Valor</label><input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label><input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div><button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button></form></div>
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
@@ -943,7 +1034,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       {/* --- MODAL PARA REGISTO MANUAL DE ENCOMENDAS --- */}
       {isManualOrderModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                         <ClipboardEdit size={20} className="text-purple-600" /> Registar Encomenda Manual
@@ -952,47 +1043,65 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                 </div>
                 <div className="p-6 overflow-y-auto">
                     <form onSubmit={handleManualOrderSubmit} className="space-y-6">
-                        <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border">
-                            Use este formulário para adicionar encomendas feitas fora do site (ex: OLX, WhatsApp) ou para recuperar encomendas perdidas.
-                        </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Cliente</label>
-                                <input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderForm.customerName} onChange={e => setManualOrderForm({...manualOrderForm, customerName: e.target.value})} />
+                                <input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderCustomer.name} onChange={e => setManualOrderCustomer({...manualOrderCustomer, name: e.target.value})} />
                             </div>
                              <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email do Cliente (Opcional)</label>
-                                <input type="email" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Para associar à conta" value={manualOrderForm.customerEmail} onChange={e => setManualOrderForm({...manualOrderForm, customerEmail: e.target.value})} />
+                                <input type="email" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Para associar à conta" value={manualOrderCustomer.email} onChange={e => setManualOrderCustomer({...manualOrderCustomer, email: e.target.value})} />
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total da Encomenda (€)</label>
-                                <input required type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderForm.orderTotal} onChange={e => setManualOrderForm({...manualOrderForm, orderTotal: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Encomenda</label>
-                                <input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderForm.orderDate} onChange={e => setManualOrderForm({...manualOrderForm, orderDate: e.target.value})} />
-                            </div>
+                        
+                        <div className="bg-gray-50 p-4 rounded-xl border">
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens da Encomenda</label>
+                           <div className="flex gap-2 items-center">
+                               <select onChange={e => addProductToManualOrder(e.target.value)} value="" className="flex-1 p-2 border border-gray-300 rounded-lg">
+                                   <option value="">-- Adicionar Produto --</option>
+                                   {productsForSelect.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                               </select>
+                           </div>
+                           
+                           <div className="space-y-2 mt-4">
+                               {manualOrderItems.map(item => {
+                                   const itemKey = `${item.id}|${item.selectedVariant}`;
+                                   return (
+                                       <div key={itemKey} className="flex justify-between items-center bg-white p-2 rounded border">
+                                           <div>
+                                               <p className="font-bold text-sm">{item.name}{item.selectedVariant && ` - ${item.selectedVariant}`}</p>
+                                               <p className="text-xs text-gray-500">{formatCurrency(item.finalPrice)}</p>
+                                           </div>
+                                           <div className="flex items-center gap-2">
+                                                <button type="button" onClick={() => updateManualOrderItemQuantity(itemKey, -1)} className="w-6 h-6 rounded bg-gray-200">-</button>
+                                                <span className="font-bold">{item.quantity}</span>
+                                                <button type="button" onClick={() => updateManualOrderItemQuantity(itemKey, 1)} className="w-6 h-6 rounded bg-gray-200">+</button>
+                                                <button type="button" onClick={() => setManualOrderItems(prev => prev.filter(p => `${p.id}|${p.selectedVariant}` !== itemKey))}><MinusCircle size={16} className="text-red-500"/></button>
+                                           </div>
+                                       </div>
+                                   );
+                               })}
+                           </div>
+
+                           <div className="text-right font-bold text-lg mt-4">
+                               Total: {formatCurrency(manualOrderItems.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0))}
+                           </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Itens da Encomenda</label>
-                            <textarea required rows={4} className="w-full p-3 border border-gray-300 rounded-lg font-mono text-sm" placeholder="Ex: 1x Xiaomi TV Box S (2ª Gen)&#10;2x Cabo HDMI 2.1" value={manualOrderForm.items} onChange={e => setManualOrderForm({...manualOrderForm, items: e.target.value})} />
-                        </div>
+
                          <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Morada de Envio</label>
-                            <textarea rows={3} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Rua, Código Postal, Cidade" value={manualOrderForm.shippingInfo} onChange={e => setManualOrderForm({...manualOrderForm, shippingInfo: e.target.value})} />
+                            <textarea rows={2} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Rua, Código Postal, Cidade" value={manualOrderShipping} onChange={e => setManualOrderShipping(e.target.value)} />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Pagamento</label>
-                             <select className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderForm.paymentMethod} onChange={e => setManualOrderForm({...manualOrderForm, paymentMethod: e.target.value})}>
+                             <select className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderPayment} onChange={e => setManualOrderPayment(e.target.value)}>
                                 <option>MB Way</option><option>Transferência</option><option>Cobrança</option><option>Outro</option>
                              </select>
                         </div>
                         <div className="flex gap-3 pt-4 border-t">
                             <button type="button" onClick={() => setIsManualOrderModalOpen(false)} className="px-6 py-3 border rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
                             <button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2">
-                                <Save size={18} /> Guardar Encomenda
+                                <Save size={18} /> Guardar & Deduzir Stock
                             </button>
                         </div>
                     </form>
