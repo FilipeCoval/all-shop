@@ -606,9 +606,13 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     const invUpdatePayload: Partial<InventoryProduct> = {
         status: newStatus,
         quantitySold: newQuantitySold,
-        units: hasUnits ? updatedUnits : undefined,
         salesHistory: firebase.firestore.FieldValue.arrayUnion(newSaleRecord) as any
     };
+
+    if (hasUnits) {
+      invUpdatePayload.units = updatedUnits;
+    }
+    
     batch.update(invProductRef, invUpdatePayload);
     
     // 2. Update Linked Online Order (if any)
@@ -975,19 +979,23 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
 
                           </div>
                         ) : (
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label>
-                                <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} />
-                            </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label>
+                            <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} />
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Unitário (€)</label>
                                 <input type="number" step="0.01" required className="w-full p-3 border border-gray-300 rounded-lg text-lg" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} />
                             </div>
-                          </div>
-                        )}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label>
+                                <input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} />
+                            </div>
+                        </div>
                         
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label><input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} /></div>
                         <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Venda</label><input type="date" required className="w-full p-3 border border-gray-300 rounded-lg" value={saleForm.date} onChange={e => setSaleForm({...saleForm, date: e.target.value})} /></div>
                         <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas (Cliente/Origem)</label><input type="text" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ex: Vendido no OLX ao Rui" value={saleForm.notes} onChange={e => setSaleForm({...saleForm, notes: e.target.value})} /></div>
                         
