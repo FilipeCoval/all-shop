@@ -220,7 +220,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'manual_sales'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
@@ -591,14 +591,33 @@ const payload: any = { name: formData.name, category: formData.category, publicP
   
   const handleSaleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProductForSale) return;
+    if (!selectedProductForSale || !linkedOrderId) {
+        alert("É obrigatório associar esta baixa de stock a uma encomenda.");
+        return;
+    }
+
+    const linkedOrder = allOrders.find(o => o.id === linkedOrderId);
+    if (!linkedOrder) {
+        alert("Encomenda selecionada não encontrada.");
+        return;
+    }
+
+    const orderItem = getSafeItems(linkedOrder.items).find(item => 
+        typeof item === 'object' && 
+        item.productId === selectedProductForSale.publicProductId &&
+        (!item.selectedVariant || item.selectedVariant === selectedProductForSale.variant)
+    ) as OrderItem | undefined;
+
+    if (!orderItem) {
+        alert("Este produto não corresponde a nenhum item na encomenda selecionada.");
+        return;
+    }
 
     const hasUnits = selectedProductForSale.units && selectedProductForSale.units.length > 0;
-    const qty = hasUnits ? selectedUnitsForSale.length : Number(saleForm.quantity);
-    const price = Number(saleForm.unitPrice);
-    const shipping = Number(saleForm.shippingCost) || 0;
+    const qty = hasUnits ? selectedUnitsForSale.length : orderItem.quantity;
+    
+    if (qty <= 0) return alert("A quantidade a vender deve ser maior que 0.");
 
-    if (qty <= 0) return alert("Quantidade deve ser maior que 0");
     const remainingStock = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold;
     if (qty > remainingStock) return alert(`Erro: Stock insuficiente. Apenas ${remainingStock} unidades disponíveis.`);
 
@@ -607,12 +626,12 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     // 1. Update Inventory Product
     const invProductRef = db.collection('products_inventory').doc(selectedProductForSale.id);
     const newSaleRecord: SaleRecord = {
-        id: linkedOrderId ? `ORDER-${linkedOrderId}-${selectedProductForSale.publicProductId}` : Date.now().toString(),
-        date: saleForm.date,
+        id: `ORDER-${linkedOrderId}-${selectedProductForSale.publicProductId}`,
+        date: new Date().toISOString(),
         quantity: qty,
-        unitPrice: price,
-        shippingCost: shipping,
-        notes: saleForm.notes || (linkedOrderId ? `Venda Online - Pedido ${linkedOrderId}` : '')
+        unitPrice: orderItem.price,
+        shippingCost: 0,
+        notes: `Venda Online - Pedido ${linkedOrderId}`
     };
 
     let updatedUnits = selectedProductForSale.units || [];
@@ -637,29 +656,23 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     
     batch.update(invProductRef, invUpdatePayload);
     
-    // 2. Update Linked Online Order (if any)
-    if (linkedOrderId) {
-        const orderRef = db.collection('orders').doc(linkedOrderId);
-        const orderToUpdate = allOrders.find(o => o.id === linkedOrderId);
-
-        if (orderToUpdate) {
-            const updatedItems = getSafeItems(orderToUpdate.items).map(item => {
-                if (typeof item === 'object' && item.productId === selectedProductForSale.publicProductId && (!item.selectedVariant || item.selectedVariant === selectedProductForSale.variant)) {
-                    const existingSerials = item.serialNumbers || [];
-                    return { ...item, serialNumbers: [...existingSerials, ...selectedUnitsForSale] };
-                }
-                return item;
-            });
-            batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
+    // 2. Update Linked Online Order
+    const orderRef = db.collection('orders').doc(linkedOrderId);
+    const updatedItems = getSafeItems(linkedOrder.items).map(item => {
+        if (typeof item === 'object' && item.productId === selectedProductForSale.publicProductId && (!item.selectedVariant || item.selectedVariant === selectedProductForSale.variant)) {
+            const existingSerials = item.serialNumbers || [];
+            return { ...item, serialNumbers: [...existingSerials, ...selectedUnitsForSale] };
         }
-    }
+        return item;
+    });
+    batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
     
     try {
         await batch.commit();
         setIsSaleModalOpen(false);
-        alert("Venda registada com sucesso!");
+        alert("Baixa de stock registada e encomenda atualizada com sucesso!");
     } catch (err) {
-        alert("Erro ao registar venda. Verifique a consola.");
+        alert("Erro ao registar baixa de stock. Verifique a consola.");
         console.error(err);
     }
   };
@@ -807,48 +820,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
         alert("Ocorreu um erro. Verifique a consola.");
     }
   };
-
-  const manualSalesLedger = useMemo(() => {
-    const ledger: SalesLedgerItem[] = [];
-
-    // Processar apenas vendas manuais do inventário
-    products.forEach(p => {
-        (p.salesHistory || []).forEach(s => {
-            // Ignorar vendas manuais que já estão ligadas a uma encomenda online para não duplicar
-            if (s.id.startsWith('ORDER-')) return;
-            
-            ledger.push({
-                id: `M-${s.id}`,
-                date: s.date,
-                type: 'Manual',
-                items: [`${s.quantity}x ${p.name} ${p.variant ? `(${p.variant})` : ''}`],
-                customer: s.notes || 'N/A',
-                total: s.unitPrice * s.quantity,
-                sourceId: s.id,
-            });
-        });
-    });
-    
-    // Ordenar por data, mais recente primeiro
-    return ledger.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [products]);
-
-  const filteredManualSales = useMemo(() => {
-    if (!salesSearchTerm) return manualSalesLedger;
-    const term = salesSearchTerm.toLowerCase();
-    return manualSalesLedger.filter(sale => 
-        sale.customer.toLowerCase().includes(term) ||
-        sale.sourceId.toLowerCase().includes(term) ||
-        sale.items.some(item => item.toLowerCase().includes(term))
-    );
-  }, [manualSalesLedger, salesSearchTerm]);
-
-  const manualSalesStats = useMemo(() => {
-    const totalRevenue = manualSalesLedger.reduce((sum, sale) => sum + sale.total, 0);
-    const averageSale = manualSalesLedger.length > 0 ? totalRevenue / manualSalesLedger.length : 0;
-    return { totalRevenue, averageSale, totalSales: manualSalesLedger.length };
-  }, [manualSalesLedger]);
-
+  
   const handleOpenInvestedModal = () => {
     const data = products.map(p => ({
         ...p,
@@ -1086,7 +1058,6 @@ const payload: any = { name: formData.name, category: formData.category, publicP
             <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 p-1 rounded-lg gap-1 md:gap-0">
                 <button onClick={() => setActiveTab('inventory')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
                 <button onClick={() => setActiveTab('orders')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
-                <button onClick={() => setActiveTab('manual_sales')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'manual_sales' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><History size={16} /> Vendas Manuais</button>
                 <button onClick={() => setActiveTab('coupons')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
             </div>
             <div className="hidden md:flex items-center gap-3">
@@ -1114,18 +1085,31 @@ const payload: any = { name: formData.name, category: formData.category, publicP
             <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
             return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
             </table></div></div></>}
-        {activeTab === 'orders' && <div className="space-y-6">
-          <div className="flex justify-end">
-              <button 
-                  onClick={() => setIsManualOrderModalOpen(true)}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-bold shadow-md"
-              >
-                  <ClipboardEdit size={18} /> Registar Encomenda Manual
-              </button>
+        {activeTab === 'orders' && (
+          <div className="space-y-6 animate-fade-in">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"><div className="flex justify-between items-center mb-6"><div className="flex items-center gap-4"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação Geral</h3><div className="bg-gray-100 p-1 rounded-lg flex gap-1 text-xs font-medium"><button onClick={() => setChartTimeframe('7d')} className={`px-2 py-1 rounded ${chartTimeframe === '7d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>7D</button><button onClick={() => setChartTimeframe('30d')} className={`px-2 py-1 rounded ${chartTimeframe === '30d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>30D</button><button onClick={() => setChartTimeframe('1y')} className={`px-2 py-1 rounded ${chartTimeframe === '1y' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>1A</button></div></div><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
+              <div className="flex justify-end">
+                  <button 
+                      onClick={() => setIsManualOrderModalOpen(true)}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-bold shadow-md"
+                  >
+                      <ClipboardEdit size={18} /> Registar Encomenda Manual
+                  </button>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left whitespace-nowrap">
+                        <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                            <tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                            {allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Pago' ? 'bg-cyan-100 text-cyan-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Pago">Pago</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button>{isAdmin && order.status === 'Cancelado' && (<button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar Encomenda"><Trash2 size={16} /></button>)}</td></tr>)}
+                        </tbody>
+                    </table>
+                </div>
+              </div>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in"><div className="flex justify-between items-center mb-6"><div className="flex items-center gap-4"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação</h3><div className="bg-gray-100 p-1 rounded-lg flex gap-1 text-xs font-medium"><button onClick={() => setChartTimeframe('7d')} className={`px-2 py-1 rounded ${chartTimeframe === '7d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>7D</button><button onClick={() => setChartTimeframe('30d')} className={`px-2 py-1 rounded ${chartTimeframe === '30d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>30D</button><button onClick={() => setChartTimeframe('1y')} className={`px-2 py-1 rounded ${chartTimeframe === '1y' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>1A</button></div></div><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Pago' ? 'bg-cyan-100 text-cyan-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Pago">Pago</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button>{isAdmin && order.status === 'Cancelado' && (<button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar Encomenda"><Trash2 size={16} /></button>)}</td></tr>)}</tbody></table></div></div></div>}
-        {activeTab === 'manual_sales' && <div className="animate-fade-in space-y-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><KpiCard title="Receita (Vendas Manuais)" value={manualSalesStats.totalRevenue} icon={<TrendingUp size={18} />} color="green" /><KpiCard title="Total Vendas Manuais" value={manualSalesStats.totalSales} icon={<ShoppingCart size={18} />} color="indigo" /><KpiCard title="Valor Médio/Venda" value={manualSalesStats.averageSale} icon={<DollarSign size={18} />} color="blue" /></div><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="p-4 border-b"><div className="relative max-w-sm"><input type="text" placeholder="Pesquisar por cliente, item, ID..." value={salesSearchTerm} onChange={e => setSalesSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm" /><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Data</th><th className="px-6 py-3">Cliente/Notas</th><th className="px-6 py-3">Itens</th><th className="px-6 py-3 text-right">Total</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredManualSales.map(sale => <tr key={sale.id} className="hover:bg-gray-50"><td className="px-6 py-4"><span className="font-medium">{new Date(sale.date).toLocaleDateString()}</span></td><td className="px-6 py-4">{sale.customer}</td><td className="px-6 py-4 text-xs"><div className="flex flex-col gap-1">{sale.items.map((item, i) => <span key={i} className="line-clamp-1">{item}</span>)}</div></td><td className="px-6 py-4 text-right font-bold">{formatCurrency(sale.total)}</td></tr>)}</tbody></table></div></div></div>}
+        )}
         {activeTab === 'coupons' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3><form onSubmit={handleAddCoupon} className="space-y-4"><div><label className="text-xs font-bold text-gray-500 uppercase">Código</label><input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-gray-500 uppercase">Tipo</label><select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded"><option value="PERCENTAGE">Percentagem (%)</option><option value="FIXED">Valor Fixo (€)</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Valor</label><input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label><input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div><button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button></form></div>
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
@@ -1143,7 +1127,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="bg-green-600 p-6 text-white shrink-0">
-                    <h3 className="text-xl font-bold flex items-center gap-2"><DollarSign /> Registar Venda</h3>
+                    <h3 className="text-xl font-bold flex items-center gap-2"><DollarSign /> Registar Baixa de Stock</h3>
                     <p className="opacity-90 mt-1 text-sm">{selectedProductForSale.name} {selectedProductForSale.variant && `(${selectedProductForSale.variant})`}</p>
                     <div className="mt-2 text-xs bg-green-700 inline-block px-2 py-1 rounded">
                         Stock Disponível: {selectedProductForSale.quantityBought - selectedProductForSale.quantitySold}
@@ -1153,13 +1137,14 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                     <form onSubmit={handleSaleSubmit} className="space-y-6">
                         
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                          <label className="block text-xs font-bold text-blue-800 uppercase mb-2">Associar a Encomenda Online (Opcional)</label>
+                          <label className="block text-xs font-bold text-blue-800 uppercase mb-2">Associar a Encomenda (Obrigatório)</label>
                           <select 
                             value={linkedOrderId} 
                             onChange={e => setLinkedOrderId(e.target.value)} 
                             className="w-full p-3 border border-blue-300 rounded-lg bg-white"
+                            required
                           >
-                            <option value="">-- Venda Manual (Ex: OLX) --</option>
+                            <option value="">-- Selecione a Encomenda --</option>
                             {pendingOrders.map(order => (
                               <option key={order.id} value={order.id}>
                                 {order.id} - {order.shippingInfo?.name || 'Cliente Desconhecido'}
@@ -1168,7 +1153,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                           </select>
                         </div>
                         
-                        {selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (
+                        {selectedProductForSale.units && selectedProductForSale.units.length > 0 && (
                           <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                             <label className="block text-xs font-bold text-purple-800 uppercase mb-2">Selecionar Unidades / S/N para Vender</label>
                             
@@ -1203,30 +1188,11 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                             )}
 
                           </div>
-                        ) : (
-                          <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantidade</label>
-                            <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required className="w-full p-3 border border-gray-300 rounded-lg text-lg font-bold" value={saleForm.quantity} onChange={e => setSaleForm({...saleForm, quantity: e.target.value})} />
-                          </div>
                         )}
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Unitário (€)</label>
-                                <input type="number" step="0.01" required className="w-full p-3 border border-gray-300 rounded-lg text-lg" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Portes de Envio Pagos (€)</label>
-                                <input type="number" step="0.01" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="0.00" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})} />
-                            </div>
-                        </div>
-                        
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data da Venda</label><input type="date" required className="w-full p-3 border border-gray-300 rounded-lg" value={saleForm.date} onChange={e => setSaleForm({...saleForm, date: e.target.value})} /></div>
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas (Cliente/Origem)</label><input type="text" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ex: Vendido no OLX ao Rui" value={saleForm.notes} onChange={e => setSaleForm({...saleForm, notes: e.target.value})} /></div>
                         
                         <div className="flex gap-3 pt-2">
                             <button type="button" onClick={() => setIsSaleModalOpen(false)} className="px-4 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-                            <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar Venda</button>
+                            <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar e Dar Baixa</button>
                         </div>
                     </form>
                 </div>
