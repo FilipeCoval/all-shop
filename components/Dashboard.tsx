@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -29,12 +29,22 @@ interface ManualOrderItem extends Product {
     finalPrice: number;
 }
 
+interface SalesLedgerItem {
+    id: string;
+    date: string;
+    type: 'Online' | 'Manual';
+    items: string[];
+    customer: string;
+    total: number;
+    sourceId: string; // ID da Order ou ID do SaleRecord
+}
+
 
 // Utility para formatação de moeda
 const formatCurrency = (value: number) => 
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
-const KpiCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string; }> = ({ title, value, icon, color }) => {
+const KpiCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string; onClick?: () => void; }> = ({ title, value, icon, color, onClick }) => {
   const colorClasses: { [key: string]: string } = {
     blue: 'bg-blue-50 text-blue-600',
     indigo: 'bg-indigo-50 text-indigo-600',
@@ -44,8 +54,13 @@ const KpiCard: React.FC<{ title: string; value: string | number; icon: React.Rea
   };
   const colorClass = colorClasses[color] || 'bg-gray-50 text-gray-600';
   const displayValue = typeof value === 'number' ? formatCurrency(value) : value;
+  const isClickable = !!onClick;
+
   return (
-    <div className="p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full">
+    <div 
+      onClick={onClick} 
+      className={`p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full transition-all duration-300 ${isClickable ? 'cursor-pointer hover:border-indigo-300 hover:shadow-lg hover:scale-[1.02]' : ''}`}
+    >
       <div className="flex justify-between items-start mb-2">
         <span className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">{title}</span>
         <div className={`p-1.5 rounded-lg ${colorClass}`}>{icon}</div>
@@ -205,7 +220,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'manual_sales'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
   const [aiQuery, setAiQuery] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
@@ -256,6 +271,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [manualOrderCustomer, setManualOrderCustomer] = useState({ name: '', email: '' });
   const [manualOrderShipping, setManualOrderShipping] = useState('');
   const [manualOrderPayment, setManualOrderPayment] = useState('MB Way');
+
+  // Chart and Sales Ledger states
+  const [chartTimeframe, setChartTimeframe] = useState<'7d' | '30d' | '1y'>('7d');
+  const [salesSearchTerm, setSalesSearchTerm] = useState('');
+
+  // --- STATE FOR KPI DETAILS MODAL ---
+  const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
 
 
   const [formData, setFormData] = useState({
@@ -539,7 +561,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { console.error(e); alert("Erro ao gravar rastreio"); } };
   const handleCopy = (text: string) => navigator.clipboard.writeText(text);
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
-  const chartData = useMemo(() => { const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const days = []; const today = new Date(); let totalPeriod = 0; for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { weekday: 'short' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; }, [allOrders, products]);
+  const chartData = useMemo(() => { const numDays = chartTimeframe === '1y' ? 365 : chartTimeframe === '30d' ? 30 : 7; const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const today = new Date(); let totalPeriod = 0; if (chartTimeframe === '1y') { const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(today.getMonth() - i, 1); return d; }).reverse(); const monthlyData = months.map(monthStart => { const year = monthStart.getFullYear(); const month = monthStart.getMonth() + 1; const monthStr = `${year}-${month.toString().padStart(2, '0')}`; const totalForMonth = allSales.reduce((acc, sale) => { return sale.date.startsWith(monthStr) ? acc + sale.total : acc; }, 0); totalPeriod += totalForMonth; return { label: monthStart.toLocaleDateString('pt-PT', { month: 'short' }), value: totalForMonth }; }); const maxValue = Math.max(...monthlyData.map(d => d.value), 1); return { days: monthlyData, maxValue, totalPeriod }; } else { const days = []; for (let i = numDays - 1; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { day: 'numeric' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; } }, [allOrders, products, chartTimeframe]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = p.purchasePrice * p.quantityBought; totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else revenue = p.quantitySold * p.salePrice; realizedRevenue += revenue; const cogs = p.quantitySold * p.purchasePrice; const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; const remainingStock = p.quantityBought - p.quantitySold; if (remainingStock > 0 && p.targetSalePrice) potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock; }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus }); setModalUnits(product.units || []); setIsModalOpen(true); };
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', targetSalePrice: '', cashbackValue: '', cashbackStatus: 'NONE' }); setModalUnits([]); setIsModalOpen(true); };
@@ -786,6 +808,167 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     }
   };
 
+  const manualSalesLedger = useMemo(() => {
+    const ledger: SalesLedgerItem[] = [];
+
+    // Processar apenas vendas manuais do inventário
+    products.forEach(p => {
+        (p.salesHistory || []).forEach(s => {
+            // Ignorar vendas manuais que já estão ligadas a uma encomenda online para não duplicar
+            if (s.id.startsWith('ORDER-')) return;
+            
+            ledger.push({
+                id: `M-${s.id}`,
+                date: s.date,
+                type: 'Manual',
+                items: [`${s.quantity}x ${p.name} ${p.variant ? `(${p.variant})` : ''}`],
+                customer: s.notes || 'N/A',
+                total: s.unitPrice * s.quantity,
+                sourceId: s.id,
+            });
+        });
+    });
+    
+    // Ordenar por data, mais recente primeiro
+    return ledger.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [products]);
+
+  const filteredManualSales = useMemo(() => {
+    if (!salesSearchTerm) return manualSalesLedger;
+    const term = salesSearchTerm.toLowerCase();
+    return manualSalesLedger.filter(sale => 
+        sale.customer.toLowerCase().includes(term) ||
+        sale.sourceId.toLowerCase().includes(term) ||
+        sale.items.some(item => item.toLowerCase().includes(term))
+    );
+  }, [manualSalesLedger, salesSearchTerm]);
+
+  const manualSalesStats = useMemo(() => {
+    const totalRevenue = manualSalesLedger.reduce((sum, sale) => sum + sale.total, 0);
+    const averageSale = manualSalesLedger.length > 0 ? totalRevenue / manualSalesLedger.length : 0;
+    return { totalRevenue, averageSale, totalSales: manualSalesLedger.length };
+  }, [manualSalesLedger]);
+
+  const handleOpenInvestedModal = () => {
+    const data = products.map(p => ({
+        ...p,
+        totalInvested: p.quantityBought * p.purchasePrice
+    }));
+    setDetailsModalData({
+        title: 'Detalhes: Total Investido',
+        data,
+        columns: [
+            { header: 'Produto', accessor: 'name' },
+            { header: 'Qtd. Comprada', accessor: 'quantityBought' },
+            { header: 'Custo Unitário', accessor: (item) => formatCurrency(item.purchasePrice) },
+            { header: 'Investimento Total', accessor: (item) => formatCurrency(item.totalInvested) },
+        ],
+        total: stats.totalInvested
+    });
+  };
+
+  const handleOpenRevenueModal = () => {
+    const allSalesData: any[] = [];
+    
+    // Vendas Online
+    allOrders.filter(o => o.status !== 'Cancelado').forEach(order => {
+        allSalesData.push({
+            date: order.date,
+            type: 'Online',
+            description: `Pedido ${order.id} - ${order.shippingInfo?.name || 'N/A'}`,
+            total: order.total
+        });
+    });
+
+    // Vendas Manuais
+    products.forEach(p => {
+        (p.salesHistory || []).forEach(s => {
+            allSalesData.push({
+                date: s.date,
+                type: 'Manual',
+                description: `${s.quantity}x ${p.name} - ${s.notes || 'N/A'}`,
+                total: s.unitPrice * s.quantity
+            });
+        });
+    });
+
+    allSalesData.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    setDetailsModalData({
+        title: 'Detalhes: Vendas Reais',
+        data: allSalesData,
+        columns: [
+            { header: 'Data', accessor: (item) => new Date(item.date).toLocaleDateString() },
+            { header: 'Tipo', accessor: 'type' },
+            { header: 'Descrição', accessor: 'description' },
+            { header: 'Total Venda', accessor: (item) => formatCurrency(item.total) }
+        ],
+        total: stats.realizedRevenue
+    });
+  };
+  
+  const handleOpenProfitModal = () => {
+    const profitData: any[] = [];
+
+    // Lucro de Vendas
+    products.forEach(p => {
+        (p.salesHistory || []).forEach(s => {
+            const revenue = s.quantity * s.unitPrice;
+            const cogs = s.quantity * p.purchasePrice;
+            profitData.push({
+                date: s.date,
+                type: 'Venda',
+                description: `${s.quantity}x ${p.name}`,
+                revenue: revenue,
+                cogs: cogs,
+                profit: revenue - cogs - (s.shippingCost || 0)
+            });
+        });
+    });
+
+    // Lucro de Cashback
+    products.filter(p => p.cashbackStatus === 'RECEIVED').forEach(p => {
+        profitData.push({
+            date: p.purchaseDate, // Usar data da compra como referência
+            type: 'Cashback',
+            description: `Cashback de ${p.name}`,
+            revenue: p.cashbackValue,
+            cogs: 0,
+            profit: p.cashbackValue
+        });
+    });
+    
+    profitData.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    setDetailsModalData({
+        title: 'Detalhes: Lucro Líquido',
+        data: profitData,
+        columns: [
+            { header: 'Data', accessor: (item) => new Date(item.date).toLocaleDateString() },
+            { header: 'Tipo', accessor: 'type' },
+            { header: 'Descrição', accessor: 'description' },
+            { header: 'Receita', accessor: (item) => formatCurrency(item.revenue) },
+            { header: 'Custo', accessor: (item) => formatCurrency(item.cogs) },
+            { header: 'Lucro', accessor: (item) => <span className={item.profit >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(item.profit)}</span> }
+        ],
+        total: stats.realizedProfit
+    });
+  };
+
+  const handleOpenCashbackModal = () => {
+    const data = products.filter(p => p.cashbackStatus === 'PENDING');
+    setDetailsModalData({
+        title: 'Detalhes: Cashback Pendente',
+        data,
+        columns: [
+            { header: 'Produto', accessor: 'name' },
+            { header: 'Fornecedor', accessor: 'supplierName' },
+            { header: 'Valor Pendente', accessor: (item) => formatCurrency(item.cashbackValue) }
+        ],
+        total: stats.pendingCashback
+    });
+  };
+
 
   if (!isAdmin) {
     return <AccessDeniedPanel reason={user ? "A sua conta não tem privilégios de administrador." : "Precisa de iniciar sessão para aceder ao Backoffice."} />;
@@ -807,6 +990,40 @@ const payload: any = { name: formData.name, category: formData.category, publicP
           }} 
           onClose={() => setIsScannerOpen(false)} 
       />}
+      {detailsModalData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h2 className="text-xl font-bold text-gray-900">{detailsModalData.title}</h2>
+                    <button onClick={() => setDetailsModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
+                </div>
+                <div className="overflow-y-auto">
+                    <table className="w-full text-left">
+                        <thead className="sticky top-0 bg-gray-100 text-xs font-semibold text-gray-500 uppercase">
+                            <tr>
+                                {detailsModalData.columns.map(col => <th key={col.header} className="px-6 py-3">{col.header}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-sm">
+                            {detailsModalData.data.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                    {detailsModalData.columns.map(col => (
+                                        <td key={col.header} className="px-6 py-4 whitespace-nowrap">
+                                            {typeof col.accessor === 'function' ? col.accessor(item) : (item[col.accessor as string] ?? 'N/A')}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="p-4 border-t bg-gray-50 flex justify-end items-center gap-4">
+                    <span className="text-sm font-bold text-gray-500">TOTAL GERAL:</span>
+                    <span className="text-lg font-bold text-gray-900">{formatCurrency(detailsModalData.total)}</span>
+                </div>
+            </div>
+        </div>
+      )}
 
       {notificationModalData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -869,6 +1086,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
             <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 p-1 rounded-lg gap-1 md:gap-0">
                 <button onClick={() => setActiveTab('inventory')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
                 <button onClick={() => setActiveTab('orders')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
+                <button onClick={() => setActiveTab('manual_sales')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'manual_sales' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><History size={16} /> Vendas Manuais</button>
                 <button onClick={() => setActiveTab('coupons')} className={`w-full md:w-auto px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
             </div>
             <div className="hidden md:flex items-center gap-3">
@@ -882,7 +1100,13 @@ const payload: any = { name: formData.name, category: formData.category, publicP
 
       <div className="container mx-auto px-4 py-8">
         {activeTab === 'inventory' && <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8"><KpiCard title="Total Investido" value={stats.totalInvested} icon={<Package size={18} />} color="blue" /><KpiCard title="Vendas Reais" value={stats.realizedRevenue} icon={<DollarSign size={18} />} color="indigo" /><KpiCard title="Lucro Líquido" value={stats.realizedProfit} icon={<TrendingUp size={18} />} color={stats.realizedProfit >= 0 ? "green" : "red"} /><KpiCard title="Cashback Pendente" value={stats.pendingCashback} icon={<AlertCircle size={18} />} color="yellow" /><div onClick={() => setIsOnlineDetailsOpen(true)} className="p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full cursor-pointer hover:border-green-300 transition-colors relative overflow-hidden"><div className="flex justify-between items-start mb-2"><span className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Online Agora</span><div className="p-1.5 rounded-lg bg-green-50 text-green-600 relative"><Users size={18} /><span className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span></div></div><div className="text-2xl font-bold text-green-600 flex items-end gap-2">{onlineUsers.length}<span className="text-xs text-gray-400 font-normal mb-1">visitantes</span></div></div></div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <KpiCard title="Total Investido" value={stats.totalInvested} icon={<Package size={18} />} color="blue" onClick={handleOpenInvestedModal} />
+                <KpiCard title="Vendas Reais" value={stats.realizedRevenue} icon={<DollarSign size={18} />} color="indigo" onClick={handleOpenRevenueModal} />
+                <KpiCard title="Lucro Líquido" value={stats.realizedProfit} icon={<TrendingUp size={18} />} color={stats.realizedProfit >= 0 ? "green" : "red"} onClick={handleOpenProfitModal} />
+                <KpiCard title="Cashback Pendente" value={stats.pendingCashback} icon={<AlertCircle size={18} />} color="yellow" onClick={handleOpenCashbackModal} />
+                <div onClick={() => setIsOnlineDetailsOpen(true)} className="p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full cursor-pointer hover:border-green-300 transition-colors relative overflow-hidden"><div className="flex justify-between items-start mb-2"><span className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Online Agora</span><div className="p-1.5 rounded-lg bg-green-50 text-green-600 relative"><Users size={18} /><span className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span></div></div><div className="text-2xl font-bold text-green-600 flex items-end gap-2">{onlineUsers.length}<span className="text-xs text-gray-400 font-normal mb-1">visitantes</span></div></div>
+            </div>
             {isOnlineDetailsOpen && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex justify-end" onClick={() => setIsOnlineDetailsOpen(false)}><div className="w-80 h-full bg-white shadow-2xl p-6 overflow-y-auto animate-slide-in-right" onClick={(e) => e.stopPropagation()}><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-lg flex items-center gap-2 text-gray-900"><Users className="text-green-600" /> Tráfego Real</h3><button onClick={() => setIsOnlineDetailsOpen(false)}><X size={20} className="text-gray-400" /></button></div><div className="space-y-3">{onlineUsers.map(u => <div key={u.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm"><div className="flex justify-between items-start"><span className="font-bold text-gray-800">{u.userName}</span><span className={`text-[10px] px-1.5 py-0.5 rounded ${u.device === 'Mobile' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{u.device}</span></div><div className="mt-1 flex items-center gap-1 text-xs text-gray-500 truncate"><Eye size={12} /><span className="truncate">{u.page === '#/' ? 'Home' : u.page.replace('#', '')}</span></div><div className="mt-1 text-[10px] text-gray-400 text-right">Há {Math.floor((Date.now() - u.lastActive) / 1000)}s</div></div>)}{onlineUsers.length === 0 && <p className="text-gray-500 text-center text-sm py-4">Ninguém online agora.</p>}</div></div></div>}
             <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in"><div className="flex items-center gap-3 mb-4"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div><div><h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3><p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p></div></div><div className="flex flex-col sm:flex-row gap-2"><input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles." className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onKeyDown={(e) => e.key === 'Enter' && handleAskAi()} /><button onClick={handleAskAi} disabled={isAiLoading || !aiQuery.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">{isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}</button></div>{aiResponse && <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">{aiResponse}</div>}</div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {countInStock}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {countSold}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div><button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button><button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
@@ -899,8 +1123,9 @@ const payload: any = { name: formData.name, category: formData.category, publicP
                   <ClipboardEdit size={18} /> Registar Encomenda Manual
               </button>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in"><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação (7 Dias)</h3><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in"><div className="flex justify-between items-center mb-6"><div className="flex items-center gap-4"><h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart2 className="text-indigo-600" /> Faturação</h3><div className="bg-gray-100 p-1 rounded-lg flex gap-1 text-xs font-medium"><button onClick={() => setChartTimeframe('7d')} className={`px-2 py-1 rounded ${chartTimeframe === '7d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>7D</button><button onClick={() => setChartTimeframe('30d')} className={`px-2 py-1 rounded ${chartTimeframe === '30d' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>30D</button><button onClick={() => setChartTimeframe('1y')} className={`px-2 py-1 rounded ${chartTimeframe === '1y' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500'}`}>1A</button></div></div><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Total: {formatCurrency(chartData.totalPeriod)}</span></div><div className="flex items-stretch h-64 gap-4"><div className="flex flex-col justify-between text-xs font-medium text-gray-400 py-2 min-w-[30px] text-right"><span>{formatCurrency(chartData.maxValue)}</span><span>{formatCurrency(chartData.maxValue / 2)}</span><span>0€</span></div><div className="flex items-end flex-1 gap-2 md:gap-4 relative border-l border-b border-gray-200"><div className="absolute w-full border-t border-dashed border-gray-100 top-2 left-0 z-0"></div><div className="absolute w-full border-t border-dashed border-gray-100 top-1/2 left-0 z-0"></div>{chartData.days.map((day, idx) => { const heightPercent = (day.value / chartData.maxValue) * 100; const isZero = day.value === 0; return <div key={idx} className="flex-1 flex flex-col justify-end h-full group relative z-10"><div className={`w-full rounded-t-md transition-all duration-700 ease-out relative group-hover:brightness-110 ${isZero ? 'bg-gray-100' : 'bg-gradient-to-t from-blue-500 to-indigo-600 shadow-lg shadow-indigo-200'}`} style={{ height: isZero ? '4px' : `${heightPercent}%`, minHeight: '4px' }}>{!isZero && <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-20">{formatCurrency(day.value)}<div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div></div>}</div><span className="text-[10px] md:text-xs text-gray-500 font-medium mt-2 text-center uppercase tracking-wide">{day.label}</span></div>})}</div></div></div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{allOrders.map(order => <tr key={order.id} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-indigo-700">{order.id}</td><td className="px-6 py-4">{order.shippingInfo?.name || 'N/A'}</td><td className="px-6 py-4 font-bold">{formatCurrency(order.total)}</td><td className="px-6 py-4"><select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value)} className={`text-xs font-bold px-2 py-1 rounded-full border-none cursor-pointer ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Pago' ? 'bg-cyan-100 text-cyan-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}><option value="Processamento">Processamento</option><option value="Pago">Pago</option><option value="Enviado">Enviado</option><option value="Entregue">Entregue</option><option value="Cancelado">Cancelado</option></select></td><td className="px-6 py-4 text-right flex justify-end items-center gap-2"><button onClick={() => setSelectedOrderDetails(order)} className="text-indigo-600 font-bold text-xs hover:underline">Detalhes</button>{isAdmin && order.status === 'Cancelado' && (<button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar Encomenda"><Trash2 size={16} /></button>)}</td></tr>)}</tbody></table></div></div></div>}
+        {activeTab === 'manual_sales' && <div className="animate-fade-in space-y-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><KpiCard title="Receita (Vendas Manuais)" value={manualSalesStats.totalRevenue} icon={<TrendingUp size={18} />} color="green" /><KpiCard title="Total Vendas Manuais" value={manualSalesStats.totalSales} icon={<ShoppingCart size={18} />} color="indigo" /><KpiCard title="Valor Médio/Venda" value={manualSalesStats.averageSale} icon={<DollarSign size={18} />} color="blue" /></div><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="p-4 border-b"><div className="relative max-w-sm"><input type="text" placeholder="Pesquisar por cliente, item, ID..." value={salesSearchTerm} onChange={e => setSalesSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm" /><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Data</th><th className="px-6 py-3">Cliente/Notas</th><th className="px-6 py-3">Itens</th><th className="px-6 py-3 text-right">Total</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredManualSales.map(sale => <tr key={sale.id} className="hover:bg-gray-50"><td className="px-6 py-4"><span className="font-medium">{new Date(sale.date).toLocaleDateString()}</span></td><td className="px-6 py-4">{sale.customer}</td><td className="px-6 py-4 text-xs"><div className="flex flex-col gap-1">{sale.items.map((item, i) => <span key={i} className="line-clamp-1">{item}</span>)}</div></td><td className="px-6 py-4 text-right font-bold">{formatCurrency(sale.total)}</td></tr>)}</tbody></table></div></div></div>}
         {activeTab === 'coupons' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3><form onSubmit={handleAddCoupon} className="space-y-4"><div><label className="text-xs font-bold text-gray-500 uppercase">Código</label><input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-gray-500 uppercase">Tipo</label><select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded"><option value="PERCENTAGE">Percentagem (%)</option><option value="FIXED">Valor Fixo (€)</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Valor</label><input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label><input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div><button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button></form></div>
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
@@ -937,7 +1162,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                             <option value="">-- Venda Manual (Ex: OLX) --</option>
                             {pendingOrders.map(order => (
                               <option key={order.id} value={order.id}>
-                                {order.id} - {order.shippingInfo.name}
+                                {order.id} - {order.shippingInfo?.name || 'Cliente Desconhecido'}
                               </option>
                             ))}
                           </select>
