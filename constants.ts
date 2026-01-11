@@ -111,7 +111,7 @@ export const PRODUCTS: Product[] = [
   {
     id: 13,
     name: "Tapete Gaming Mouse Pad XL - Sports Car Edition",
-    price: 12.99,
+    price: 13.99,
     description: "Grande tapete de mesa com design Sports Car. Superfície estendida de alta precisão de 900x400mm com base antiderrapante.",
     category: "Acessórios",
     comingSoon: true,
@@ -131,9 +131,10 @@ export const PRODUCTS: Product[] = [
     description: "A elite do streaming. Salto de 130% em performance gráfica e 32GB de armazenamento. Ideal para quem quer a box mais fluída do mercado com Wi-Fi 6.",
     category: "TV & Streaming",
     stock: 50,
-    image: proxyImg("https://imiland.ir/wp-content/uploads/2025/05/1748368235_68_Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png"),
+    image: proxyImg("https://androidpctv.com/wp-content/uploads/2025/04/Xiaomi-TV-Box-S-3rd-gen-review-p012.jpg"),
     images: [
-        proxyImg("https://androidpctv.com/wp-content/uploads/2025/04/Xiaomi-TV-Box-S-3rd-gen-review-p012.jpg")
+        proxyImg("https://techxreviews.com/wp-content/uploads/2025/05/Xiaomi-TV-Box-S-3rd-Gen-%F0%9F%93%BA-This-is-the-best-cheap-TV-box-of-2025-_-Review-0-1-screenshot.png"),
+        proxyImg("https://m.media-amazon.com/images/S/aplus-media-library-service-media/53017add-e552-4f0e-b544-d80552d9b523.__CR0,0,970,600_PT0_SX970_V1___.jpg")
     ],
     features: ["Suporte 8K / 4K", "Google TV", "Processador A55 Ultra", "32GB ROM / WiFi 6"]
   },
