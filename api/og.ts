@@ -19,7 +19,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const title = `${product.name} | Allshop Store`;
     const description = `${product.description.substring(0, 150)}...`;
-    const image = product.image || 'https://i.imgur.com/nSiZKBf.png';
+    
+    // Ensure image URL is HTTPS
+    let image = product.image || 'https://i.imgur.com/nSiZKBf.png';
+    if (image.startsWith('http://')) {
+        image = image.replace('http://', 'https');
+    }
+
     const protocol = host?.includes('localhost') ? 'http' : 'https';
     const cleanUrl = `${protocol}://${host}/product/${id}`;
     const storeUrl = `${protocol}://${host}/#product/${id}`;
@@ -32,17 +38,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <title>${title}</title>
         <meta name="description" content="${description}">
         
-        <!-- Open Graph -->
+        <!-- Open Graph / Facebook / Telegram -->
+        <meta property="og:site_name" content="Allshop Store" />
         <meta property="og:type" content="website">
         <meta property="og:url" content="${cleanUrl}">
         <meta property="og:title" content="${title}">
         <meta property="og:description" content="${description}">
         <meta property="og:image" content="${image}">
+        <meta property="og:image:secure_url" content="${image}">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
 
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
+        <meta property="twitter:url" content="${cleanUrl}">
         <meta property="twitter:title" content="${title}">
         <meta property="twitter:description" content="${description}">
         <meta property="twitter:image" content="${image}">
