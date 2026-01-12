@@ -17,8 +17,7 @@
     "lucide-react": "^0.454.0",
     "@google/genai": "latest",
     "firebase": "^10.13.1",
-    "@zxing/library": "^0.21.0",
-    "next": "^14.2.5"
+    "@zxing/library": "^0.21.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
