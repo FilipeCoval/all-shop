@@ -1,4 +1,17 @@
 {
+  "builds": [
+    {
+      "src": "api/og.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
   "rewrites": [
     {
       "source": "/product/:id",
@@ -12,6 +25,5 @@
       "destination": "/api/og?id=:id"
     },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "cleanUrls": true
+  ]
 }
