@@ -1,40 +1,10 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
-export function middleware(request: NextRequest) {
-  const userAgent = request.headers.get('user-agent')?.toLowerCase() || '';
-  const url = request.nextUrl.clone();
-  
-  // Lista exaustiva de bots que geram previews
-  const bots = [
-    'facebookexternalhit',
-    'whatsapp',
-    'telegrambot',
-    'twitterbot',
-    'slackbot',
-    'discordbot',
-    'googlebot',
-    'bingbot',
-    'linkedinbot',
-    'skypeuripreview'
-  ];
-
-  const isBot = bots.some(bot => userAgent.includes(bot));
-  
-  // Intercetamos apenas rotas de produto para o OG dinâmico
-  if (isBot && url.pathname.includes('/product/')) {
-    const productId = url.pathname.split('/').pop();
-    if (productId && !isNaN(Number(productId))) {
-      // Redirecionamento interno para o gerador de HTML
-      url.pathname = `/api/og`;
-      url.searchParams.set('id', productId);
-      return NextResponse.rewrite(url);
-    }
-  }
-
-  return NextResponse.next();
-}
-
+// This file is no longer used for rewriting and can be safely removed.
+// The rewriting logic has been moved to vercel.json for better performance and reliability.
 export const config = {
-  matcher: ['/product/:id*', '/'],
+  matcher: [], // Empty matcher ensures this middleware never runs.
 };
+
+export default function middleware() {
+  // This is a no-op function to satisfy Vercel's build requirement for a default export.
+  // The empty matcher in the config object ensures it's never actually invoked.
+}
