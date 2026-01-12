@@ -1,37 +1,28 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE",
-  authDomain: "allshop-store-70851.firebaseapp.com",
-  projectId: "allshop-store-70851",
-};
-
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-
-const db = firebase.firestore();
+import { PRODUCTS } from '../constants';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
+  const host = req.headers.host;
 
-  if (!id) return res.status(400).send('ID Required');
+  if (!id) {
+    return res.status(400).send('ID Required');
+  }
 
   try {
-    const productDoc = await db.collection('products_public').doc(id as string).get();
+    const productId = parseInt(id as string, 10);
+    const product = PRODUCTS.find(p => p.id === productId);
     
-    if (!productDoc.exists) {
+    if (!product) {
       return res.status(404).send('Product Not Found');
     }
 
-    const product = productDoc.data();
-    const title = `${product?.name} | Allshop Store`;
-    const description = `${product?.description?.substring(0, 150)}...`;
-    const image = product?.image || 'https://i.imgur.com/nSiZKBf.png';
-    const cleanUrl = `https://allshop-store.vercel.app/product/${id}`;
-    const storeUrl = `https://allshop-store.vercel.app/#product/${id}`;
+    const title = `${product.name} | Allshop Store`;
+    const description = `${product.description.substring(0, 150)}...`;
+    const image = product.image || 'https://i.imgur.com/nSiZKBf.png';
+    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    const cleanUrl = `${protocol}://${host}/product/${id}`;
+    const storeUrl = `${protocol}://${host}/#product/${id}`;
 
     const html = `
       <!DOCTYPE html>
@@ -70,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).send(html);
 
   } catch (error) {
-    return res.status(500).send('Error');
+    console.error('OG Generation Error:', error);
+    return res.status(500).send('Server Error');
   }
 }
