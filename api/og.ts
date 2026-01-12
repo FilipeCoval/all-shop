@@ -1,4 +1,4 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
