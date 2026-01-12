@@ -2,6 +2,21 @@ import React, { Component, ReactNode, ErrorInfo } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// --- ROUTER GUARD PARA URLS LIMPOS ---
+// Se o utilizador vier de uma partilha (ex: /product/17), convertemos para o formato Hash (/#product/17)
+// Isto permite partilhar links bonitos no WhatsApp/Telegram que funcionam no nosso sistema.
+const handleCleanUrlRedirect = () => {
+  const path = window.location.pathname;
+  if (path.includes('/product/')) {
+    const productId = path.split('/').pop();
+    if (productId) {
+      window.location.replace(`/#product/${productId}`);
+    }
+  }
+};
+handleCleanUrlRedirect();
+
+// Error Boundary para capturar crashes e evitar ecrã branco
 interface ErrorBoundaryProps {
   children?: ReactNode;
 }
@@ -12,6 +27,9 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public props: ErrorBoundaryProps;
+  public state: ErrorBoundaryState;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -42,7 +60,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         </div>
       );
     }
-
     return this.props.children;
   }
 }
@@ -52,8 +69,6 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// Garante que o container está vazio antes de iniciar o React.
-// Essencial para evitar duplicação em ambientes como Vercel/Netlify.
 rootElement.innerHTML = ''; 
 
 const root = ReactDOM.createRoot(rootElement);
