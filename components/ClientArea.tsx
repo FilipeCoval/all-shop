@@ -344,11 +344,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             </div>
             <div class="box">
               <h3>Cliente</h3>
-              <p><strong>${user.name}</strong></p>
+              <p><strong>${user?.name || 'Cliente'}</strong></p>
               ${deliveryAddress}
-              <p>${user.email}</p>
-              <p>${user.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
-              <p>${user.phone || ''}</p>
+              <p>${user?.email || ''}</p>
+              <p>${user?.nif ? `NIF: ${user.nif}` : 'Consumidor Final'}</p>
+              <p>${user?.phone || ''}</p>
             </div>
           </div>
 
