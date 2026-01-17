@@ -1105,6 +1105,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             // Verificar se já existe algum lote com este publicProductId na coleção de inventário
             const existingInventory = await db.collection('products_inventory').where('publicProductId', '==', prod.id).limit(1).get();
             
+            // Garantir que a imagem principal faz parte da galeria para não se perder no Backoffice
+            let finalImages = [...(prod.images || [])];
+            if (prod.image && !finalImages.includes(prod.image)) {
+                finalImages.unshift(prod.image);
+            }
+
             // 1. Criar no Inventário (Backoffice)
             if (existingInventory.empty) {
                 if (prod.variants && prod.variants.length > 0) {
@@ -1127,7 +1133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                              units: [],
                              status: 'IN_STOCK',
                              description: prod.description,
-                             images: prod.images || [],
+                             images: finalImages, // Use a lista completa com a imagem principal
                              features: prod.features || [],
                              comingSoon: prod.comingSoon || false
                          });
@@ -1151,7 +1157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         units: [],
                         status: 'IN_STOCK',
                         description: prod.description,
-                        images: prod.images || [],
+                        images: finalImages, // Use a lista completa com a imagem principal
                         features: prod.features || [],
                         comingSoon: prod.comingSoon || false
                     });
