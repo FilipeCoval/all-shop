@@ -26,12 +26,13 @@ export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Enviado' | 'Entregue' | 'Cancelado';
+  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado';
   items: (OrderItem | string)[]; // ACEITA DADOS ANTIGOS (string) E NOVOS (OrderItem)
-  userId?: string;
+  userId?: string | null; // Permite null para encomendas de convidados
   shippingInfo: UserCheckoutInfo;
   trackingNumber?: string;
   pointsAwarded?: boolean;
+  cancellationReason?: string;
 }
 
 export interface OrderItem {
@@ -50,6 +51,7 @@ export interface OrderItem {
 
 export interface UserCheckoutInfo {
   name: string;
+  email: string; // Adicionado para guardar o email do convidado
   street: string;
   doorNumber: string;
   zip: string;
@@ -81,6 +83,7 @@ export interface Product {
   variants?: ProductVariant[];
   features: string[];
   comingSoon?: boolean;
+  badges?: string[]; // Etiquetas de marketing (Novidade, Promoção, etc.)
   images?: string[];
   variantLabel?: string;
 }
@@ -112,6 +115,7 @@ export interface InventoryProduct {
   status: ProductStatus;
   description?: string;
   features?: string[];
+  badges?: string[]; // Etiquetas de marketing no inventário
   images?: string[];
   comingSoon?: boolean;
 }
