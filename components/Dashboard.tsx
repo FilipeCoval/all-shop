@@ -8,11 +8,9 @@ import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
-import { db, storage } from '../services/firebaseConfig';
+// FIX: Importar firebase da config centralizada para evitar erros de build (Rollup/Vite)
+import { db, storage, firebase } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
-// FIX: Import firebase to resolve UMD global errors for FieldValue
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
 
 // Helper function to safely handle old and new order item formats
 const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -936,6 +934,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     const invUpdatePayload: Partial<InventoryProduct> = {
         status: newStatus,
         quantitySold: newQuantitySold,
+        // FIX: Usar 'firebase.firestore.FieldValue' importado de forma segura via firebaseConfig
         salesHistory: firebase.firestore.FieldValue.arrayUnion(newSaleRecord) as any
     };
 
