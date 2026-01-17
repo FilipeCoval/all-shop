@@ -7,7 +7,7 @@ import {
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
-import { PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
+import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 // FIX: Importar firebase da config centralizada para evitar erros de build (Rollup/Vite)
 import { db, storage, firebase } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
@@ -242,6 +242,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [isCouponsLoading, setIsCouponsLoading] = useState(false);
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 });
   
+  // --- REAL PUBLIC PRODUCTS FROM DB ---
+  const [publicProductsList, setPublicProductsList] = useState<Product[]>([]);
+
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
@@ -309,9 +312,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const selectedPublicProductVariants = useMemo(() => {
       if (!formData.publicProductId) return [];
-      const prod = PRODUCTS.find(p => p.id === Number(formData.publicProductId));
+      // MUDANÇA: Usa a lista real de produtos da DB, não a estática
+      const prod = publicProductsList.find(p => p.id === Number(formData.publicProductId));
       return prod?.variants || [];
-  }, [formData.publicProductId]);
+  }, [formData.publicProductId, publicProductsList]);
 
   const [saleForm, setSaleForm] = useState({
     quantity: '1', unitPrice: '', shippingCost: '', date: new Date().toISOString().split('T')[0],
@@ -350,6 +354,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         });
     }, (err) => console.error("Sales notification listener failed:", err));
     return () => unsubscribe();
+  }, [isAdmin]);
+
+  // --- BUSCAR PRODUTOS PÚBLICOS REAIS PARA O DROPDOWN ---
+  useEffect(() => {
+      if (!isAdmin) return;
+      const unsubscribe = db.collection('products_public').onSnapshot(snap => {
+          const loadedProducts: Product[] = [];
+          snap.forEach(doc => {
+              const data = doc.data();
+              const id = parseInt(doc.id, 10);
+              if (!isNaN(id)) {
+                  loadedProducts.push({ ...data, id } as Product);
+              }
+          });
+          setPublicProductsList(loadedProducts);
+      }, err => console.error("Erro a carregar produtos públicos:", err));
+      return () => unsubscribe();
   }, [isAdmin]);
 
   useEffect(() => {
@@ -710,8 +731,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setIsModalOpen(true);
   };
 
-  const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { 
-      const publicProd = PRODUCTS.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
+  const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { 
+      const selectedId = e.target.value; 
+      setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); 
+      if (selectedId) { 
+          // MUDANÇA: Usa a lista real da DB
+          const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); 
+          if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); 
+      } 
+  };
   
   const handleAddImage = () => {
       if (formData.newImageUrl && formData.newImageUrl.trim()) {
@@ -992,7 +1020,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const countSold = products.filter(p => p.status === 'SOLD').length;
   
   const productsForSelect = useMemo(() => {
-    return PRODUCTS.filter(p => !p.comingSoon).flatMap(p => {
+    // MUDANÇA: Usa a lista real de produtos da DB, não a estática
+    return publicProductsList.filter(p => !p.comingSoon).flatMap(p => {
         if (p.variants && p.variants.length > 0) {
             return p.variants.map(v => ({
                 value: `${p.id}|${v.name}`,
@@ -1004,14 +1033,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             label: p.name,
         };
     });
-  }, []);
+  }, [publicProductsList]);
 
   const addProductToManualOrder = (value: string) => {
       if (!value) return;
       const [idStr, variantName] = value.split('|');
       const productId = Number(idStr);
       
-      const product = PRODUCTS.find(p => p.id === productId);
+      // MUDANÇA: Usa a lista real de produtos da DB
+      const product = publicProductsList.find(p => p.id === productId);
       if (!product) return;
 
       const key = `${product.id}|${variantName}`;
@@ -1137,7 +1167,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         const batch = db.batch();
         let count = 0;
 
-        for (const prod of PRODUCTS) {
+        // MUDANÇA: Usa INITIAL_PRODUCTS para a importação inicial
+        for (const prod of INITIAL_PRODUCTS) {
             // Verificar se já existe algum lote com este publicProductId na coleção de inventário
             const existingInventory = await db.collection('products_inventory').where('publicProductId', '==', prod.id).limit(1).get();
             
@@ -1527,7 +1558,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       
       {/* ... (Rest of component including Modals) ... */}
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{
-PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div>
+// MUDANÇA: Usa a lista real de produtos carregada da DB
+publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div>
       {/* Campo Avançado para ID Público Manual */}
       <div className="mt-4 pt-4 border-t border-blue-200">
           <div className="flex items-center justify-between mb-2">
@@ -1553,7 +1585,7 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       {/* GALERIA DE IMAGENS E DESCRIÇÃO - REMOVIDO CONDICIONAL PARA SEMPRE APARECER */}
       <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
           <div>
-              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><AlignLeft size={16} /> Descrição Completa</h4>
+              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4>
               <textarea 
                   rows={4}
                   className="w-full p-3 border border-gray-300 rounded-lg text-sm"
