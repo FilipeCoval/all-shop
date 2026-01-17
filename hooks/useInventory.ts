@@ -39,12 +39,15 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   // Função auxiliar para mapear Produto de Inventário -> Produto Público
   const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicId: number): Product => {
+    // Garante que existe pelo menos uma imagem válida
+    const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) ? inv.images[0] : 'https://via.placeholder.com/300';
+    
     return {
         id: publicId,
         name: inv.name,
         category: inv.category,
-        price: inv.salePrice || 0, // Garante que usa o salePrice definido no formulário
-        image: (inv.images && inv.images.length > 0) ? inv.images[0] : 'https://via.placeholder.com/300', 
+        price: inv.salePrice || 0, 
+        image: mainImage, 
         description: inv.description || `Produto ${inv.name}`,
         stock: inv.quantityBought - inv.quantitySold,
         features: inv.features || [],
@@ -63,7 +66,6 @@ export const useInventory = (isAdmin: boolean = false) => {
       // 2. Sincronizar com a Loja Pública (Se tiver Public ID)
       const publicId = product.publicProductId || Date.now();
       
-      // Lógica de MERGE para variantes ao criar
       if (product.publicProductId) {
           const publicDocRef = db.collection('products_public').doc(publicId.toString());
           const publicDocSnap = await publicDocRef.get();
@@ -76,15 +78,15 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           // Se o novo produto é uma variante, adiciona à lista
           if (product.variant) {
-              // Remove se já existir variante com mesmo nome (para atualizar)
               existingVariants = existingVariants.filter(v => v.name !== product.variant);
               
               const newVariant: ProductVariant = {
                   name: product.variant,
                   price: product.salePrice || 0
               };
-              // FIX: Conditionally add image to avoid undefined value
-              if (product.images && product.images.length > 0) {
+              
+              // FIX: Apenas adiciona a imagem se ela existir e não for undefined
+              if (product.images && product.images.length > 0 && product.images[0]) {
                   newVariant.image = product.images[0];
               }
 
@@ -94,11 +96,14 @@ export const useInventory = (isAdmin: boolean = false) => {
           const publicProduct = mapToPublicProduct(product, publicId);
           publicProduct.variants = existingVariants;
           
-          await publicDocRef.set(publicProduct, { merge: true });
+          // Remove campos undefined antes de salvar
+          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
+          await publicDocRef.set(cleanPublicProduct, { merge: true });
       } else {
-          // Se não tem ID, cria novo
           const publicProduct = mapToPublicProduct(product, publicId);
-          await db.collection('products_public').doc(publicId.toString()).set(publicProduct);
+          // Remove campos undefined antes de salvar
+          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
+          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct);
           await docRef.update({ publicProductId: publicId });
       }
 
@@ -113,7 +118,7 @@ export const useInventory = (isAdmin: boolean = false) => {
       // 1. Atualizar Inventário
       await db.collection('products_inventory').doc(id).update(updates);
 
-      // 2. Verificar se precisamos atualizar a loja pública
+      // 2. Atualizar Loja Pública
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const currentData = docSnap.data() as InventoryProduct;
       
@@ -130,7 +135,6 @@ export const useInventory = (isAdmin: boolean = false) => {
               existingVariants = existingData.variants || [];
           }
 
-          // Atualizar a variante específica na lista de variantes públicas
           if (updatedFullData.variant) {
               existingVariants = existingVariants.filter(v => v.name !== updatedFullData.variant);
               
@@ -138,8 +142,8 @@ export const useInventory = (isAdmin: boolean = false) => {
                   name: updatedFullData.variant,
                   price: updatedFullData.salePrice || 0
               };
-              // FIX: Conditionally add image to avoid undefined value
-              if (updatedFullData.images && updatedFullData.images.length > 0) {
+              
+              if (updatedFullData.images && updatedFullData.images.length > 0 && updatedFullData.images[0]) {
                   newVariant.image = updatedFullData.images[0];
               }
 
@@ -149,7 +153,8 @@ export const useInventory = (isAdmin: boolean = false) => {
           const publicProduct = mapToPublicProduct(updatedFullData, publicId);
           publicProduct.variants = existingVariants;
           
-          await publicDocRef.set(publicProduct, { merge: true });
+          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
+          await publicDocRef.set(cleanPublicProduct, { merge: true });
       }
 
     } catch (error) {
@@ -166,9 +171,6 @@ export const useInventory = (isAdmin: boolean = false) => {
       await db.collection('products_inventory').doc(id).delete();
 
       if (data && data.publicProductId) {
-          // Ao apagar do inventário, se for uma variante, removemos apenas a variante do produto público
-          // Se for o último lote desse produto, apagamos o produto público.
-          
           const remainingInventory = await db.collection('products_inventory')
               .where('publicProductId', '==', data.publicProductId)
               .get();
@@ -176,7 +178,6 @@ export const useInventory = (isAdmin: boolean = false) => {
           if (remainingInventory.empty) {
               await db.collection('products_public').doc(data.publicProductId.toString()).delete();
           } else {
-              // Se ainda restam outros lotes/variantes, apenas removemos esta variante da lista pública
               if (data.variant) {
                   const publicDocRef = db.collection('products_public').doc(data.publicProductId.toString());
                   const publicDocSnap = await publicDocRef.get();
