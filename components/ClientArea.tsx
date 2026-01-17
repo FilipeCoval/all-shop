@@ -3,10 +3,8 @@ import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, 
 // FIX: Imported the 'X' icon from lucide-react to fix the 'Cannot find name X' error.
 import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
-import { db } from '../services/firebaseConfig';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
-
+// FIX: Centralized firebase import to prevent duplicate import errors in build
+import { db, firebase } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
   user: User;
@@ -185,6 +183,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           const updatedPoints = currentPoints - reward.cost;
           const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
           
+          // FIX: Usar 'firebase.firestore.FieldValue' importado de forma segura via firebaseConfig se necessário, 
+          // ou atualização direta como aqui
           await db.collection('users').doc(user.uid).update({
               loyaltyPoints: updatedPoints,
               pointsHistory: updatedHistory
