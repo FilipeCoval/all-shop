@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, XCircle } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -39,16 +39,21 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const categories = useMemo(() => {
     if (!products) return ['Todas'];
-    const cats = products.map(p => p.category);
+    const cats = products.map(p => p.category || 'Outros').filter(c => c);
     return ['Todas', ...new Set(cats)];
   }, [products]);
 
   const filteredAndSortedProducts = useMemo(() => {
       if (!products) return [];
       let result = products.filter(product => {
-        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              product.description.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'Todas' || product.category === selectedCategory;
+        // FIX: Add null checks to prevent crashes if name or description are missing
+        const name = product.name || '';
+        const description = product.description || '';
+        const category = product.category || 'Outros';
+
+        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = selectedCategory === 'Todas' || category === selectedCategory;
         return matchesSearch && matchesCategory;
       });
 
@@ -73,19 +78,14 @@ const ProductList: React.FC<ProductListProps> = ({
       }
   };
 
-  const getProductBadge = (product: Product, isOutOfStock: boolean) => {
-      // Prioridade 1: "Em Breve"
+  const getProductBadge = (product: Product) => {
+      // Prioridade máxima para "Em Breve"
       if (product.comingSoon) return { text: 'EM BREVE', color: 'bg-purple-600', icon: <CalendarClock size={10} /> };
       
-      // Prioridade 2: "Esgotado" - anula todos os outros dísticos promocionais.
-      if (isOutOfStock) return { text: 'ESGOTADO', color: 'bg-red-600', icon: <XCircle size={10} /> };
-      
-      // Dísticos promocionais (só aparecem se houver stock)
       if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
       if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
       if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
       if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
-      
       return null;
   };
 
@@ -147,18 +147,16 @@ const ProductList: React.FC<ProductListProps> = ({
                 : 'flex flex-col gap-4'
             }`}>
             {paginatedProducts.map((product) => {
-                const dynamicStock = getStock(product.id);
-                // Para utilizadores públicos, `getStock` devolve 999. Nesse caso, usamos o `product.stock` estático.
-                // Para admins, usamos o stock dinâmico da base de dados.
-                const stock = dynamicStock === 999 ? product.stock : dynamicStock;
-                const isOutOfStock = stock <= 0 && !product.comingSoon;
-                const badge = getProductBadge(product, isOutOfStock);
+                const stock = getStock(product.id);
+                const isOutOfStock = stock <= 0 && stock !== 999 && !product.comingSoon;
+                const badge = getProductBadge(product);
 
                 if (viewMode === 'list') {
                     return (
                         <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex group animate-fade-in relative">
                             <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="w-32 sm:w-56 h-32 sm:h-auto bg-gray-50 relative shrink-0 p-4 flex items-center justify-center">
                                 <img src={product.image} alt={product.name} className={`max-w-full max-h-full object-contain ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
+                                {isOutOfStock && <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded">ESGOTADO</span>}
                                 {badge && <span className={`absolute top-2 left-2 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 shadow-sm`}>{badge.icon}{badge.text}</span>}
                             </a>
                             <div className="flex-1 p-6 flex flex-col sm:flex-row gap-4">
@@ -201,6 +199,11 @@ const ProductList: React.FC<ProductListProps> = ({
 
                     <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block relative h-64 overflow-hidden bg-gray-100">
                         <img src={product.image} alt={product.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
+                        {isOutOfStock && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+                                <span className="bg-red-600 text-white px-4 py-1 rounded text-sm font-bold uppercase transform -rotate-12 border border-white">Esgotado</span>
+                            </div>
+                        )}
                     </a>
                     
                     <div className="p-5 flex flex-col flex-grow">
