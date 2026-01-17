@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
-import { InventoryProduct, Product } from '../types';
+import { InventoryProduct, Product, ProductVariant } from '../types';
 
 export const useInventory = (isAdmin: boolean = false) => {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -43,13 +43,13 @@ export const useInventory = (isAdmin: boolean = false) => {
         id: publicId,
         name: inv.name,
         category: inv.category,
-        price: inv.salePrice,
-        image: (inv.images && inv.images.length > 0) ? inv.images[0] : 'https://via.placeholder.com/300', // Fallback image
+        price: inv.salePrice || 0, // Garante que usa o salePrice definido no formulário
+        image: (inv.images && inv.images.length > 0) ? inv.images[0] : 'https://via.placeholder.com/300', 
         description: inv.description || `Produto ${inv.name}`,
         stock: inv.quantityBought - inv.quantitySold,
         features: inv.features || [],
         comingSoon: inv.comingSoon || false,
-        badges: inv.badges || [], // Mapeia as etiquetas
+        badges: inv.badges || [],
         images: inv.images || [],
         variantLabel: 'Opção'
     };
@@ -61,16 +61,44 @@ export const useInventory = (isAdmin: boolean = false) => {
       const docRef = await db.collection('products_inventory').add(product);
       
       // 2. Sincronizar com a Loja Pública (Se tiver Public ID)
-      // Se não tiver Public ID, geramos um baseado no timestamp para garantir que aparece
       const publicId = product.publicProductId || Date.now();
       
-      const publicProduct = mapToPublicProduct(product, publicId);
-      
-      // Salva na coleção pública usando o ID numérico como chave do documento (string)
-      await db.collection('products_public').doc(publicId.toString()).set(publicProduct);
+      // Lógica de MERGE para variantes ao criar
+      if (product.publicProductId) {
+          const publicDocRef = db.collection('products_public').doc(publicId.toString());
+          const publicDocSnap = await publicDocRef.get();
+          
+          let existingVariants: ProductVariant[] = [];
+          if (publicDocSnap.exists) {
+              const existingData = publicDocSnap.data() as Product;
+              existingVariants = existingData.variants || [];
+          }
 
-      // Atualiza o inventário com o ID público gerado se não existia
-      if (!product.publicProductId) {
+          // Se o novo produto é uma variante, adiciona à lista
+          if (product.variant) {
+              // Remove se já existir variante com mesmo nome (para atualizar)
+              existingVariants = existingVariants.filter(v => v.name !== product.variant);
+              
+              const newVariant: ProductVariant = {
+                  name: product.variant,
+                  price: product.salePrice || 0
+              };
+              // FIX: Conditionally add image to avoid undefined value
+              if (product.images && product.images.length > 0) {
+                  newVariant.image = product.images[0];
+              }
+
+              existingVariants.push(newVariant);
+          }
+
+          const publicProduct = mapToPublicProduct(product, publicId);
+          publicProduct.variants = existingVariants;
+          
+          await publicDocRef.set(publicProduct, { merge: true });
+      } else {
+          // Se não tem ID, cria novo
+          const publicProduct = mapToPublicProduct(product, publicId);
+          await db.collection('products_public').doc(publicId.toString()).set(publicProduct);
           await docRef.update({ publicProductId: publicId });
       }
 
@@ -86,16 +114,42 @@ export const useInventory = (isAdmin: boolean = false) => {
       await db.collection('products_inventory').doc(id).update(updates);
 
       // 2. Verificar se precisamos atualizar a loja pública
-      // Precisamos ler o documento atual para saber o publicProductId
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const currentData = docSnap.data() as InventoryProduct;
       
       if (currentData && currentData.publicProductId) {
-          // Mesclar dados atuais com as atualizações para criar o objeto completo
+          const publicId = currentData.publicProductId;
           const updatedFullData = { ...currentData, ...updates };
-          const publicProduct = mapToPublicProduct(updatedFullData, currentData.publicProductId);
           
-          await db.collection('products_public').doc(currentData.publicProductId.toString()).set(publicProduct, { merge: true });
+          const publicDocRef = db.collection('products_public').doc(publicId.toString());
+          const publicDocSnap = await publicDocRef.get();
+
+          let existingVariants: ProductVariant[] = [];
+          if (publicDocSnap.exists) {
+              const existingData = publicDocSnap.data() as Product;
+              existingVariants = existingData.variants || [];
+          }
+
+          // Atualizar a variante específica na lista de variantes públicas
+          if (updatedFullData.variant) {
+              existingVariants = existingVariants.filter(v => v.name !== updatedFullData.variant);
+              
+              const newVariant: ProductVariant = {
+                  name: updatedFullData.variant,
+                  price: updatedFullData.salePrice || 0
+              };
+              // FIX: Conditionally add image to avoid undefined value
+              if (updatedFullData.images && updatedFullData.images.length > 0) {
+                  newVariant.image = updatedFullData.images[0];
+              }
+
+              existingVariants.push(newVariant);
+          }
+
+          const publicProduct = mapToPublicProduct(updatedFullData, publicId);
+          publicProduct.variants = existingVariants;
+          
+          await publicDocRef.set(publicProduct, { merge: true });
       }
 
     } catch (error) {
@@ -106,14 +160,33 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   const deleteProduct = async (id: string) => {
     try {
-      // Ler antes de apagar para saber qual remover do público
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const data = docSnap.data() as InventoryProduct;
 
       await db.collection('products_inventory').doc(id).delete();
 
       if (data && data.publicProductId) {
-          await db.collection('products_public').doc(data.publicProductId.toString()).delete();
+          // Ao apagar do inventário, se for uma variante, removemos apenas a variante do produto público
+          // Se for o último lote desse produto, apagamos o produto público.
+          
+          const remainingInventory = await db.collection('products_inventory')
+              .where('publicProductId', '==', data.publicProductId)
+              .get();
+              
+          if (remainingInventory.empty) {
+              await db.collection('products_public').doc(data.publicProductId.toString()).delete();
+          } else {
+              // Se ainda restam outros lotes/variantes, apenas removemos esta variante da lista pública
+              if (data.variant) {
+                  const publicDocRef = db.collection('products_public').doc(data.publicProductId.toString());
+                  const publicDocSnap = await publicDocRef.get();
+                  if (publicDocSnap.exists) {
+                      const pubData = publicDocSnap.data() as Product;
+                      const newVariants = (pubData.variants || []).filter(v => v.name !== data.variant);
+                      await publicDocRef.update({ variants: newVariants });
+                  }
+              }
+          }
       }
     } catch (error) {
       console.error("Erro ao apagar produto:", error);
