@@ -4,6 +4,9 @@ export const STORE_NAME = "Allshop";
 export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
+// URL OFICIAL DA LOJA
+export const PUBLIC_URL = "https://allshop-store.vercel.app";
+
 export const SELLER_PHONE = "351933865907"; 
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
 export const TELEGRAM_BOT_TOKEN = "8486202340:AAEny5gLzHm_obmJmPLeGKyNcjIePR3OBYs";
@@ -11,10 +14,6 @@ export const TELEGRAM_CHAT_ID = "-1003494194252";
 
 /**
  * IMPORTANTE: Lista de emails com permissão de administrador.
- * Estes emails DEVEM ser exatamente os mesmos (letra por letra) que estão
- * nas Regras de Segurança do Firestore para que o acesso funcione.
- * 
- * Foram convertidos para minúsculas para evitar erros de case-sensitivity.
  */
 export const ADMIN_EMAILS = [
   "filipe_coval_90@hotmail.com",
@@ -37,7 +36,6 @@ export const LOYALTY_REWARDS = [
 
 /** 
  * Proxy de Imagens Ultra-Compatível
- * Necessário para contornar o bloqueio de hotlinking (403) de sites como AliExpress e Temu.
  */
 export const proxyImg = (url: string) => {
     if (!url) return LOGO_URL;
@@ -45,7 +43,10 @@ export const proxyImg = (url: string) => {
     return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
 };
 
-export const PRODUCTS: Product[] = [
+// MUDANÇA: Renomeado para INITIAL_PRODUCTS. 
+// Isto garante que o código não usa isto por engano como fonte de verdade.
+// Serve apenas para o botão "Importar" no Dashboard.
+export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 17,
     name: "Xiaomi Redmi Buds 6 Play TWS Bluetooth 5.4",
