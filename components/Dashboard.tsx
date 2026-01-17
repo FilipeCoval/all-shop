@@ -999,6 +999,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleDeleteSale = async (saleId: string) => { if (!editingId) return; const product = products.find(p => p.id === editingId); if (!product || !product.salesHistory) return; const saleToDelete = product.salesHistory.find(s => s.id === saleId); if (!saleToDelete) return; if (!window.confirm(`Tem a certeza que quer cancelar esta venda de ${saleToDelete.quantity} unidade(s)? O stock será reposto.`)) return; const newHistory = product.salesHistory.filter(s => s.id !== saleId); const newQuantitySold = product.quantitySold - saleToDelete.quantity; const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0); const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let newStatus: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD'; else if (newQuantitySold > 0) newStatus = 'PARTIAL'; try { await updateProduct(product.id, { salesHistory: newHistory, quantitySold: Math.max(0, newQuantitySold), salePrice: newAverageSalePrice, status: newStatus }); alert("Venda anulada e stock reposto com sucesso!"); } catch (err) { console.error(err); alert("Erro ao anular venda."); } };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Tem a certeza absoluta que quer apagar este registo? Esta ação não pode ser desfeita.')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro ao apagar: " + (error.message || "Permissão negada")); } } };
   
+  // NOVA FUNÇÃO: Apagar grupo inteiro (Produto da Loja + Todos os Lotes)
+  const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => {
+    if (!window.confirm(`ATENÇÃO: Tem a certeza que quer apagar o produto "${items[0].name}" da loja online?\n\nIsto irá apagar também os ${items.length} lotes de stock associados.`)) return;
+    
+    try {
+        const batch = db.batch();
+        
+        // 1. Apagar todos os lotes de inventário
+        items.forEach(item => {
+            const ref = db.collection('products_inventory').doc(item.id);
+            batch.delete(ref);
+        });
+        
+        // 2. Apagar o produto público
+        if (items[0].publicProductId) {
+            const pubRef = db.collection('products_public').doc(items[0].publicProductId.toString());
+            batch.delete(pubRef);
+        }
+        
+        await batch.commit();
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao apagar grupo de produtos.");
+    }
+  };
+
   // FIX: Added null check for 'p.name' and 'p.category' to prevent crashes when filtering incomplete product data
   const filteredProducts = products.filter(p => { 
       const name = p.name || '';
@@ -1316,52 +1342,109 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                  <button onClick={() => handleCreateVariant(mainItem)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded" title="Adicionar Variante">
                                      <Layers size={16} />
                                  </button>
+                                 <button onClick={() => handleDeleteGroup(groupId, items)} className="p-1.5 text-red-500 hover:bg-red-50 rounded" title="Apagar Produto da Loja">
+                                     <Trash2 size={16} />
+                                 </button>
                              </div>
                           </td>
                         </tr>
 
-                        {/* EXPANDED ROWS (Batch Level) */}
+                        {/* EXPANDED ROWS (Batch Level - RICH TABLE) */}
                         {isExpanded && (
-                            <tr className="bg-gray-50/50">
+                            <tr className="bg-gray-50/50 border-b border-gray-200">
                                 <td colSpan={6} className="px-4 py-4">
                                     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10">
                                         <table className="w-full text-xs">
                                             <thead className="bg-gray-100 text-gray-500 uppercase">
                                                 <tr>
-                                                    <th className="px-4 py-2 text-left">Data Compra</th>
-                                                    <th className="px-4 py-2 text-left">Fornecedor</th>
-                                                    <th className="px-4 py-2 text-left">Info Lote</th>
-                                                    <th className="px-4 py-2 text-right">Custo Unit.</th>
-                                                    <th className="px-4 py-2 text-center">Stock Lote</th>
+                                                    <th className="px-4 py-2 text-left">Lote / Variante</th>
+                                                    <th className="px-4 py-2 text-left">Origem</th>
+                                                    <th className="px-4 py-2 text-center">Stock</th>
+                                                    <th className="px-4 py-2 text-right">Compra</th>
+                                                    <th className="px-4 py-2 text-right">Venda (Estimada)</th>
+                                                    <th className="px-4 py-2 text-center">Cashback / Lucro</th>
                                                     <th className="px-4 py-2 text-right">Ações</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {items.map(batch => {
-                                                    const batchStock = batch.quantityBought - batch.quantitySold;
-                                                    const profit = (batch.salePrice || 0) - batch.purchasePrice + batch.cashbackValue;
-                                                    
+                                                {items.map(p => {
+                                                    const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice;
+                                                    const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0;
+                                                    const totalCost = p.quantityBought * p.purchasePrice;
+                                                    let realizedRevenue = 0;
+                                                    let totalShippingPaid = 0;
+                                                    if (p.salesHistory && p.salesHistory.length > 0) {
+                                                        realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0);
+                                                        totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0);
+                                                    } else {
+                                                        realizedRevenue = p.quantitySold * p.salePrice;
+                                                    }
+                                                    const remainingStock = p.quantityBought - p.quantitySold;
+                                                    const potentialRevenue = remainingStock * (p.targetSalePrice || 0);
+                                                    const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0);
+                                                    const totalProjectedRevenue = realizedRevenue + potentialRevenue;
+                                                    const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue;
+                                                    const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0;
+                                                    const batchStock = p.quantityBought - p.quantitySold;
+
                                                     return (
-                                                        <tr key={batch.id} className="hover:bg-blue-50 transition-colors">
-                                                            <td className="px-4 py-3">{new Date(batch.purchaseDate).toLocaleDateString()}</td>
-                                                            <td className="px-4 py-3 font-medium">
-                                                                {batch.supplierName || '-'} 
-                                                                {batch.supplierOrderId && <span className="block text-[10px] text-gray-400 font-mono">{batch.supplierOrderId}</span>}
+                                                        <tr key={p.id} className="hover:bg-blue-50 transition-colors">
+                                                            <td className="px-4 py-3">
+                                                                <div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>
+                                                                {p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}
+                                                                <div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div>
                                                             </td>
                                                             <td className="px-4 py-3">
-                                                                {batch.variant && <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px] font-bold mr-1">{batch.variant}</span>}
-                                                                <span className="text-gray-500">{batch.description?.substring(0, 20)}...</span>
+                                                                {p.supplierName ? (
+                                                                    <div className="flex flex-col">
+                                                                        <div className="flex items-center gap-1 font-bold text-gray-700 text-[10px]">
+                                                                            <Globe size={10} className="text-indigo-500" /> {p.supplierName}
+                                                                        </div>
+                                                                        {p.supplierOrderId && (
+                                                                            <div className="text-[10px] text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar">
+                                                                                <FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : <span className="text-gray-400 text-xs">-</span>}
                                                             </td>
-                                                            <td className="px-4 py-3 text-right">{formatCurrency(batch.purchasePrice)}</td>
                                                             <td className="px-4 py-3 text-center">
-                                                                <span className={batchStock > 0 ? 'text-green-600 font-bold' : 'text-red-400'}>
-                                                                    {batchStock} / {batch.quantityBought}
-                                                                </span>
+                                                                <div className="flex justify-between text-[10px] mb-1 font-medium text-gray-600"><span>{batchStock} un.</span></div>
+                                                                <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden mx-auto">
+                                                                    <div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div>
+                                                                </div>
                                                             </td>
-                                                            <td className="px-4 py-3 text-right flex justify-end gap-2">
-                                                                {batchStock > 0 && <button onClick={() => openSaleModal(batch)} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Vender deste lote"><DollarSign size={14}/></button>}
-                                                                <button onClick={() => handleEdit(batch)} className="text-gray-500 hover:bg-gray-100 p-1 rounded" title="Editar este lote"><Edit2 size={14}/></button>
-                                                                <button onClick={() => handleDelete(batch.id)} className="text-red-400 hover:bg-red-50 p-1 rounded" title="Apagar lote"><Trash2 size={14}/></button>
+                                                            <td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td>
+                                                            <td className="px-4 py-3 text-right text-gray-500">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                {p.cashbackValue > 0 ? (
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
+                                                                            {formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={8} />}
+                                                                        </div>
+                                                                        {canCalculate && (
+                                                                            <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">
+                                                                                Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                                {projectedFinalProfit > 0 && <span className="ml-1 text-[9px] bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className="text-gray-300 text-[10px]">-</span>
+                                                                        {canCalculate && (remainingStock === 0 || p.targetSalePrice) && (
+                                                                            <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">
+                                                                                Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>
+                                                                                {projectedFinalProfit > 0 && <span className="ml-1 text-[9px] bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right flex justify-end gap-1">
+                                                                {batchStock > 0 && <button onClick={() => openSaleModal(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote"><DollarSign size={14}/></button>}
+                                                                <button onClick={() => handleEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote"><Edit2 size={14}/></button>
+                                                                <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:bg-red-50 p-1.5 rounded bg-white border border-red-200 shadow-sm" title="Apagar lote"><Trash2 size={14}/></button>
                                                             </td>
                                                         </tr>
                                                     );
