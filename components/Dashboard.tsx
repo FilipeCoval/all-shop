@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -303,7 +303,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     newImageUrl: '', // Input temporário para URL
     images: [] as string[], // Array de imagens
     features: [] as string[], // Array de destaques
-    newFeature: '' // Input temporário para destaque
+    newFeature: '', // Input temporário para destaque
+    comingSoon: false
   });
 
   const selectedPublicProductVariants = useMemo(() => {
@@ -642,7 +643,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           images: product.images || [],
           newImageUrl: '',
           features: product.features || [],
-          newFeature: ''
+          newFeature: '',
+          comingSoon: product.comingSoon || false
       }); 
       setModalUnits(product.units || []); 
       setIsPublicIdEditable(false);
@@ -670,7 +672,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           images: [],
           newImageUrl: '',
           features: [],
-          newFeature: ''
+          newFeature: '',
+          comingSoon: false
       }); 
       setModalUnits([]); 
       setIsPublicIdEditable(false);
@@ -699,7 +702,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           images: parentProduct.images || [], // Mantém as imagens (utilizador pode mudar depois)
           newImageUrl: '',
           features: parentProduct.features || [], // Mantém destaques
-          newFeature: ''
+          newFeature: '',
+          comingSoon: parentProduct.comingSoon || false
       }); 
       setModalUnits([]); 
       setIsPublicIdEditable(false); // Bloqueia ID público para garantir ligação correta
@@ -794,7 +798,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           status: productStatus, 
           badges: formData.badges, 
           images: formData.images,
-          features: formData.features
+          features: formData.features,
+          comingSoon: formData.comingSoon
       }; 
       
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
@@ -1593,6 +1598,22 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div>
+      
+      {/* TOGGLE MODO PRÉ-LANÇAMENTO / EM BREVE */}
+      <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm">
+          <div>
+              <h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4>
+              <p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p>
+          </div>
+          <button 
+              type="button" 
+              onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}
+          >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+      </div>
+
       <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6">
           <h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4>
           <div className="flex flex-wrap gap-2">
