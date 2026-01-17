@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -281,6 +281,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   // --- STATE FOR KPI DETAILS MODAL ---
   const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
 
+  // --- STATE FOR PUBLIC ID EDITING ---
+  const [isPublicIdEditable, setIsPublicIdEditable] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', 
@@ -299,7 +301,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     cashbackStatus: 'NONE' as CashbackStatus,
     badges: [] as string[],
     newImageUrl: '', // Input temporário para URL
-    images: [] as string[] // Array de imagens
+    images: [] as string[], // Array de imagens
+    features: [] as string[], // Array de destaques
+    newFeature: '' // Input temporário para destaque
   });
 
   const selectedPublicProductVariants = useMemo(() => {
@@ -636,9 +640,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           cashbackStatus: product.cashbackStatus, 
           badges: product.badges || [], 
           images: product.images || [],
-          newImageUrl: ''
+          newImageUrl: '',
+          features: product.features || [],
+          newFeature: ''
       }); 
       setModalUnits(product.units || []); 
+      setIsPublicIdEditable(false);
       setIsModalOpen(true); 
   };
 
@@ -661,10 +668,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           cashbackStatus: 'NONE', 
           badges: [], 
           images: [],
-          newImageUrl: '' 
+          newImageUrl: '',
+          features: [],
+          newFeature: ''
       }); 
       setModalUnits([]); 
+      setIsPublicIdEditable(false);
       setIsModalOpen(true); 
+  };
+
+  // --- NOVA FUNÇÃO: Criar Variante a partir de Produto Existente ---
+  const handleCreateVariant = (parentProduct: InventoryProduct) => {
+      setEditingId(null); // Cria novo ID
+      setFormData({ 
+          name: parentProduct.name, // Mantém o mesmo nome
+          description: parentProduct.description || '', // Mantém a descrição
+          category: parentProduct.category, // Mantém categoria
+          publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', // LIGA AO MESMO PRODUTO PÚBLICO
+          variant: '', // Limpa a variante para o utilizador escrever a nova (ex: "Azul")
+          purchaseDate: new Date().toISOString().split('T')[0], 
+          supplierName: parentProduct.supplierName || '', 
+          supplierOrderId: '', 
+          quantityBought: '', // Limpa stock
+          purchasePrice: parentProduct.purchasePrice.toString(), // Mantém preço de compra
+          salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', // Mantém preço de venda
+          targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', 
+          cashbackValue: '', 
+          cashbackStatus: 'NONE', 
+          badges: parentProduct.badges || [], 
+          images: parentProduct.images || [], // Mantém as imagens (utilizador pode mudar depois)
+          newImageUrl: '',
+          features: parentProduct.features || [], // Mantém destaques
+          newFeature: ''
+      }); 
+      setModalUnits([]); 
+      setIsPublicIdEditable(false); // Bloqueia ID público para garantir ligação correta
+      setIsModalOpen(true);
   };
 
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { 
@@ -684,6 +723,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setFormData(prev => ({ 
           ...prev, 
           images: prev.images.filter((_, idx) => idx !== indexToRemove) 
+      }));
+  };
+
+  // Nova função para reordenar imagens
+  const handleMoveImage = (index: number, direction: 'left' | 'right') => {
+      if (direction === 'left' && index === 0) return;
+      if (direction === 'right' && index === formData.images.length - 1) return;
+
+      const newImages = [...formData.images];
+      const targetIndex = direction === 'left' ? index - 1 : index + 1;
+      
+      // Swap elements
+      [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]];
+      
+      setFormData(prev => ({ ...prev, images: newImages }));
+  };
+
+  const handleAddFeature = () => {
+      if (formData.newFeature && formData.newFeature.trim()) {
+          setFormData(prev => ({ 
+              ...prev, 
+              features: [...prev.features, prev.newFeature.trim()], 
+              newFeature: '' 
+          }));
+      }
+  };
+
+  const handleRemoveFeature = (indexToRemove: number) => {
+      setFormData(prev => ({ 
+          ...prev, 
+          features: prev.features.filter((_, idx) => idx !== indexToRemove) 
       }));
   };
 
@@ -723,7 +793,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           units: modalUnits, 
           status: productStatus, 
           badges: formData.badges, 
-          images: formData.images
+          images: formData.images,
+          features: formData.features
       }; 
       
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
@@ -1373,7 +1444,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
             <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda (Loja)</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
             <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
-            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.salePrice ? formatCurrency(p.salePrice) : (p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-')}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
+            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.salePrice ? formatCurrency(p.salePrice) : (p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-')}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}
+            
+            <button onClick={() => handleCreateVariant(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded" title="Adicionar Variante (Cor/Tamanho)"><Layers size={16} /></button>
+            <button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
             </table></div></div></>}
         {activeTab === 'orders' && (
           <div className="space-y-6 animate-fade-in">
@@ -1406,64 +1480,117 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       
       {/* ... (Rest of component including Modals) ... */}
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{
-PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div></div>
+PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div>
+      {/* Campo Avançado para ID Público Manual */}
+      <div className="mt-4 pt-4 border-t border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label>
+              <button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  {isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}
+              </button>
+          </div>
+          <div className="flex gap-2 items-center">
+              <input 
+                  type="text" 
+                  value={formData.publicProductId} 
+                  onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} 
+                  disabled={!isPublicIdEditable}
+                  placeholder="ID numérico do produto público"
+                  className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}
+              />
+              <div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div>
+          </div>
+      </div>
+      </div>
       
-      {/* GALERIA DE IMAGENS E DESCRIÇÃO */}
-      {!formData.publicProductId && (
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
-              <div>
-                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><AlignLeft size={16} /> Descrição Completa</h4>
-                  <textarea 
-                      rows={4}
-                      className="w-full p-3 border border-gray-300 rounded-lg text-sm"
-                      placeholder="Descreva o produto com detalhes..."
-                      value={formData.description}
-                      onChange={e => setFormData({...formData, description: e.target.value})}
-                  />
-              </div>
+      {/* GALERIA DE IMAGENS E DESCRIÇÃO - REMOVIDO CONDICIONAL PARA SEMPRE APARECER */}
+      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+          <div>
+              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><AlignLeft size={16} /> Descrição Completa</h4>
+              <textarea 
+                  rows={4}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-sm"
+                  placeholder="Descreva o produto com detalhes..."
+                  value={formData.description}
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+              />
+          </div>
 
-              <div>
-                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>
-                  
-                  {/* Lista de Imagens */}
-                  {formData.images.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                          {formData.images.map((img, idx) => (
-                              <div key={idx} className="relative group w-20 h-20 bg-white rounded-lg border border-gray-200 overflow-hidden">
-                                  <img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain" />
-                                  <button 
-                                      type="button" 
-                                      onClick={() => handleRemoveImage(idx)}
-                                      className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
-                                      <Trash2 size={16} />
-                                  </button>
+          {/* GESTÃO DE IMAGENS COM REORDENAÇÃO */}
+          <div>
+              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>
+              
+              {formData.images.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                      {formData.images.map((img, idx) => (
+                          <div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+                              <div className="aspect-square relative">
+                                  <img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" />
+                                  <div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div>
                               </div>
-                          ))}
-                      </div>
-                  )}
-
-                  {/* Input para adicionar nova imagem */}
-                  <div className="flex gap-2">
-                      <input 
-                          type="url" 
-                          placeholder="https://i.imgur.com/exemplo.jpg" 
-                          className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" 
-                          value={formData.newImageUrl} 
-                          onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
-                      />
-                      <button 
-                          type="button" 
-                          onClick={handleAddImage}
-                          className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors"
-                      >
-                          Adicionar
-                      </button>
+                              <div className="flex border-t border-gray-100 divide-x divide-gray-100">
+                                  <button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button>
+                                  <button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button>
+                                  <button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button>
+                              </div>
+                          </div>
+                      ))}
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">Cole o link direto da imagem e clique em "Adicionar". Pode adicionar várias.</p>
+              )}
+
+              <div className="flex gap-2">
+                  <input 
+                      type="url" 
+                      placeholder="Cole o link da imagem (ex: imgur.com/...)" 
+                      className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" 
+                      value={formData.newImageUrl} 
+                      onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
+                  />
+                  <button 
+                      type="button" 
+                      onClick={handleAddImage}
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors"
+                  >
+                      Adicionar
+                  </button>
               </div>
           </div>
-      )}
+
+          {/* GESTÃO DE DESTAQUES (FEATURES) */}
+          <div>
+              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ListPlus size={16} /> Destaques / Características Principais</h4>
+              
+              {formData.features.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                      {formData.features.map((feat, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div>
+                              <span className="flex-1 text-gray-700">{feat}</span>
+                              <button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                          </div>
+                      ))}
+                  </div>
+              )}
+
+              <div className="flex gap-2">
+                  <input 
+                      type="text" 
+                      placeholder="Ex: Bateria de 24h, WiFi 6..." 
+                      className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" 
+                      value={formData.newFeature} 
+                      onChange={e => setFormData({...formData, newFeature: e.target.value})}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
+                  />
+                  <button 
+                      type="button" 
+                      onClick={handleAddFeature}
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors"
+                  >
+                      + Item
+                  </button>
+              </div>
+          </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div>
       <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6">
@@ -1486,6 +1613,20 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
           </div>
           <p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p>
       </div>
+      
+      {/* CAMPO DE VARIANTE (Só se quiser variante) */}
+      <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4">
+          <label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label>
+          <input 
+              type="text" 
+              placeholder="Ex: Azul, XL, 64GB" 
+              className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold"
+              value={formData.variant} 
+              onChange={e => setFormData({...formData, variant: e.target.value})} 
+          />
+          <p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p>
+      </div>
+
       <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><form onSubmit={(e) => { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="submit" className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">+</button></form>
       <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100">
@@ -1505,223 +1646,168 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       {editingId && <div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => <tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>)}</tbody></table></div> : <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>}</div>}
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
       
+      {/* Sale Modal */}
       {isSaleModalOpen && selectedProductForSale && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="bg-green-600 p-6 text-white shrink-0">
-                    <h3 className="text-xl font-bold flex items-center gap-2"><DollarSign /> Registar Baixa de Stock</h3>
-                    <p className="opacity-90 mt-1 text-sm">{selectedProductForSale.name} {selectedProductForSale.variant && `(${selectedProductForSale.variant})`}</p>
-                    <div className="mt-2 text-xs bg-green-700 inline-block px-2 py-1 rounded">
-                        Stock Disponível: {selectedProductForSale.quantityBought - selectedProductForSale.quantitySold}
-                    </div>
-                </div>
-                <div className="overflow-y-auto p-6">
-                    <form onSubmit={handleSaleSubmit} className="space-y-6">
-                        
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Associar a Encomenda (Obrigatório)</label>
-                          <select 
-                            value={linkedOrderId} 
-                            onChange={e => setLinkedOrderId(e.target.value)} 
-                            className="w-full p-3 border border-gray-300 rounded-lg bg-white"
-                            required
-                          >
-                            <option value="">-- Selecione a Encomenda --</option>
-                            {pendingOrders.map(order => (
-                              <option key={order.id} value={order.id}>
-                                {order.id} - {order.shippingInfo?.name || 'Cliente Desconhecido'}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        
-                        {selectedOrderForSaleDetails && (
-                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 animate-fade-in text-sm space-y-2">
-                                <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Info size={16}/> Sumário da Encomenda</h4>
-                                <p><strong className="text-gray-500">Cliente:</strong> {selectedOrderForSaleDetails.shippingInfo.name}</p>
-                                <p><strong className="text-gray-500">Data:</strong> {new Date(selectedOrderForSaleDetails.date).toLocaleDateString()}</p>
-                                <div className="pt-2 border-t border-blue-100 mt-2">
-                                  {(getSafeItems(selectedOrderForSaleDetails.items) as OrderItem[]).filter(item => item.productId === selectedProductForSale.publicProductId).map((item, idx) => (
-                                    <div key={idx} className="flex justify-between items-center">
-                                        <span>{item.quantity}x {item.name} {item.selectedVariant && `(${item.selectedVariant})`}</span>
-                                        <span className="font-bold">{formatCurrency(item.price)}</span>
-                                    </div>
-                                  ))}
-                                </div>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0">
+               <h3 className="font-bold text-gray-900 flex items-center gap-2"><DollarSign size={20} className="text-green-600"/> Registar Venda / Baixa</h3>
+               <button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+             </div>
+             <form onSubmit={handleSaleSubmit} className="p-6 space-y-4">
+               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                 <p className="text-xs font-bold text-gray-500 uppercase">Produto</p>
+                 <p className="font-bold text-gray-900">{selectedProductForSale.name}</p>
+                 <p className="text-xs text-blue-600">{selectedProductForSale.variant}</p>
+               </div>
+               
+               <div>
+                 <label className="block text-sm font-bold text-gray-700 mb-1">Associar a Encomenda Online (Obrigatório)</label>
+                 <select 
+                    required 
+                    value={linkedOrderId} 
+                    onChange={(e) => setLinkedOrderId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                 >
+                   <option value="">-- Selecione uma encomenda --</option>
+                   {pendingOrders.map(o => (
+                     <option key={o.id} value={o.id}>
+                       {o.id} - {o.shippingInfo?.name} ({formatCurrency(o.total)})
+                     </option>
+                   ))}
+                 </select>
+               </div>
+
+               {selectedOrderForSaleDetails && (
+                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs">
+                    <p className="font-bold text-blue-900">Itens da Encomenda:</p>
+                    <ul className="list-disc pl-4 mt-1 text-blue-800">
+                        {getSafeItems(selectedOrderForSaleDetails.items).map((item, idx) => {
+                             const iName = typeof item === 'string' ? item : `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`;
+                             return <li key={idx}>{iName}</li>;
+                        })}
+                    </ul>
+                 </div>
+               )}
+
+               {selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (
+                   <div>
+                     <label className="block text-sm font-bold text-gray-700 mb-2">Selecionar Unidades (S/N) a vender</label>
+                     <div className="flex gap-2 mb-2">
+                       <button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="bg-gray-200 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-300"><Camera size={14}/> Escanear S/N</button>
+                       <select value={manualUnitSelect} onChange={(e) => { if(e.target.value) handleSelectUnitForSale(e.target.value); setManualUnitSelect(''); }} className="flex-1 p-2 border border-gray-300 rounded-lg text-xs">
+                          <option value="">-- Selecionar Manualmente --</option>
+                          {selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (
+                              <option key={u.id} value={u.id}>{u.id}</option>
+                          ))}
+                       </select>
+                     </div>
+                     <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-50 rounded-lg border border-gray-200">
+                        {selectedUnitsForSale.map(sn => (
+                            <div key={sn} className="bg-white border border-green-200 text-green-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-1 shadow-sm">
+                                {sn} <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(s => s !== sn))} className="text-red-400 hover:text-red-600"><X size={12}/></button>
                             </div>
-                        )}
-
-                        {selectedProductForSale.units && selectedProductForSale.units.length > 0 && (
-                          <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
-                            <label className="block text-xs font-bold text-purple-800 uppercase mb-2">Selecionar Unidades / S/N para Vender</label>
-                            
-                            <button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg mb-4">
-                                <Camera size={18} /> Escanear Unidade
-                            </button>
-
-                            <div className="text-center text-xs text-gray-400 mb-2">ou adicione manualmente:</div>
-
-                            <div className="flex gap-2 mb-4">
-                               <select value={manualUnitSelect} onChange={e => setManualUnitSelect(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg text-sm">
-                                  <option value="">-- Selecione um S/N --</option>
-                                  {selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (
-                                    <option key={u.id} value={u.id}>{u.id}</option>
-                                  ))}
-                               </select>
-                               <button type="button" onClick={() => { if(manualUnitSelect) handleSelectUnitForSale(manualUnitSelect); setManualUnitSelect(''); }} className="bg-gray-200 hover:bg-gray-300 px-3 rounded-lg font-bold">+</button>
-                            </div>
-                            
-                            {selectedUnitsForSale.length > 0 && (
-                               <div>
-                                  <p className="text-xs font-bold text-gray-600 mb-2">Unidades selecionadas ({selectedUnitsForSale.length}):</p>
-                                  <div className="flex flex-wrap gap-2">
-                                     {selectedUnitsForSale.map(unitId => (
-                                        <div key={unitId} className="bg-white border border-purple-200 text-purple-800 text-xs font-mono px-2 py-1 rounded-full flex items-center gap-2">
-                                           <span>{unitId}</span>
-                                           <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(id => id !== unitId))} className="text-red-400 hover:text-red-600"><X size={12} /></button>
-                                        </div>
-                                     ))}
-                                  </div>
-                               </div>
-                            )}
-
-                          </div>
-                        )}
-                        
-                        <div className="flex gap-3 pt-2">
-                            <button type="button" onClick={() => setIsSaleModalOpen(false)} className="px-4 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-                            <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">Confirmar e Dar Baixa</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+                        ))}
+                        {selectedUnitsForSale.length === 0 && <span className="text-gray-400 text-xs italic">Nenhuma unidade selecionada.</span>}
+                     </div>
+                     <p className="text-xs text-gray-500 mt-1">Quantidade será calculada com base nas unidades selecionadas.</p>
+                   </div>
+               ) : (
+                   <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade</label>
+                       <input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required value={saleForm.quantity} onChange={(e) => setSaleForm({...saleForm, quantity: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" />
+                   </div>
+               )}
+               
+               <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2">
+                   <CheckCircle size={18} /> Confirmar Venda
+               </button>
+             </form>
+          </div>
         </div>
       )}
-      
-      {selectedOrderDetails && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"><div className="bg-indigo-600 p-6 text-white flex justify-between items-start"><div ><h3 className="text-xl font-bold flex items-center gap-2"><ShoppingCart /> Pedido {selectedOrderDetails.id}</h3><p className="opacity-80 text-sm mt-1">{new Date(selectedOrderDetails.date).toLocaleString()}</p></div><button onClick={() => setSelectedOrderDetails(null)} className="text-white/80 hover:text-white"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><UserIcon size={18} /> Dados do Cliente</h4><div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2"><p><span className="font-bold text-gray-500">Nome:</span> {selectedOrderDetails.shippingInfo?.name}</p><p><span className="font-bold text-gray-500">Pagamento:</span> {selectedOrderDetails.shippingInfo?.paymentMethod}</p><div className="flex items-start gap-1">
-  <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" />
-  <span className="text-gray-700">
-    {(selectedOrderDetails.shippingInfo?.street
-      ? `${selectedOrderDetails.shippingInfo.street}, ${selectedOrderDetails.shippingInfo.doorNumber}, ${selectedOrderDetails.shippingInfo.zip} ${selectedOrderDetails.shippingInfo.city}`
-      : (selectedOrderDetails.shippingInfo as any)?.address) ||
-      'Morada não disponível'}
-  </span>
-</div></div></div>
-      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Truck size={18} /> Rastreio de Envio</h4><div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><label className="block text-xs font-bold text-blue-800 uppercase mb-1">Código de Rastreio (CTT)</label><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm border border-blue-200 rounded text-gray-700" placeholder="Ex: DA123456789PT" value={selectedOrderDetails.trackingNumber || ''} onChange={(e) => setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: e.target.value})} /><button type="button" onClick={() => { setScannerMode('tracking'); setIsScannerOpen(true); }} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200" title="Escanear Código"><Camera size={18} /></button><button onClick={() => handleUpdateTracking(selectedOrderDetails.id, selectedOrderDetails.trackingNumber || '')} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700">Guardar</button></div><p className="text-[10px] text-blue-500 mt-1">Este código aparecerá na área do cliente.</p></div></div>
-      <div><h4 className="font-bold text-gray-900 border-b pb-2 mb-3 flex items-center gap-2"><Package size={18} /> Artigos & S/N</h4>
-      <ul className="space-y-3">
-        {getSafeItems(selectedOrderDetails.items).map((item, idx) => {
-          if (typeof item === 'string') {
-            return (
-              <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-                <span className="text-gray-700 font-medium text-sm">{item}</span>
-                <span className="text-xs text-gray-400 italic ml-2">(Encomenda antiga)</span>
-              </li>
-            );
-          }
-          const itemObject = item as OrderItem;
-          return (
-            <li key={idx} className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm">
-              <div className="flex justify-between items-start gap-2">
-                <div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold text-xs">{itemObject.quantity}x</div>
-                    <span className="text-gray-800 font-bold">{itemObject.name}</span>
-                  </div>
-                  {itemObject.selectedVariant && <p className="text-xs text-gray-500 ml-8 mt-1">({itemObject.selectedVariant})</p>}
-                  {itemObject.serialNumbers && itemObject.serialNumbers.length > 0 && (
-                      <div className="mt-2 ml-8 bg-green-50 text-green-700 text-xs p-2 rounded-lg border border-green-100">
-                          <p className="font-bold mb-1">S/N Atribuídos:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {itemObject.serialNumbers.map(sn => <span key={sn} className="font-mono bg-white px-1.5 py-0.5 rounded border border-green-200">{sn}</span>)}
-                          </div>
-                      </div>
-                  )}
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      </div>
-      <div className="flex justify-between items-center pt-4 border-t border-gray-100"><span className="text-gray-500 font-medium">Total do Pedido</span><span className="text-2xl font-bold text-indigo-600">{formatCurrency(selectedOrderDetails.total)}</span></div></div><div className="p-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setSelectedOrderDetails(null)} className="px-6 py-2 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-100">Fechar</button></div></div></div>}
 
-      {/* --- MODAL PARA REGISTO MANUAL DE ENCOMENDAS --- */}
+      {/* Manual Order Modal */}
       {isManualOrderModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <ClipboardEdit size={20} className="text-purple-600" /> Registar Encomenda Manual
-                    </h2>
-                    <button onClick={() => setIsManualOrderModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
-                </div>
-                <div className="p-6 overflow-y-auto">
-                    <form onSubmit={handleManualOrderSubmit} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Cliente</label>
-                                <input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderCustomer.name} onChange={e => setManualOrderCustomer({...manualOrderCustomer, name: e.target.value})} />
-                            </div>
-                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email do Cliente (Opcional)</label>
-                                <input type="email" className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Para associar à conta" value={manualOrderCustomer.email} onChange={e => setManualOrderCustomer({...manualOrderCustomer, email: e.target.value})} />
-                            </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 p-4 rounded-xl border">
-                           <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Itens da Encomenda</label>
-                           <div className="flex gap-2 items-center">
-                               <select onChange={e => addProductToManualOrder(e.target.value)} value="" className="flex-1 p-2 border border-gray-300 rounded-lg">
-                                   <option value="">-- Adicionar Produto --</option>
-                                   {productsForSelect.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                               </select>
-                           </div>
-                           
-                           <div className="space-y-2 mt-4">
-                               {manualOrderItems.map(item => {
-                                   const itemKey = `${item.id}|${item.selectedVariant}`;
-                                   return (
-                                       <div key={itemKey} className="flex justify-between items-center bg-white p-2 rounded border">
-                                           <div>
-                                               <p className="font-bold text-sm">{item.name}{item.selectedVariant && ` - ${item.selectedVariant}`}</p>
-                                               <p className="text-xs text-gray-500">{formatCurrency(item.finalPrice)}</p>
-                                           </div>
-                                           <div className="flex items-center gap-2">
-                                                <button type="button" onClick={() => updateManualOrderItemQuantity(itemKey, -1)} className="w-6 h-6 rounded bg-gray-200">-</button>
-                                                <span className="font-bold">{item.quantity}</span>
-                                                <button type="button" onClick={() => updateManualOrderItemQuantity(itemKey, 1)} className="w-6 h-6 rounded bg-gray-200">+</button>
-                                                <button type="button" onClick={() => setManualOrderItems(prev => prev.filter(p => `${p.id}|${p.selectedVariant}` !== itemKey))}><MinusCircle size={16} className="text-red-500"/></button>
-                                           </div>
-                                       </div>
-                                   );
-                               })}
-                           </div>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+               <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><ClipboardEdit size={20} className="text-purple-600"/> Criar Encomenda Manual</h3>
+               <button onClick={() => setIsManualOrderModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button>
+             </div>
+             
+             <form onSubmit={handleManualOrderSubmit} className="p-6 space-y-6">
+                 {/* Product Selection */}
+                 <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                     <h4 className="font-bold text-purple-900 text-sm mb-3">1. Adicionar Produtos</h4>
+                     <select onChange={(e) => { addProductToManualOrder(e.target.value); e.target.value = ''; }} className="w-full p-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white mb-4">
+                         <option value="">-- Pesquisar Produto --</option>
+                         {productsForSelect.map(p => (
+                             <option key={p.value} value={p.value}>{p.label}</option>
+                         ))}
+                     </select>
+                     
+                     <div className="space-y-2 max-h-40 overflow-y-auto">
+                         {manualOrderItems.map((item, idx) => (
+                             <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                                 <div>
+                                     <p className="font-bold text-sm text-gray-800">{item.name}</p>
+                                     <p className="text-xs text-gray-500">{item.selectedVariant} | {formatCurrency(item.finalPrice)}</p>
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                     <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                                         <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 font-bold">-</button>
+                                         <span className="w-6 text-center text-sm font-bold">{item.quantity}</span>
+                                         <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 font-bold">+</button>
+                                     </div>
+                                     <p className="font-bold text-purple-700 w-16 text-right">{formatCurrency(item.finalPrice * item.quantity)}</p>
+                                     <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, -999)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                 </div>
+                             </div>
+                         ))}
+                         {manualOrderItems.length === 0 && <p className="text-center text-gray-400 text-sm py-2">Nenhum produto adicionado.</p>}
+                     </div>
+                     
+                     {manualOrderItems.length > 0 && (
+                         <div className="mt-4 pt-4 border-t border-purple-200 flex justify-end">
+                             <p className="text-lg font-bold text-gray-900">Total: {formatCurrency(manualOrderItems.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0))}</p>
+                         </div>
+                     )}
+                 </div>
 
-                           <div className="text-right font-bold text-lg mt-4">
-                               Total: {formatCurrency(manualOrderItems.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0))}
-                           </div>
-                        </div>
-
+                 {/* Customer Info */}
+                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                     <h4 className="font-bold text-gray-800 text-sm mb-3">2. Dados do Cliente</h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Morada de Envio</label>
-                            <textarea rows={2} className="w-full p-3 border border-gray-300 rounded-lg" placeholder="Rua, Código Postal, Cidade" value={manualOrderShipping} onChange={e => setManualOrderShipping(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Pagamento</label>
-                             <select className="w-full p-3 border border-gray-300 rounded-lg" value={manualOrderPayment} onChange={e => setManualOrderPayment(e.target.value)}>
-                                <option>MB Way</option><option>Transferência</option><option>Cobrança</option><option>Outro</option>
-                             </select>
-                        </div>
-                        <div className="flex gap-3 pt-4 border-t">
-                            <button type="button" onClick={() => setIsManualOrderModalOpen(false)} className="px-6 py-3 border rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-                            <button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2">
-                                <Save size={18} /> Guardar & Deduzir Stock
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome</label>
+                             <input type="text" required value={manualOrderCustomer.name} onChange={e => setManualOrderCustomer({...manualOrderCustomer, name: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="Nome do Cliente" />
+                         </div>
+                         <div>
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email (Opcional)</label>
+                             <input type="email" value={manualOrderCustomer.email} onChange={e => setManualOrderCustomer({...manualOrderCustomer, email: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="email@exemplo.com" />
+                         </div>
+                     </div>
+                     <div className="mt-4">
+                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Morada / Notas de Envio</label>
+                         <textarea required value={manualOrderShipping} onChange={e => setManualOrderShipping(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg" rows={2} placeholder="Morada completa ou 'Entrega em mão'" />
+                     </div>
+                     <div className="mt-4">
+                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Pagamento</label>
+                         <select value={manualOrderPayment} onChange={e => setManualOrderPayment(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
+                             <option value="MB Way">MB Way</option>
+                             <option value="Transferência">Transferência Bancária</option>
+                             <option value="Cobrança">À Cobrança</option>
+                             <option value="Dinheiro">Dinheiro (Em Mão)</option>
+                         </select>
+                     </div>
+                 </div>
+
+                 <button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
+                     <Save size={20} /> Criar Encomenda e Deduzir Stock
+                 </button>
+             </form>
+          </div>
         </div>
       )}
 
