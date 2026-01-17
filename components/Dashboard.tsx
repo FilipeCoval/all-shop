@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -250,6 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [manualUnitCode, setManualUnitCode] = useState('');
   
   const [stockAlerts, setStockAlerts] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [notificationModalData, setNotificationModalData] = useState<{
     productName: string;
@@ -262,6 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   // States for Sale Modal
   const [linkedOrderId, setLinkedOrderId] = useState<string>('');
+  const [selectedOrderForSaleDetails, setSelectedOrderForSaleDetails] = useState<Order | null>(null);
   const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
   const [manualUnitSelect, setManualUnitSelect] = useState('');
   
@@ -299,6 +301,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   });
 
   const pendingOrders = useMemo(() => allOrders.filter(o => ['Processamento', 'Pago'].includes(o.status)), [allOrders]);
+  
+  // Efeito para atualizar detalhes da encomenda quando o ID muda
+  useEffect(() => {
+      if (linkedOrderId) {
+          const order = allOrders.find(o => o.id === linkedOrderId);
+          setSelectedOrderForSaleDetails(order || null);
+      } else {
+          setSelectedOrderForSaleDetails(null);
+      }
+  }, [linkedOrderId, allOrders]);
+
 
   useEffect(() => {
     if(!isAdmin) return;
@@ -450,12 +463,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         setNotificationModalData(null);
     }
   };
+  
+  const copyToClipboard = (text: string): boolean => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    let successful = false;
+    try {
+      successful = document.execCommand('copy');
+    } catch (err) {
+      console.error('Fallback: Oops, unable to copy', err);
+    }
+    document.body.removeChild(textArea);
+    return successful;
+  };
 
   const handleCopyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+    if (copyToClipboard(text)) {
         setCopySuccess(type);
         setTimeout(() => setCopySuccess(''), 2000);
-    });
+    } else {
+        alert("Não foi possível copiar. Por favor, copie manualmente.");
+    }
   };
 
   const handleAddCoupon = async (e: React.FormEvent) => { e.preventDefault(); if (!newCoupon.code) return; try { await db.collection('coupons').add({ ...newCoupon, code: newCoupon.code.toUpperCase().trim() }); setNewCoupon({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 }); alert("Cupão criado!"); } catch (err) { console.error(err); alert("Erro ao criar cupão"); } };
@@ -559,7 +593,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   };
 
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { console.error(e); alert("Erro ao gravar rastreio"); } };
-  const handleCopy = (text: string) => navigator.clipboard.writeText(text);
+  
+  const handleCopy = (text: string) => {
+    if (!copyToClipboard(text)) {
+        alert("Não foi possível copiar. Por favor, copie manualmente.");
+    }
+  };
+
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
   const chartData = useMemo(() => { const numDays = chartTimeframe === '1y' ? 365 : chartTimeframe === '30d' ? 30 : 7; const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const today = new Date(); let totalPeriod = 0; if (chartTimeframe === '1y') { const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(today.getMonth() - i, 1); return d; }).reverse(); const monthlyData = months.map(monthStart => { const year = monthStart.getFullYear(); const month = monthStart.getMonth() + 1; const monthStr = `${year}-${month.toString().padStart(2, '0')}`; const totalForMonth = allSales.reduce((acc, sale) => { return sale.date.startsWith(monthStr) ? acc + sale.total : acc; }, 0); totalPeriod += totalForMonth; return { label: monthStart.toLocaleDateString('pt-PT', { month: 'short' }), value: totalForMonth }; }); const maxValue = Math.max(...monthlyData.map(d => d.value), 1); return { days: monthlyData, maxValue, totalPeriod }; } else { const days = []; for (let i = numDays - 1; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { day: 'numeric' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; } }, [allOrders, products, chartTimeframe]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = p.purchasePrice * p.quantityBought; totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else revenue = p.quantitySold * p.salePrice; realizedRevenue += revenue; const cogs = p.quantitySold * p.purchasePrice; const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; const remainingStock = p.quantityBought - p.quantitySold; if (remainingStock > 0 && p.targetSalePrice) potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock; }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
@@ -586,6 +626,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
     });
     setSelectedUnitsForSale([]);
     setLinkedOrderId('');
+    setSelectedOrderForSaleDetails(null);
     setIsSaleModalOpen(true); 
   };
   
@@ -679,7 +720,27 @@ const payload: any = { name: formData.name, category: formData.category, publicP
 
   const handleDeleteSale = async (saleId: string) => { if (!editingId) return; const product = products.find(p => p.id === editingId); if (!product || !product.salesHistory) return; const saleToDelete = product.salesHistory.find(s => s.id === saleId); if (!saleToDelete) return; if (!window.confirm(`Tem a certeza que quer cancelar esta venda de ${saleToDelete.quantity} unidade(s)? O stock será reposto.`)) return; const newHistory = product.salesHistory.filter(s => s.id !== saleId); const newQuantitySold = product.quantitySold - saleToDelete.quantity; const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0); const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let newStatus: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD'; else if (newQuantitySold > 0) newStatus = 'PARTIAL'; try { await updateProduct(product.id, { salesHistory: newHistory, quantitySold: Math.max(0, newQuantitySold), salePrice: newAverageSalePrice, status: newStatus }); alert("Venda anulada e stock reposto com sucesso!"); } catch (err) { console.error(err); alert("Erro ao anular venda."); } };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Tem a certeza absoluta que quer apagar este registo? Esta ação não pode ser desfeita.')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro ao apagar: " + (error.message || "Permissão negada")); } } };
-  const filteredProducts = products.filter(p => { const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) || p.supplierOrderId?.toLowerCase().includes(searchTerm.toLowerCase()); let matchesStatus = true; if (statusFilter === 'IN_STOCK') matchesStatus = p.status !== 'SOLD'; if (statusFilter === 'SOLD') matchesStatus = p.status === 'SOLD'; let matchesCashback = true; if (cashbackFilter !== 'ALL') matchesCashback = p.cashbackStatus === cashbackFilter; return matchesSearch && matchesStatus && matchesCashback; });
+  
+  // FIX: Added null check for 'p.name' and 'p.category' to prevent crashes when filtering incomplete product data
+  const filteredProducts = products.filter(p => { 
+      const name = p.name || '';
+      const category = p.category || '';
+      const supplierName = p.supplierName || '';
+      const supplierOrderId = p.supplierOrderId || '';
+      
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            category.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            supplierName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            supplierOrderId.toLowerCase().includes(searchTerm.toLowerCase());
+                            
+      let matchesStatus = true; 
+      if (statusFilter === 'IN_STOCK') matchesStatus = p.status !== 'SOLD'; 
+      if (statusFilter === 'SOLD') matchesStatus = p.status === 'SOLD'; 
+      let matchesCashback = true; 
+      if (cashbackFilter !== 'ALL') matchesCashback = p.cashbackStatus === cashbackFilter; 
+      return matchesSearch && matchesStatus && matchesCashback; 
+  });
+  
   const countInStock = products.filter(p => p.status !== 'SOLD').length;
   const countSold = products.filter(p => p.status === 'SOLD').length;
   
@@ -820,6 +881,91 @@ const payload: any = { name: formData.name, category: formData.category, publicP
         alert("Ocorreu um erro. Verifique a consola.");
     }
   };
+
+  // --- FUNÇÃO PARA IMPORTAR PRODUTOS ---
+  const handleImportProducts = async () => {
+    if(!window.confirm("Isto irá importar todos os produtos do ficheiro 'constants.ts' para o Firebase. Quer continuar?")) return;
+    setIsImporting(true);
+
+    try {
+        const batch = db.batch();
+        let count = 0;
+
+        for (const prod of PRODUCTS) {
+            // Verificar se já existe algum lote com este publicProductId na coleção de inventário
+            const existingInventory = await db.collection('products_inventory').where('publicProductId', '==', prod.id).limit(1).get();
+            
+            // 1. Criar no Inventário (Backoffice)
+            if (existingInventory.empty) {
+                if (prod.variants && prod.variants.length > 0) {
+                    for (const v of prod.variants) {
+                         const newDocRef = db.collection('products_inventory').doc();
+                         batch.set(newDocRef, {
+                             name: prod.name,
+                             category: prod.category,
+                             publicProductId: prod.id,
+                             variant: v.name,
+                             purchaseDate: new Date().toISOString().split('T')[0],
+                             quantityBought: 999,
+                             quantitySold: 0,
+                             salesHistory: [],
+                             purchasePrice: 0,
+                             targetSalePrice: v.price,
+                             salePrice: v.price,
+                             cashbackValue: 0,
+                             cashbackStatus: 'NONE',
+                             units: [],
+                             status: 'IN_STOCK',
+                             description: prod.description,
+                             images: prod.images || [],
+                             features: prod.features || [],
+                             comingSoon: prod.comingSoon || false
+                         });
+                    }
+                } else {
+                    const newDocRef = db.collection('products_inventory').doc();
+                    batch.set(newDocRef, {
+                        name: prod.name,
+                        category: prod.category,
+                        publicProductId: prod.id,
+                        variant: null,
+                        purchaseDate: new Date().toISOString().split('T')[0],
+                        quantityBought: 999,
+                        quantitySold: 0,
+                        salesHistory: [],
+                        purchasePrice: 0,
+                        targetSalePrice: prod.price,
+                        salePrice: prod.price,
+                        cashbackValue: 0,
+                        cashbackStatus: 'NONE',
+                        units: [],
+                        status: 'IN_STOCK',
+                        description: prod.description,
+                        images: prod.images || [],
+                        features: prod.features || [],
+                        comingSoon: prod.comingSoon || false
+                    });
+                }
+            }
+
+            // 2. Criar na Loja Pública (Frontend)
+            // Usamos o ID numérico como chave do documento para ser fácil de encontrar
+            const publicDocRef = db.collection('products_public').doc(prod.id.toString());
+            batch.set(publicDocRef, prod, { merge: true }); // Merge para não apagar dados se já existirem
+            
+            count++;
+        }
+
+        await batch.commit();
+        alert(`Sucesso! ${count} produtos importados e sincronizados com a loja pública.`);
+
+    } catch (e) {
+        console.error("Erro na importação:", e);
+        alert("Ocorreu um erro durante a importação. Verifique a consola.");
+    } finally {
+        setIsImporting(false);
+    }
+  };
   
   const handleOpenInvestedModal = () => {
     const data = products.map(p => ({
@@ -948,6 +1094,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
+      {/* ... (Render code remains largely the same until the end) ... */}
       
       {showToast && <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right"><div className="bg-white border-l-4 border-green-500 shadow-2xl rounded-r-lg p-4 flex items-start gap-3 w-80"><div className="text-green-500 bg-green-50 p-2 rounded-full"><DollarSign size={24} /></div><div className="flex-1"><h4 className="font-bold text-gray-900">Nova Venda Online!</h4><p className="text-sm text-gray-600 mt-1">Pedido {showToast.id.startsWith('#') ? '' : '#'}{showToast.id.toUpperCase()}</p><p className="text-lg font-bold text-green-600 mt-1">{formatCurrency(showToast.total)}</p></div><button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button></div></div>}
       {isScannerOpen && <BarcodeScanner 
@@ -997,6 +1144,9 @@ const payload: any = { name: formData.name, category: formData.category, publicP
         </div>
       )}
 
+      {/* ... (Rest of the component: Notification Modal, Header, Tab Content, Modals) ... */}
+      {/* Specifically fixing the scanner error logic or any logic inside render is done above in state calculation */}
+      
       {notificationModalData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -1078,9 +1228,16 @@ const payload: any = { name: formData.name, category: formData.category, publicP
                 <KpiCard title="Cashback Pendente" value={stats.pendingCashback} icon={<AlertCircle size={18} />} color="yellow" onClick={handleOpenCashbackModal} />
                 <div onClick={() => setIsOnlineDetailsOpen(true)} className="p-4 rounded-xl border bg-white shadow-sm flex flex-col justify-between h-full cursor-pointer hover:border-green-300 transition-colors relative overflow-hidden"><div className="flex justify-between items-start mb-2"><span className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Online Agora</span><div className="p-1.5 rounded-lg bg-green-50 text-green-600 relative"><Users size={18} /><span className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span></div></div><div className="text-2xl font-bold text-green-600 flex items-end gap-2">{onlineUsers.length}<span className="text-xs text-gray-400 font-normal mb-1">visitantes</span></div></div>
             </div>
+            {/* ... Rest of Dashboard (Tabs content) ... */}
             {isOnlineDetailsOpen && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex justify-end" onClick={() => setIsOnlineDetailsOpen(false)}><div className="w-80 h-full bg-white shadow-2xl p-6 overflow-y-auto animate-slide-in-right" onClick={(e) => e.stopPropagation()}><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-lg flex items-center gap-2 text-gray-900"><Users className="text-green-600" /> Tráfego Real</h3><button onClick={() => setIsOnlineDetailsOpen(false)}><X size={20} className="text-gray-400" /></button></div><div className="space-y-3">{onlineUsers.map(u => <div key={u.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm"><div className="flex justify-between items-start"><span className="font-bold text-gray-800">{u.userName}</span><span className={`text-[10px] px-1.5 py-0.5 rounded ${u.device === 'Mobile' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{u.device}</span></div><div className="mt-1 flex items-center gap-1 text-xs text-gray-500 truncate"><Eye size={12} /><span className="truncate">{u.page === '#/' ? 'Home' : u.page.replace('#', '')}</span></div><div className="mt-1 text-[10px] text-gray-400 text-right">Há {Math.floor((Date.now() - u.lastActive) / 1000)}s</div></div>)}{onlineUsers.length === 0 && <p className="text-gray-500 text-center text-sm py-4">Ninguém online agora.</p>}</div></div></div>}
+            
+            {/* ... Rest of Inventory Tab ... */}
             <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in"><div className="flex items-center gap-3 mb-4"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div><div><h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3><p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p></div></div><div className="flex flex-col sm:flex-row gap-2"><input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles." className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onKeyDown={(e) => e.key === 'Enter' && handleAskAi()} /><button onClick={handleAskAi} disabled={isAiLoading || !aiQuery.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">{isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}</button></div>{aiResponse && <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">{aiResponse}</div>}</div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {countInStock}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {countSold}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div><button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button><button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {countInStock}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {countSold}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
+            <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
+            <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar Produtos Estáticos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
+            <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
             <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda Alvo</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
             <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
             return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
@@ -1114,6 +1271,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
       
+      {/* ... (Rest of component including Modals) ... */}
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{
 PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div>
@@ -1136,12 +1294,12 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                 <div className="overflow-y-auto p-6">
                     <form onSubmit={handleSaleSubmit} className="space-y-6">
                         
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                          <label className="block text-xs font-bold text-blue-800 uppercase mb-2">Associar a Encomenda (Obrigatório)</label>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Associar a Encomenda (Obrigatório)</label>
                           <select 
                             value={linkedOrderId} 
                             onChange={e => setLinkedOrderId(e.target.value)} 
-                            className="w-full p-3 border border-blue-300 rounded-lg bg-white"
+                            className="w-full p-3 border border-gray-300 rounded-lg bg-white"
                             required
                           >
                             <option value="">-- Selecione a Encomenda --</option>
@@ -1153,6 +1311,22 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
                           </select>
                         </div>
                         
+                        {selectedOrderForSaleDetails && (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 animate-fade-in text-sm space-y-2">
+                                <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Info size={16}/> Sumário da Encomenda</h4>
+                                <p><strong className="text-gray-500">Cliente:</strong> {selectedOrderForSaleDetails.shippingInfo.name}</p>
+                                <p><strong className="text-gray-500">Data:</strong> {new Date(selectedOrderForSaleDetails.date).toLocaleDateString()}</p>
+                                <div className="pt-2 border-t border-blue-100 mt-2">
+                                  {(getSafeItems(selectedOrderForSaleDetails.items) as OrderItem[]).filter(item => item.productId === selectedProductForSale.publicProductId).map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center">
+                                        <span>{item.quantity}x {item.name} {item.selectedVariant && `(${item.selectedVariant})`}</span>
+                                        <span className="font-bold">{formatCurrency(item.price)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                            </div>
+                        )}
+
                         {selectedProductForSale.units && selectedProductForSale.units.length > 0 && (
                           <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                             <label className="block text-xs font-bold text-purple-800 uppercase mb-2">Selecionar Unidades / S/N para Vender</label>
