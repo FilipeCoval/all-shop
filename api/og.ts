@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PRODUCTS } from '../constants';
+import { INITIAL_PRODUCTS } from '../constants';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
@@ -11,21 +11,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const productId = parseInt(id as string, 10);
-    const product = PRODUCTS.find(p => p.id === productId);
+    // Usa os produtos iniciais como base para os previews sociais.
+    // Para ser 100% dinâmico aqui, seria necessário o firebase-admin SDK com service accounts,
+    // o que é mais complexo. Esta solução "estática" serve para os links mais importantes.
+    const product = INITIAL_PRODUCTS.find(p => p.id === productId);
     
-    if (!product) {
-      return res.status(404).send('Product Not Found');
-    }
-
-    const title = `${product.name} | Allshop Store`;
-    const description = `${product.description.substring(0, 150)}...`;
-    
-    // Ensure image URL is HTTPS
-    let image = product.image || 'https://i.imgur.com/nSiZKBf.png';
-    if (image.startsWith('http://')) {
-        image = image.replace('http://', 'https');
-    }
-
+    // Se não encontrar no estático, usa uma imagem genérica
+    const title = product ? `${product.name} | Allshop Store` : 'Produto Allshop';
+    const description = product ? `${product.description.substring(0, 150)}...` : 'Veja este produto incrível na nossa loja.';
+    const image = product?.image || 'https://i.imgur.com/nSiZKBf.png';
     const protocol = host?.includes('localhost') ? 'http' : 'https';
     const cleanUrl = `${protocol}://${host}/product/${id}`;
     const storeUrl = `${protocol}://${host}/#product/${id}`;
@@ -38,20 +32,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <title>${title}</title>
         <meta name="description" content="${description}">
         
-        <!-- Open Graph / Facebook / Telegram -->
-        <meta property="og:site_name" content="Allshop Store" />
+        <!-- Open Graph -->
         <meta property="og:type" content="website">
         <meta property="og:url" content="${cleanUrl}">
         <meta property="og:title" content="${title}">
         <meta property="og:description" content="${description}">
         <meta property="og:image" content="${image}">
-        <meta property="og:image:secure_url" content="${image}">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
 
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
-        <meta property="twitter:url" content="${cleanUrl}">
         <meta property="twitter:title" content="${title}">
         <meta property="twitter:description" content="${description}">
         <meta property="twitter:image" content="${image}">
