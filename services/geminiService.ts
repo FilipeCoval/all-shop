@@ -1,11 +1,12 @@
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
-import { PRODUCTS, STORE_NAME } from '../constants';
+import { STORE_NAME } from '../constants';
 import { InventoryProduct, Product } from '../types';
 
 let chatSession: Chat | null = null;
 
-const getSystemInstruction = (): string => {
-  const productsList = PRODUCTS.map(p => 
+// Agora aceita a lista de produtos como argumento
+const getSystemInstruction = (products: Product[]): string => {
+  const productsList = products.map(p => 
     `- **${p.name}** (€ ${p.price.toFixed(2)})${p.variants ? ' [Várias Opções/Variantes Disponíveis]' : ''}${p.comingSoon ? ' [PRODUTO EM BREVE - Brevemente no Stock]' : ''}\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
   ).join('\n\n');
 
@@ -13,33 +14,20 @@ const getSystemInstruction = (): string => {
 Atue como o **Especialista de Tecnologia e Vendas** da loja **${STORE_NAME}**.
 Sua missão é converter curiosos em clientes, explicando as diferenças técnicas de forma simples e profissional.
 
-**🚀 GRANDES NOVIDADES A CHEGAR (EM BREVE):**
-1. **Redmi Buds 6 Play:** A última palavra em áudio Xiaomi. Destaque o Bluetooth 5.4 e a redução de ruído por IA. Incrível autonomia de 36h por apenas 24.99€.
-2. **Lenovo LivePods LP40:** Auriculares TWS ultra-leves e económicos para o dia-a-dia.
-3. **Logitech G502 HERO:** O rato gaming lendário com sensor HERO 25K.
-4. **Mouse Pad XL Sports Car:** Tapetes de 900x400mm com design premium.
-
-**🔗 CONECTIVIDADE E CABOS:**
-- **Hub Acer USB-A para Ethernet:** A solução perfeita para quem precisa de internet Gigabit estável no portátil via porta USB comum.
-- **Cabo Xiaomi Turbo 120W (C to C):** O cabo específico para quem tem carregadores de alta performance Xiaomi.
-- **Cabos HDMI 2.1 e Cat8:** Essenciais para gaming 4K/120Hz e internet estável de 40Gbps.
-
-**🧠 GUIA DE CARREGADORES:**
-- Temos kits Turbo económicos e os **Originais Xiaomi**. Explique que os originais ativam modos como "HyperCharge" 120W.
-
 Responda sempre em Português de Portugal. Use emojis para ser amigável.
 
-**📦 CATÁLOGO ATUALIZADO:**
+**📦 CATÁLOGO ATUALIZADO (Use apenas estes dados):**
 ${productsList}
 `;
 }
 
-export const initializeChat = async (): Promise<Chat> => {
+// Inicia sessão com os produtos atuais
+export const initializeChat = async (products: Product[]): Promise<Chat> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   chatSession = ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: getSystemInstruction(),
+      systemInstruction: getSystemInstruction(products),
       temperature: 0.3,
       maxOutputTokens: 600,
       thinkingConfig: { thinkingBudget: 300 },
@@ -48,11 +36,15 @@ export const initializeChat = async (): Promise<Chat> => {
   return chatSession;
 };
 
-export const sendMessageToGemini = async (message: string): Promise<string> => {
+// Recebe os produtos para garantir que a IA sabe do que está a falar
+export const sendMessageToGemini = async (message: string, currentProducts: Product[]): Promise<string> => {
   try {
+    // Recria a sessão se for a primeira vez ou se os produtos mudarem (idealmente)
+    // Para simplificar, recriamos se não existir
     if (!chatSession) {
-        await initializeChat();
+        await initializeChat(currentProducts);
     }
+    
     if (!chatSession) return "A ligar sistemas...";
     
     const response: GenerateContentResponse = await chatSession.sendMessage({ message });
