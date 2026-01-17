@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -283,12 +283,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
 
   const [formData, setFormData] = useState({
-    name: '', category: '', publicProductId: '' as string, variant: '',
-    purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', 
-    quantityBought: '', purchasePrice: '', targetSalePrice: '', cashbackValue: '',
+    name: '', 
+    description: '',
+    category: '', 
+    publicProductId: '' as string, 
+    variant: '',
+    purchaseDate: new Date().toISOString().split('T')[0], 
+    supplierName: '', 
+    supplierOrderId: '', 
+    quantityBought: '', 
+    purchasePrice: '', 
+    salePrice: '', // Preço de Venda Real (Loja)
+    targetSalePrice: '', // Preço Estimado (opcional)
+    cashbackValue: '',
     cashbackStatus: 'NONE' as CashbackStatus,
     badges: [] as string[],
-    imageUrl: ''
+    newImageUrl: '', // Input temporário para URL
+    images: [] as string[] // Array de imagens
   });
 
   const selectedPublicProductVariants = useMemo(() => {
@@ -605,15 +616,126 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
   const chartData = useMemo(() => { const numDays = chartTimeframe === '1y' ? 365 : chartTimeframe === '30d' ? 30 : 7; const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const today = new Date(); let totalPeriod = 0; if (chartTimeframe === '1y') { const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(today.getMonth() - i, 1); return d; }).reverse(); const monthlyData = months.map(monthStart => { const year = monthStart.getFullYear(); const month = monthStart.getMonth() + 1; const monthStr = `${year}-${month.toString().padStart(2, '0')}`; const totalForMonth = allSales.reduce((acc, sale) => { return sale.date.startsWith(monthStr) ? acc + sale.total : acc; }, 0); totalPeriod += totalForMonth; return { label: monthStart.toLocaleDateString('pt-PT', { month: 'short' }), value: totalForMonth }; }); const maxValue = Math.max(...monthlyData.map(d => d.value), 1); return { days: monthlyData, maxValue, totalPeriod }; } else { const days = []; for (let i = numDays - 1; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { day: 'numeric' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; } }, [allOrders, products, chartTimeframe]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = p.purchasePrice * p.quantityBought; totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else revenue = p.quantitySold * p.salePrice; realizedRevenue += revenue; const cogs = p.quantitySold * p.purchasePrice; const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; const remainingStock = p.quantityBought - p.quantitySold; if (remainingStock > 0 && p.targetSalePrice) potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock; }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
-  const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, badges: product.badges || [], imageUrl: (product.images && product.images.length > 0) ? product.images[0] : '' }); setModalUnits(product.units || []); setIsModalOpen(true); };
-  const handleAddNew = () => { setEditingId(null); setFormData({ name: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', targetSalePrice: '', cashbackValue: '', cashbackStatus: 'NONE', badges: [], imageUrl: '' }); setModalUnits([]); setIsModalOpen(true); };
+  
+  const handleEdit = (product: InventoryProduct) => { 
+      setEditingId(product.id); 
+      setFormData({ 
+          name: product.name, 
+          description: product.description || '',
+          category: product.category, 
+          publicProductId: product.publicProductId ? product.publicProductId.toString() : '', 
+          variant: product.variant || '', 
+          purchaseDate: product.purchaseDate, 
+          supplierName: product.supplierName || '', 
+          supplierOrderId: product.supplierOrderId || '', 
+          quantityBought: product.quantityBought.toString(), 
+          purchasePrice: product.purchasePrice.toString(), 
+          salePrice: product.salePrice ? product.salePrice.toString() : '',
+          targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', 
+          cashbackValue: product.cashbackValue.toString(), 
+          cashbackStatus: product.cashbackStatus, 
+          badges: product.badges || [], 
+          images: product.images || [],
+          newImageUrl: ''
+      }); 
+      setModalUnits(product.units || []); 
+      setIsModalOpen(true); 
+  };
+
+  const handleAddNew = () => { 
+      setEditingId(null); 
+      setFormData({ 
+          name: '', 
+          description: '',
+          category: 'TV Box', 
+          publicProductId: '', 
+          variant: '', 
+          purchaseDate: new Date().toISOString().split('T')[0], 
+          supplierName: '', 
+          supplierOrderId: '', 
+          quantityBought: '', 
+          purchasePrice: '', 
+          salePrice: '',
+          targetSalePrice: '', 
+          cashbackValue: '', 
+          cashbackStatus: 'NONE', 
+          badges: [], 
+          images: [],
+          newImageUrl: '' 
+      }); 
+      setModalUnits([]); 
+      setIsModalOpen(true); 
+  };
+
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { 
       const publicProd = PRODUCTS.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
-  const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) { alert("Este produto tem variantes. Por favor selecione qual variante está a registar."); return; } const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : []; const currentSalePrice = existingProduct ? existingProduct.salePrice : 0; 
-let productStatus: ProductStatus = 'IN_STOCK';
-if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD';
-else if (currentSold > 0) productStatus = 'PARTIAL';
-const payload: any = { name: formData.name, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: safeSalesHistory, purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.imageUrl ? [formData.imageUrl] : [] }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); } };
+  
+  const handleAddImage = () => {
+      if (formData.newImageUrl && formData.newImageUrl.trim()) {
+          setFormData(prev => ({ 
+              ...prev, 
+              images: [...prev.images, prev.newImageUrl.trim()], 
+              newImageUrl: '' 
+          }));
+      }
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+      setFormData(prev => ({ 
+          ...prev, 
+          images: prev.images.filter((_, idx) => idx !== indexToRemove) 
+      }));
+  };
+
+  const handleProductSubmit = async (e: React.FormEvent) => { 
+      e.preventDefault(); 
+      if (selectedPublicProductVariants.length > 0 && !formData.variant) { alert("Este produto tem variantes. Por favor selecione qual variante está a registar."); return; } 
+      
+      const qBought = Number(formData.quantityBought) || 0; 
+      const existingProduct = products.find(p => p.id === editingId); 
+      const currentSold = existingProduct ? existingProduct.quantitySold : 0; 
+      const safeSalesHistory = (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : []; 
+      
+      // PREÇO DE VENDA CORRIGIDO: Se não for preenchido, usa 0
+      const currentSalePrice = formData.salePrice ? Number(formData.salePrice) : 0; 
+      
+      let productStatus: ProductStatus = 'IN_STOCK';
+      if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD';
+      else if (currentSold > 0) productStatus = 'PARTIAL';
+      
+      const payload: any = { 
+          name: formData.name, 
+          description: formData.description,
+          category: formData.category, 
+          publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, 
+          variant: formData.variant || null, 
+          purchaseDate: formData.purchaseDate, 
+          supplierName: formData.supplierName, 
+          supplierOrderId: formData.supplierOrderId, 
+          quantityBought: qBought, 
+          quantitySold: currentSold, 
+          salesHistory: safeSalesHistory, 
+          purchasePrice: Number(formData.purchasePrice) || 0, 
+          targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, 
+          salePrice: currentSalePrice, 
+          cashbackValue: Number(formData.cashbackValue) || 0, 
+          cashbackStatus: formData.cashbackStatus, 
+          units: modalUnits, 
+          status: productStatus, 
+          badges: formData.badges, 
+          images: formData.images
+      }; 
+      
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
+      
+      try { 
+          if (editingId) await updateProduct(editingId, payload); 
+          else await addProduct(payload); 
+          setIsModalOpen(false); 
+      } catch (err) { 
+          console.error("Erro ao guardar produto:", err); alert('Erro ao guardar.'); 
+      } 
+  };
   
   const toggleBadge = (badge: string) => {
       setFormData(prev => {
@@ -802,7 +924,7 @@ const payload: any = { name: formData.name, category: formData.category, publicP
           };
           return [...prev, newItem];
       });
-  };
+    };
 
   const updateManualOrderItemQuantity = (key: string, delta: number) => {
       setManualOrderItems(prev => prev.map(item => {
@@ -848,7 +970,6 @@ const payload: any = { name: formData.name, category: formData.category, publicP
                     addedAt: new Date().toISOString()
                 })),
                 userId: userId,
-                // FIX: Added the 'email' property to the 'shippingInfo' object to conform to the 'UserCheckoutInfo' type, resolving a TypeScript error.
                 shippingInfo: {
                     name: manualOrderCustomer.name,
                     email: manualOrderCustomer.email,
@@ -1158,7 +1279,6 @@ const payload: any = { name: formData.name, category: formData.category, publicP
       )}
 
       {/* ... (Rest of the component: Notification Modal, Header, Tab Content, Modals) ... */}
-      {/* Specifically fixing the scanner error logic or any logic inside render is done above in state calculation */}
       
       {notificationModalData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -1251,9 +1371,9 @@ const payload: any = { name: formData.name, category: formData.category, publicP
             <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
             <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar Produtos Estáticos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
             <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
-            <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda Alvo</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+            <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda (Loja)</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
             <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
-            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
+            return <tr key={p.id} className="hover:bg-gray-50"><td className="px-6 py-4"><div className="font-bold whitespace-normal min-w-[150px]">{p.name}</div><span className="text-xs text-blue-500">{p.variant}</span></td><td className="px-4 py-4">{p.supplierName ? <div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700"><Globe size={12} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>}</div> : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-4 text-center"><div className="flex justify-between text-xs mb-1 font-medium text-gray-600"><span>{remainingStock} restam</span></div><div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full ${stockPercent === 100 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${stockPercent}%` }}></div></div></td><td className="px-4 py-4 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-4 text-right">{p.salePrice ? formatCurrency(p.salePrice) : (p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-')}</td><td className="px-4 py-4 text-center">{p.cashbackValue > 0 ? <div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={10} />}</div>{canCalculate && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div> : <div className="flex flex-col items-center"><span className="text-gray-300 text-xs">-</span>{canCalculate && (remainingStock === 0 || p.targetSalePrice) && <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap mt-1">Lucro: <span className={`${projectedFinalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{formatCurrency(projectedFinalProfit)}</span>{projectedFinalProfit > 0 && <span className="ml-1 text-xs bg-green-100 text-green-700 px-1 rounded">{margin}%</span>}</span>}</div>}</td><td className="px-4 py-4 text-center"><div className="flex flex-col items-center gap-1"><div className="flex items-center"><span className={`inline-block w-2 h-2 rounded-full mr-2 ${p.status === 'SOLD' ? 'bg-red-400' : 'bg-green-500'}`}></span><span className="text-xs font-medium text-gray-600">{p.status === 'SOLD' ? 'Esgotado' : 'Em Stock'}</span></div>{isNowInStock && hasAlerts && <button onClick={() => handleNotifySubscribers(p.publicProductId!, p.name, p.variant)} className="mt-1 text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-full flex items-center gap-1 w-full justify-center hover:bg-blue-200 transition-colors"><Bell size={12} /> Notificar ({productAlerts.length})</button>}</div></td><td className="px-4 py-4 text-right gap-1 flex justify-end">{p.status !== 'SOLD' && <button onClick={() => openSaleModal(p)} className="bg-green-600 text-white p-1.5 rounded" title="Registar Venda"><DollarSign size={16} /></button>}<button onClick={() => handleEdit(p)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="Editar"><Edit2 size={16} /></button><button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Apagar"><Trash2 size={16} /></button></td></tr>})}</tbody>
             </table></div></div></>}
         {activeTab === 'orders' && (
           <div className="space-y-6 animate-fade-in">
@@ -1288,18 +1408,60 @@ const payload: any = { name: formData.name, category: formData.category, publicP
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{
 PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div></div>
       
-      {/* NEW: IMAGE URL FIELD FOR NEW PRODUCTS */}
+      {/* GALERIA DE IMAGENS E DESCRIÇÃO */}
       {!formData.publicProductId && (
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Imagem do Produto (Obrigatório para Novos)</h4>
-              <input 
-                  type="url" 
-                  placeholder="https://i.imgur.com/exemplo.jpg" 
-                  className="w-full p-3 border border-gray-300 rounded-lg text-sm" 
-                  value={formData.imageUrl} 
-                  onChange={e => setFormData({...formData, imageUrl: e.target.value})} 
-              />
-              <p className="text-[10px] text-gray-500 mt-1">Cole aqui o link direto da imagem (ex: Imgur, Google Photos link público).</p>
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+              <div>
+                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><AlignLeft size={16} /> Descrição Completa</h4>
+                  <textarea 
+                      rows={4}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-sm"
+                      placeholder="Descreva o produto com detalhes..."
+                      value={formData.description}
+                      onChange={e => setFormData({...formData, description: e.target.value})}
+                  />
+              </div>
+
+              <div>
+                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>
+                  
+                  {/* Lista de Imagens */}
+                  {formData.images.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                          {formData.images.map((img, idx) => (
+                              <div key={idx} className="relative group w-20 h-20 bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                  <img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain" />
+                                  <button 
+                                      type="button" 
+                                      onClick={() => handleRemoveImage(idx)}
+                                      className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                      <Trash2 size={16} />
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+
+                  {/* Input para adicionar nova imagem */}
+                  <div className="flex gap-2">
+                      <input 
+                          type="url" 
+                          placeholder="https://i.imgur.com/exemplo.jpg" 
+                          className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" 
+                          value={formData.newImageUrl} 
+                          onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
+                      />
+                      <button 
+                          type="button" 
+                          onClick={handleAddImage}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors"
+                      >
+                          Adicionar
+                      </button>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">Cole o link direto da imagem e clique em "Adicionar". Pode adicionar várias.</p>
+              </div>
           </div>
       )}
 
@@ -1326,7 +1488,20 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
       </div>
       <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><form onSubmit={(e) => { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="submit" className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">+</button></form>
       <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Venda (Alvo/Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div><div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm">Cashback / Reembolso</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div></div></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100">
+          <div>
+              <label className="block text-xs font-bold text-green-700 uppercase mb-1 bg-green-50 w-fit px-1 rounded">Preço Venda (Loja)</label>
+              <div className="relative">
+                  <span className="absolute left-3 top-3 text-green-600 font-bold">€</span>
+                  <input type="number" step="0.01" className="w-full pl-8 p-3 border-2 border-green-400 rounded-lg font-bold text-green-800" value={formData.salePrice} onChange={e => setFormData({...formData, salePrice: e.target.value})} placeholder="Valor Final" />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Este é o preço que aparecerá no site.</p>
+          </div>
+          <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label>
+              <div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div>
+          </div>
+      </div><div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm">Cashback / Reembolso</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div></div></div>
       {editingId && <div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => <tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>)}</tbody></table></div> : <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>}</div>}
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
       
