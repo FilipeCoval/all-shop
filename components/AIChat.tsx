@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, Loader2 } from 'lucide-react';
-import { ChatMessage } from '../types';
+import { ChatMessage, Product } from '../types';
 import { sendMessageToGemini } from '../services/geminiService';
 import { STORE_NAME } from '../constants';
 
-const AIChat: React.FC = () => {
+interface AIChatProps {
+  products: Product[];
+}
+
+const AIChat: React.FC<AIChatProps> = ({ products }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -42,7 +46,8 @@ const AIChat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const responseText = await sendMessageToGemini(userMsg.text);
+      // Passamos 'products' (que vem do Firebase no App.tsx) para o serviço
+      const responseText = await sendMessageToGemini(userMsg.text, products);
       
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
