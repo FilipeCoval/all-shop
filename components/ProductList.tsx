@@ -82,10 +82,21 @@ const ProductList: React.FC<ProductListProps> = ({
       // Prioridade máxima para "Em Breve"
       if (product.comingSoon) return { text: 'EM BREVE', color: 'bg-purple-600', icon: <CalendarClock size={10} /> };
       
-      if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
-      if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
-      if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
-      if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
+      // Etiquetas Dinâmicas (Controladas pelo Dashboard)
+      if (product.badges) {
+          if (product.badges.includes('NOVIDADE')) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
+          if (product.badges.includes('MAIS VENDIDO')) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
+          if (product.badges.includes('PROMOÇÃO')) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
+          if (product.badges.includes('ESSENCIAL')) return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
+      }
+
+      // Fallback para lógica antiga caso não haja etiquetas definidas
+      if (!product.badges || product.badges.length === 0) {
+         if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
+         if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
+         if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
+         if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
+      }
       return null;
   };
 
