@@ -2,6 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
+import 'firebase/compat/storage';
 
 // Configuração do Firebase da Allshop Store
 // Estas chaves são públicas e necessárias para o browser comunicar com o Firebase.
@@ -21,8 +22,10 @@ const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : fir
 // Inicializar Serviços
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 // Forçar idioma para Português (ajuda nos emails de recuperação e verificação)
 auth.languageCode = 'pt';
 
-export { auth, db };
+// Exportar 'firebase' para acesso a FieldValue.increment/arrayUnion sem conflitos de importação
+export { auth, db, storage, firebase };
