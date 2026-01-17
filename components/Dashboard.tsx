@@ -1158,16 +1158,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     }
   };
 
-  // --- FUNÇÃO PARA IMPORTAR PRODUTOS ---
+  // --- FUNÇÃO PARA IMPORTAR PRODUTOS (MODO BULLETPROOF) ---
   const handleImportProducts = async () => {
-    if(!window.confirm("Isto irá importar todos os produtos do ficheiro 'constants.ts' para o Firebase. Quer continuar?")) return;
+    if(!window.confirm("Isto irá importar e CORRIGIR todos os produtos usando o ficheiro 'constants.ts'. Dados em falta (imagens, descrições) serão restaurados. Quer continuar?")) return;
     setIsImporting(true);
 
     try {
         const batch = db.batch();
-        let count = 0;
+        let countCreated = 0;
+        let countUpdated = 0;
 
-        // MUDANÇA: Usa INITIAL_PRODUCTS para a importação inicial
+        // MUDANÇA: Usa INITIAL_PRODUCTS para a importação e correção
         for (const prod of INITIAL_PRODUCTS) {
             // Verificar se já existe algum lote com este publicProductId na coleção de inventário
             const existingInventory = await db.collection('products_inventory').where('publicProductId', '==', prod.id).limit(1).get();
@@ -1177,9 +1178,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             if (prod.image && !finalImages.includes(prod.image)) {
                 finalImages.unshift(prod.image);
             }
+            // Fallback: Se não houver imagens nenhumas, usa placeholder
+            if (finalImages.length === 0) {
+                finalImages = ['https://via.placeholder.com/300?text=Sem+Imagem'];
+            }
 
-            // 1. Criar no Inventário (Backoffice)
+            // --- LÓGICA DE INVENTÁRIO (PRIVADO) ---
             if (existingInventory.empty) {
+                // CRIAR SE NÃO EXISTE
                 if (prod.variants && prod.variants.length > 0) {
                     for (const v of prod.variants) {
                          const newDocRef = db.collection('products_inventory').doc();
@@ -1200,7 +1206,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                              units: [],
                              status: 'IN_STOCK',
                              description: prod.description,
-                             images: finalImages, // Use a lista completa com a imagem principal
+                             images: finalImages,
                              features: prod.features || [],
                              comingSoon: prod.comingSoon || false
                          });
@@ -1224,23 +1230,38 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         units: [],
                         status: 'IN_STOCK',
                         description: prod.description,
-                        images: finalImages, // Use a lista completa com a imagem principal
+                        images: finalImages,
                         features: prod.features || [],
                         comingSoon: prod.comingSoon || false
                     });
                 }
+                countCreated++;
+            } else {
+                // ATUALIZAR SE JÁ EXISTE (CORREÇÃO DE DADOS)
+                existingInventory.forEach(doc => {
+                    // Atualizamos apenas campos estáticos (descrição, imagens, features)
+                    // NÃO tocamos em stock, vendas ou preços de compra.
+                    const updateData: any = {
+                        description: prod.description,
+                        images: finalImages,
+                        features: prod.features || [],
+                        // Opcional: Atualizar nome e categoria para garantir consistência
+                        name: prod.name,
+                        category: prod.category
+                    };
+                    batch.update(doc.ref, updateData);
+                });
+                countUpdated++;
             }
 
-            // 2. Criar na Loja Pública (Frontend)
+            // --- LÓGICA DE LOJA PÚBLICA (FRONTEND) ---
             // Usamos o ID numérico como chave do documento para ser fácil de encontrar
             const publicDocRef = db.collection('products_public').doc(prod.id.toString());
             batch.set(publicDocRef, prod, { merge: true }); // Merge para não apagar dados se já existirem
-            
-            count++;
         }
 
         await batch.commit();
-        alert(`Sucesso! ${count} produtos importados e sincronizados com a loja pública.`);
+        alert(`Sucesso!\n${countCreated} novos produtos criados.\n${countUpdated} produtos existentes corrigidos/atualizados.`);
 
     } catch (e) {
         console.error("Erro na importação:", e);
@@ -1518,7 +1539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {countInStock}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {countSold}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
             <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
-            <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar Produtos Estáticos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
+            <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar e Corrigir Produtos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
             <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
             <div className="overflow-x-auto"><table className="w-full text-left border-collapse whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-3">Produto</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3 text-center">Stock</th><th className="px-4 py-3 text-right">Compra</th><th className="px-4 py-3 text-right">Venda (Loja)</th><th className="px-4 py-3 text-center">Cashback / Lucro</th><th className="px-4 py-3 text-center">Estado</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
             <tbody className="divide-y divide-gray-100 text-sm">{filteredProducts.map(p => { const profitUnit = (p.targetSalePrice || 0) - p.purchasePrice; const stockPercent = p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0; const totalCost = p.quantityBought * p.purchasePrice; let realizedRevenue = 0; let totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { realizedRevenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else realizedRevenue = p.quantitySold * p.salePrice; const remainingStock = p.quantityBought - p.quantitySold; const potentialRevenue = remainingStock * (p.targetSalePrice || 0); const canCalculate = p.targetSalePrice || (p.quantityBought > 0 && remainingStock === 0); const totalProjectedRevenue = realizedRevenue + potentialRevenue; const projectedFinalProfit = totalProjectedRevenue - totalCost - totalShippingPaid + p.cashbackValue; const margin = projectedFinalProfit > 0 && totalProjectedRevenue > 0 ? ((projectedFinalProfit / totalProjectedRevenue) * 100).toFixed(0) : 0; const productAlerts = stockAlerts.filter(a => a.productId === p.publicProductId && (p.variant ? a.variantName === p.variant : !a.variantName)); const hasAlerts = productAlerts.length > 0; const isNowInStock = p.status !== 'SOLD';
