@@ -19,7 +19,7 @@ import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
-import { usePublicProducts } from './hooks/usePublicProducts'; // NEW: Hook para ler produtos
+import { usePublicProducts } from './hooks/usePublicProducts';
 import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
@@ -146,11 +146,8 @@ const App: React.FC = () => {
                     console.log(`Migradas ${guestOrdersSnapshot.size} encomendas de convidado para o utilizador ${firebaseUser.uid}.`);
                 }
             } catch (migrationError: any) {
-                // ERRO DE PERMISSÃO MELHORADO: Deteta se as regras do Firestore estão a bloquear
                 if (migrationError.code === 'permission-denied') {
-                    console.warn(
-                        'ALERTA DE PERMISSÕES: A migração de encomendas falhou. Verifique se as regras do Firestore (`firestore.rules`) estão publicadas e permitem a leitura da coleção `orders` por email. A regra deve ser semelhante a: `allow list: if ... || (isSignedIn() && request.query.where.get("shippingInfo.email") == request.auth.token.email);`'
-                    );
+                    console.warn('ALERTA DE PERMISSÕES: A migração de encomendas falhou.');
                 } else {
                     console.error("Erro na migração de encomendas:", migrationError);
                 }
