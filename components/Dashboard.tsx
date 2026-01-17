@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
 import { PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
-import { db } from '../services/firebaseConfig';
+import { db, storage } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 // FIX: Import firebase to resolve UMD global errors for FieldValue
 import firebase from 'firebase/compat/app';
@@ -251,6 +251,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   const [stockAlerts, setStockAlerts] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [notificationModalData, setNotificationModalData] = useState<{
     productName: string;
@@ -720,6 +722,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               images: [...prev.images, prev.newImageUrl.trim()], 
               newImageUrl: '' 
           }));
+      }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Validar tamanho (ex: 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+          alert("A imagem é muito grande. Máximo 5MB.");
+          return;
+      }
+
+      setIsUploading(true);
+      try {
+          const storageRef = storage.ref();
+          const fileExtension = file.name.split('.').pop();
+          // Generate a unique file name to prevent overwrites
+          const fileName = `products/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
+          const fileRef = storageRef.child(fileName);
+          
+          await fileRef.put(file);
+          const url = await fileRef.getDownloadURL();
+          
+          setFormData(prev => ({
+              ...prev,
+              images: [...prev.images, url]
+          }));
+      } catch (error) {
+          console.error("Upload error:", error);
+          alert("Erro ao fazer upload da imagem. Verifique a consola ou permissões.");
+      } finally {
+          setIsUploading(false);
+          // Reset input so same file can be selected again if needed
+          if (fileInputRef.current) fileInputRef.current.value = '';
       }
   };
 
@@ -1550,13 +1587,31 @@ PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p
               )}
 
               <div className="flex gap-2">
-                  <input 
-                      type="url" 
-                      placeholder="Cole o link da imagem (ex: imgur.com/...)" 
-                      className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" 
-                      value={formData.newImageUrl} 
-                      onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
-                  />
+                  <div className="relative flex-1">
+                      <input 
+                          type="url" 
+                          placeholder="Cole o link da imagem (ex: imgur.com/...)" 
+                          className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" 
+                          value={formData.newImageUrl} 
+                          onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
+                      />
+                      <button 
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading}
+                          className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors"
+                          title="Upload do PC"
+                      >
+                          {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      </button>
+                      <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={handleFileChange}
+                      />
+                  </div>
                   <button 
                       type="button" 
                       onClick={handleAddImage}
