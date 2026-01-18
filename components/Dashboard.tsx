@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -251,7 +251,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [publicProductsList, setPublicProductsList] = useState<Product[]>([]);
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking'>('search');
+  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking' | 'verify_product'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
   
@@ -278,6 +278,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
   const [manualUnitSelect, setManualUnitSelect] = useState('');
   const [orderMismatchWarning, setOrderMismatchWarning] = useState<string | null>(null);
+  
+  // NEW: Validation State
+  const [securityCheckPassed, setSecurityCheckPassed] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
   
   // --- STATE FOR MANUAL ORDER MODAL ---
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
@@ -339,21 +343,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           const order = allOrders.find(o => o.id === linkedOrderId);
           setSelectedOrderForSaleDetails(order || null);
           
-          // --- VALIDAÇÃO DE SEGURANÇA ---
-          // Verificar se o produto que estamos a vender existe na encomenda selecionada
           if (selectedProductForSale && order) {
               const safeItems = getSafeItems(order.items);
               const isCompatible = safeItems.some(item => {
-                  // Se for string (antigo), não conseguimos validar com certeza, então assumimos que sim ou damos aviso
-                  if (typeof item === 'string') return false; // Por segurança, formato antigo falha na validação rigorosa
-                  
-                  // Verifica ID
+                  if (typeof item === 'string') return false; 
                   const idMatch = item.productId === selectedProductForSale.publicProductId;
-                  
-                  // Verifica Variante (se existir)
-                  const variantMatch = !selectedProductForSale.variant || 
-                                      (item.selectedVariant === selectedProductForSale.variant);
-                                      
+                  const variantMatch = !selectedProductForSale.variant || (item.selectedVariant === selectedProductForSale.variant);
                   return idMatch && variantMatch;
               });
 
@@ -361,6 +356,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!");
               } else {
                   setOrderMismatchWarning(null);
+              }
+
+              // AUTO-FILL PREÇOS DO PEDIDO
+              if (order) {
+                  const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined;
+                  // Se não encontrou item compatível, não preenche nada para não baralhar
+                  if (item) {
+                      setSaleForm(prev => ({
+                          ...prev,
+                          unitPrice: item.price.toString(),
+                          // Lógica simples: se for o único item, assume o custo de envio do pedido
+                          shippingCost: (order.total - (item.price * item.quantity)).toFixed(2)
+                      }));
+                  }
               }
           }
       } else {
@@ -493,6 +502,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         return;
     }
     setSelectedUnitsForSale(prev => [...prev, code]);
+    
+    // Auto-verify if scanned
+    setSecurityCheckPassed(true);
+  };
+  
+  const handleVerifyProduct = (code: string) => {
+      if (!selectedProductForSale) return;
+      
+      const cleanCode = code.trim().toUpperCase();
+      
+      // Verifica se o código é o ID do produto ou se é um S/N válido nas unidades deste produto
+      const isProductId = cleanCode === selectedProductForSale.publicProductId?.toString();
+      const isUnitId = selectedProductForSale.units?.some(u => u.id.toUpperCase() === cleanCode);
+      
+      if (isProductId || isUnitId) {
+          setSecurityCheckPassed(true);
+          setVerificationCode(code);
+      } else {
+          alert(`Código ${code} NÃO corresponde a este produto! Verifique se pegou na caixa correta.`);
+          setSecurityCheckPassed(false);
+      }
   };
 
   const handleNotifySubscribers = (productId: number, productName: string, variantName?: string) => {
@@ -926,7 +956,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     setSelectedProductForSale(product); 
     setSaleForm({ 
         quantity: '1', 
-        unitPrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', 
+        unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', 
         shippingCost: '', 
         date: new Date().toISOString().split('T')[0], 
         notes: '', 
@@ -937,6 +967,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     setLinkedOrderId('');
     setSelectedOrderForSaleDetails(null);
     setOrderMismatchWarning(null);
+    setSecurityCheckPassed(false);
+    setVerificationCode('');
     setIsSaleModalOpen(true); 
   };
   
@@ -949,6 +981,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
     if (orderMismatchWarning) {
         alert("SEGURANÇA: Não pode confirmar esta venda porque o produto selecionado não corresponde aos itens da encomenda.");
+        return;
+    }
+    
+    // NOVO: Bloqueio de Segurança por Scanner
+    if (!securityCheckPassed) {
+        alert("SEGURANÇA: Por favor, faça a verificação do produto (Scan ou Código) antes de libertar a venda.");
         return;
     }
 
@@ -985,8 +1023,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         id: `ORDER-${linkedOrderId}-${selectedProductForSale.publicProductId}`,
         date: new Date().toISOString(),
         quantity: qty,
-        unitPrice: orderItem.price,
-        shippingCost: 0,
+        unitPrice: Number(saleForm.unitPrice) || orderItem.price, // Usa o valor manual se definido
+        shippingCost: Number(saleForm.shippingCost) || 0, // Usa o valor manual se definido
         notes: `Venda Online - Pedido ${linkedOrderId}`
     };
 
@@ -1731,7 +1769,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
       {editingId && <div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => <tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>)}</tbody></table></div> : <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>}</div>}
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
       
-      {/* Sale Modal - Updated UI */}
+      {/* Sale Modal - Updated UI with "Sub-Menu" for Verification */}
       {isSaleModalOpen && selectedProductForSale && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1739,7 +1777,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                <h3 className="font-bold text-gray-900 flex items-center gap-2"><DollarSign size={20} className="text-green-600"/> Registar Venda / Baixa</h3>
                <button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
              </div>
-             <form onSubmit={handleSaleSubmit} className="p-6 space-y-4">
+             <form onSubmit={handleSaleSubmit} className="p-6 space-y-6">
                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                  <p className="text-xs font-bold text-gray-500 uppercase">Produto</p>
                  <p className="font-bold text-gray-900">{selectedProductForSale.name}</p>
@@ -1747,7 +1785,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                </div>
                
                <div>
-                 <label className="block text-sm font-bold text-gray-700 mb-1">Associar a Encomenda Online (Obrigatório)</label>
+                 <label className="block text-sm font-bold text-gray-700 mb-1">Passo 1: Encomenda Online (Obrigatório)</label>
                  <select 
                     required 
                     value={linkedOrderId} 
@@ -1773,18 +1811,77 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                    </div>
                )}
 
-               {selectedOrderForSaleDetails && (
-                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs">
-                    <p className="font-bold text-blue-900">Itens da Encomenda:</p>
-                    <ul className="list-disc pl-4 mt-1 text-blue-800">
-                        {getSafeItems(selectedOrderForSaleDetails.items).map((item, idx) => {
-                             const iName = typeof item === 'string' ? item : `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`;
-                             return <li key={idx} className={orderMismatchWarning && iName.includes(selectedProductForSale.name) ? 'font-bold bg-yellow-200' : ''}>{iName}</li>;
-                        })}
-                    </ul>
-                 </div>
+               {/* SUB-MENU DE CONFERÊNCIA (Expandido após selecionar encomenda) */}
+               {linkedOrderId && !orderMismatchWarning && (
+                   <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4 animate-fade-in-down space-y-4">
+                       <h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 border-b border-blue-200 pb-2">
+                           <FileText size={14}/> Conferência de Valores
+                       </h4>
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="block text-xs font-bold text-gray-600 mb-1">Preço Venda (Real)</label>
+                               <input 
+                                   type="number" 
+                                   step="0.01" 
+                                   className="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold text-gray-800" 
+                                   value={saleForm.unitPrice} 
+                                   onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})}
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-xs font-bold text-gray-600 mb-1">Portes Envio (Cliente)</label>
+                               <input 
+                                   type="number" 
+                                   step="0.01" 
+                                   className="w-full p-2 border border-gray-300 rounded bg-white text-sm text-gray-800" 
+                                   value={saleForm.shippingCost} 
+                                   onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})}
+                               />
+                           </div>
+                       </div>
+
+                       <div className="border-t border-blue-200 pt-4">
+                           <h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 mb-3">
+                               <ShieldCheck size={14}/> Verificação de Segurança
+                           </h4>
+                           
+                           <div className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${securityCheckPassed ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-200'}`}>
+                               {securityCheckPassed ? (
+                                   <>
+                                       <CheckCircle size={32} className="text-green-600"/>
+                                       <div className="text-center">
+                                           <p className="font-bold text-green-800">Produto Confirmado!</p>
+                                           <p className="text-xs text-green-700">Pode finalizar a venda.</p>
+                                       </div>
+                                   </>
+                               ) : (
+                                   <>
+                                       <div className="w-full flex gap-2">
+                                           <button type="button" onClick={() => { setScannerMode('verify_product'); setIsScannerOpen(true); }} className="bg-gray-800 text-white p-2 rounded-lg hover:bg-black transition-colors"><Camera size={20}/></button>
+                                           <input 
+                                               type="text" 
+                                               placeholder="Escanear produto para libertar..." 
+                                               className="flex-1 p-2 border border-gray-300 rounded-lg text-sm text-center font-mono uppercase focus:ring-2 focus:ring-red-500 outline-none"
+                                               onKeyDown={(e) => {
+                                                   if (e.key === 'Enter') {
+                                                       e.preventDefault();
+                                                       handleVerifyProduct((e.target as HTMLInputElement).value);
+                                                       (e.target as HTMLInputElement).value = '';
+                                                   }
+                                               }}
+                                           />
+                                       </div>
+                                       <p className="text-xs text-red-600 font-bold flex items-center gap-1">
+                                           <Lock size={12}/> Venda Bloqueada: Confirme o produto físico.
+                                       </p>
+                                   </>
+                               )}
+                           </div>
+                       </div>
+                   </div>
                )}
 
+               {/* UNIDADES INDIVIDUAIS (Se aplicável) */}
                {selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (
                    <div>
                      <label className="block text-sm font-bold text-gray-700 mb-2">Selecionar Unidades (S/N) a vender</label>
@@ -1816,11 +1913,11 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                
                <button 
                    type="submit" 
-                   disabled={!!orderMismatchWarning}
-                   className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                   disabled={!!orderMismatchWarning || !securityCheckPassed}
+                   className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning || !securityCheckPassed ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                >
-                   {orderMismatchWarning ? <XCircle size={18}/> : <CheckCircle size={18}/>} 
-                   {orderMismatchWarning ? 'Bloqueado por Segurança' : 'Confirmar Venda'}
+                   {!securityCheckPassed ? <Lock size={18}/> : <CheckCircle size={18}/>} 
+                   {orderMismatchWarning ? 'Bloqueado: Produto Errado' : !securityCheckPassed ? 'Bloqueado: Verificação Pendente' : 'Confirmar Venda'}
                </button>
              </form>
           </div>
@@ -1956,6 +2053,9 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                       setIsScannerOpen(false);
                   } else if (scannerMode === 'search') {
                       setSearchTerm(code);
+                      setIsScannerOpen(false);
+                  } else if (scannerMode === 'verify_product') {
+                      handleVerifyProduct(code);
                       setIsScannerOpen(false);
                   }
               }} 
