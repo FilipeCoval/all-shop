@@ -85,25 +85,29 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
             // Adicionar formatos específicos de S/N (Code 128 é o mais comum para S/Ns densos)
             const formats = [
                 BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+                BarcodeFormat.CODE_93, BarcodeFormat.CODABAR,
                 BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, 
                 BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, 
-                BarcodeFormat.QR_CODE,
-                BarcodeFormat.DATA_MATRIX
+                BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+                BarcodeFormat.ITF
             ];
             hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
             hints.set(3, true);    // 3 = DecodeHintType.TRY_HARDER (Tenta mais devagar, mas com mais precisão)
 
-            codeReaderRef.current = new BrowserMultiFormatReader(hints, 300); // Aumentar delay para 300ms para permitir foco
+            codeReaderRef.current = new BrowserMultiFormatReader(hints, 500); // Delay aumentado para 500ms para estabilizar foco
 
             try {
                 // Tentar obter a resolução mais alta possível (Full HD) para ler códigos densos
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                const constraints = { 
                     video: { 
                         facingMode: 'environment',
                         width: { ideal: 1920 },
-                        height: { ideal: 1080 }
+                        height: { ideal: 1080 },
+                        focusMode: 'continuous' // Tenta forçar foco continuo
                     } 
-                });
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints as any);
                 streamRef.current = stream;
                 
                 if (videoRef.current) {
@@ -166,8 +170,10 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                 <div className="relative aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
                     <video ref={videoRef} className="w-full h-full object-cover scale-110" muted playsInline />
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-[90%] max-w-[300px] h-[100px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.6)]">
+                        {/* Caixa de mira reduzida para 80px para forçar precisão no código de barras correto */}
+                        <div className="w-[90%] max-w-[300px] h-[80px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)]">
                             <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>
+                            <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">Aponte para o S/N</div>
                         </div>
                     </div>
                     {error && <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-8 text-center z-50"><AlertCircle size={40} className="text-red-500 mb-4" /><p className="text-sm font-bold">{error}</p><button onClick={onClose} className="mt-6 bg-white/10 px-6 py-2 rounded-full font-bold text-xs">Voltar</button></div>}
@@ -1750,7 +1756,36 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
           <p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p>
       </div>
 
-      <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><form onSubmit={(e) => { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="submit" className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300">+</button></form>
+      <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div>
+      {/* CORREÇÃO DO FORMULÁRIO ANINHADO: Substituído <form> por <div> */}
+      <div className="flex gap-2 items-center text-xs text-gray-500 mb-4">
+          <span className="font-bold">OU</span>
+          <input 
+              value={manualUnitCode} 
+              onChange={e => setManualUnitCode(e.target.value)} 
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim());
+                      setManualUnitCode('');
+                  }
+              }}
+              type="text" 
+              placeholder="Inserir código manualmente" 
+              className="flex-1 p-2 border border-gray-300 rounded-lg" 
+          />
+          <button 
+              type="button" 
+              onClick={() => {
+                  if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim());
+                  setManualUnitCode('');
+              }}
+              className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"
+          >
+              <Plus size={16} />
+          </button>
+      </div>
+      
       <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100">
           <div>
