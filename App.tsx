@@ -56,6 +56,24 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
+  // --- REDIRECT LOGIC FOR SHARED LINKS ---
+  useEffect(() => {
+    // Se um humano clicar num link partilhado (ex: /product/17), o servidor devolve o index.html.
+    // Este efeito deteta esse caminho e redireciona para a rota hash correta (/#product/17)
+    // para que a App carregue o produto em vez da Home.
+    const path = window.location.pathname;
+    if (path.startsWith('/product/')) {
+        const id = path.split('/')[2];
+        if (id) {
+            // Limpa a URL visualmente para não ficar confuso
+            window.history.replaceState(null, '', '/');
+            // Navega para o produto
+            window.location.hash = `#product/${id}`;
+            setRoute(`#product/${id}`);
+        }
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
@@ -66,7 +84,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const originalTitle = document.title;
     const handleBlur = () => { document.title = STORE_NAME + " - Volte aqui! 🛒"; };
-    const handleFocus = () => { document.title = originalTitle; };
+    const handleFocus = () => { 
+        // Se estivermos num produto, o ProductDetails vai gerir o título
+        if (!window.location.hash.startsWith('#product/')) {
+            document.title = originalTitle; 
+        }
+    };
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -333,17 +356,13 @@ const App: React.FC = () => {
 
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
-          // A notificação pode ser rápida, mas a gravação na DB é mais crítica.
-          // Primeiro, tentamos gravar a encomenda.
           await db.collection("orders").doc(newOrder.id).set(newOrder);
           
-          // Se a gravação for bem-sucedida, atualizamos o estado local e notificamos.
           setOrders(prev => [newOrder, ...prev]);
           setCartItems([]);
           
           notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
           
-          // Lógica para atualizar o total gasto do utilizador (se logado)
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
@@ -360,11 +379,11 @@ const App: React.FC = () => {
               transaction.update(userRef, { totalSpent: newTotalSpent, tier: newTier });
             });
           }
-          return true; // Sucesso
+          return true;
       } catch (e) {
           console.error("Erro CRÍTICO no checkout:", e);
           alert("Ocorreu um erro ao guardar a sua encomenda. Por favor, tente novamente ou contacte o suporte se o erro persistir.");
-          return false; // Falha
+          return false;
       }
   };
 
