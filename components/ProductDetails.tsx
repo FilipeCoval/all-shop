@@ -6,7 +6,7 @@ import {
     Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
-import { STORE_NAME } from '../constants';
+import { STORE_NAME, PUBLIC_URL } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
@@ -44,6 +44,14 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     setAlertStatus('idle');
     setAlertEmail(currentUser?.email || '');
     window.scrollTo(0, 0);
+
+    // --- SEO & TAB TITLE UPDATE ---
+    document.title = `${product.name} | ${STORE_NAME}`;
+    
+    // Reset title on unmount
+    return () => {
+        document.title = STORE_NAME;
+    };
   }, [product, currentUser]);
 
   const uniqueImages = useMemo(() => {
@@ -80,32 +88,39 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
       else onAddToCart(product);
   };
 
-  const handleBack = (e: React.MouseEvent) => {
-    e.preventDefault();
-    window.location.hash = '/';
-  };
-
   const handleShare = async () => {
-    const shareUrl = window.location.href;
-    const shareData = {
-      title: `${product.name} - ${STORE_NAME}`,
-      text: `Dá uma olhada nisto: ${product.name} por apenas ${currentPrice}€!`,
-      url: shareUrl,
+    // URL Híbrido: Tenta usar a API de OG para bots, mas o link final para humanos
+    // Se o produto for dos iniciais, o api/og vai gerar imagem bonita.
+    // Se for novo, vai mostrar imagem genérica, mas o link funciona.
+    const shareUrl = `${PUBLIC_URL}/product/${product.id}`; 
+    const hashUrl = `${PUBLIC_URL}/#product/${product.id}`;
+
+    // Dados para partilha nativa (Mobile)
+    const shareData: ShareData = {
+      title: `${product.name}`,
+      text: `Olha o que encontrei na ${STORE_NAME} por apenas ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}!`,
+      url: shareUrl, // Tenta usar o URL limpo primeiro
     };
+
     try {
-      if (navigator.share) {
+      // 2. Tentar Web Share API (Menu Nativo do Android/iOS)
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
         setShareFeedback('shared');
       } else {
-        await navigator.clipboard.writeText(shareUrl);
-        setShareFeedback('copied');
+        throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        await navigator.clipboard.writeText(shareUrl);
+      // 3. Fallback: Copiar link seguro (com Hash) para garantir que abre na app
+      try {
+        await navigator.clipboard.writeText(hashUrl);
         setShareFeedback('copied');
+      } catch (clipboardErr) {
+        console.warn("Share fallback failed", clipboardErr);
+        prompt("Copie o link:", hashUrl);
       }
     }
+
     setTimeout(() => setShareFeedback('idle'), 3000);
   };
 
@@ -131,7 +146,13 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
   return (
     <div className="container mx-auto px-4 py-8 animate-fade-in pb-32 md:pb-8">
-      <button onClick={handleBack} className="flex items-center gap-2 text-gray-500 hover:text-primary mb-8 font-medium transition-colors"><ArrowLeft size={20} /> Voltar à Loja</button>
+      <a 
+        href="#/" 
+        onClick={(e) => { e.preventDefault(); window.location.hash = '/'; }}
+        className="flex items-center gap-2 text-gray-500 hover:text-primary mb-8 font-medium transition-colors"
+      >
+        <ArrowLeft size={20} /> Voltar à Loja
+      </a>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div className="space-y-4">
           <div className="aspect-square bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative group">
@@ -158,8 +179,18 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                     <span className="text-sm font-bold text-primary tracking-wider uppercase">{product.category}</span>
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4 leading-tight">{product.name}</h1>
                 </div>
-                <button onClick={handleShare} className="p-3 rounded-full bg-gray-50 text-gray-400 hover:text-primary transition-all">
-                    {shareFeedback === 'idle' ? <Share2 size={24} /> : shareFeedback === 'copied' ? <Copy size={24} /> : <Check size={24} />}
+                <button 
+                    onClick={handleShare} 
+                    className={`p-3 rounded-full transition-all flex items-center justify-center
+                        ${shareFeedback === 'idle' ? 'bg-gray-50 text-gray-400 hover:text-primary' : 
+                          shareFeedback === 'copied' ? 'bg-green-100 text-green-600' : 
+                          'bg-blue-100 text-blue-600'}
+                    `}
+                    title={shareFeedback === 'copied' ? 'Link Copiado' : 'Partilhar'}
+                >
+                    {shareFeedback === 'idle' && <Share2 size={24} />}
+                    {shareFeedback === 'copied' && <Check size={24} />}
+                    {shareFeedback === 'shared' && <Check size={24} />}
                 </button>
            </div>
 
@@ -289,7 +320,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
               <h2 className="text-2xl font-bold text-gray-900 mb-8">Outras opções para si</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   {relatedProducts.map(rel => (
-                      <div key={rel.id} onClick={() => window.location.hash = `product/${rel.id}`} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
+                      <a href={`#product/${rel.id}`} key={rel.id} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
                           <div className="aspect-square bg-gray-100 relative overflow-hidden">
                               <img src={rel.image} alt={rel.name} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                           </div>
@@ -297,7 +328,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                               <h3 className="font-bold text-gray-900 text-sm line-clamp-2 group-hover:text-primary transition-colors">{rel.name}</h3>
                               <p className="text-primary font-bold mt-2">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(rel.price)}</p>
                           </div>
-                      </div>
+                      </a>
                   ))}
               </div>
           </div>
