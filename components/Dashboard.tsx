@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -82,19 +82,27 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
             if (!videoRef.current) return;
             
             const hints = new Map();
+            // Adicionar formatos específicos de S/N (Code 128 é o mais comum para S/Ns densos)
             const formats = [
+                BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
                 BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, 
                 BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, 
-                BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
                 BarcodeFormat.QR_CODE,
+                BarcodeFormat.DATA_MATRIX
             ];
             hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
+            hints.set(3, true);    // 3 = DecodeHintType.TRY_HARDER (Tenta mais devagar, mas com mais precisão)
 
-            codeReaderRef.current = new BrowserMultiFormatReader(hints, 100);
+            codeReaderRef.current = new BrowserMultiFormatReader(hints, 300); // Aumentar delay para 300ms para permitir foco
 
             try {
+                // Tentar obter a resolução mais alta possível (Full HD) para ler códigos densos
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    } 
                 });
                 streamRef.current = stream;
                 
@@ -103,14 +111,11 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                         if (result) {
                             onCodeSubmit(result.getText().trim().toUpperCase());
                         }
-                        if (err && !(err.name === 'NotFoundException')) {
-                            console.debug("Scan error:", err.message);
-                        }
                     });
                 }
             } catch (err) {
                 console.error("Scanner init error:", err);
-                setError("Câmara indisponível ou permissão negada.");
+                setError("Câmara indisponível. Verifique as permissões.");
             }
         };
 
@@ -272,6 +277,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [selectedOrderForSaleDetails, setSelectedOrderForSaleDetails] = useState<Order | null>(null);
   const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
   const [manualUnitSelect, setManualUnitSelect] = useState('');
+  const [orderMismatchWarning, setOrderMismatchWarning] = useState<string | null>(null);
   
   // --- STATE FOR MANUAL ORDER MODAL ---
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
@@ -332,10 +338,36 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (linkedOrderId) {
           const order = allOrders.find(o => o.id === linkedOrderId);
           setSelectedOrderForSaleDetails(order || null);
+          
+          // --- VALIDAÇÃO DE SEGURANÇA ---
+          // Verificar se o produto que estamos a vender existe na encomenda selecionada
+          if (selectedProductForSale && order) {
+              const safeItems = getSafeItems(order.items);
+              const isCompatible = safeItems.some(item => {
+                  // Se for string (antigo), não conseguimos validar com certeza, então assumimos que sim ou damos aviso
+                  if (typeof item === 'string') return false; // Por segurança, formato antigo falha na validação rigorosa
+                  
+                  // Verifica ID
+                  const idMatch = item.productId === selectedProductForSale.publicProductId;
+                  
+                  // Verifica Variante (se existir)
+                  const variantMatch = !selectedProductForSale.variant || 
+                                      (item.selectedVariant === selectedProductForSale.variant);
+                                      
+                  return idMatch && variantMatch;
+              });
+
+              if (!isCompatible) {
+                  setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!");
+              } else {
+                  setOrderMismatchWarning(null);
+              }
+          }
       } else {
           setSelectedOrderForSaleDetails(null);
+          setOrderMismatchWarning(null);
       }
-  }, [linkedOrderId, allOrders]);
+  }, [linkedOrderId, allOrders, selectedProductForSale]);
 
 
   useEffect(() => {
@@ -904,6 +936,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     setSelectedUnitsForSale([]);
     setLinkedOrderId('');
     setSelectedOrderForSaleDetails(null);
+    setOrderMismatchWarning(null);
     setIsSaleModalOpen(true); 
   };
   
@@ -911,6 +944,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     e.preventDefault();
     if (!selectedProductForSale || !linkedOrderId) {
         alert("É obrigatório associar esta baixa de stock a uma encomenda.");
+        return;
+    }
+
+    if (orderMismatchWarning) {
+        alert("SEGURANÇA: Não pode confirmar esta venda porque o produto selecionado não corresponde aos itens da encomenda.");
         return;
     }
 
@@ -1693,7 +1731,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
       {editingId && <div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => <tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>)}</tbody></table></div> : <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>}</div>}
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
       
-      {/* Sale Modal */}
+      {/* Sale Modal - Updated UI */}
       {isSaleModalOpen && selectedProductForSale && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1714,7 +1752,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                     required 
                     value={linkedOrderId} 
                     onChange={(e) => setLinkedOrderId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                    className={`w-full p-2 border rounded-lg focus:ring-2 outline-none transition-colors ${orderMismatchWarning ? 'border-red-300 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-green-500'}`}
                  >
                    <option value="">-- Selecione uma encomenda --</option>
                    {pendingOrders.map(o => (
@@ -1725,13 +1763,23 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                  </select>
                </div>
 
+               {orderMismatchWarning && (
+                   <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded animate-shake flex items-start gap-2">
+                       <ShieldAlert size={20} className="shrink-0 mt-0.5" />
+                       <div>
+                           <p className="font-bold text-sm">PRODUTO ERRADO!</p>
+                           <p className="text-xs">{orderMismatchWarning}</p>
+                       </div>
+                   </div>
+               )}
+
                {selectedOrderForSaleDetails && (
                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs">
                     <p className="font-bold text-blue-900">Itens da Encomenda:</p>
                     <ul className="list-disc pl-4 mt-1 text-blue-800">
                         {getSafeItems(selectedOrderForSaleDetails.items).map((item, idx) => {
                              const iName = typeof item === 'string' ? item : `${item.quantity}x ${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}`;
-                             return <li key={idx}>{iName}</li>;
+                             return <li key={idx} className={orderMismatchWarning && iName.includes(selectedProductForSale.name) ? 'font-bold bg-yellow-200' : ''}>{iName}</li>;
                         })}
                     </ul>
                  </div>
@@ -1766,8 +1814,13 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                    </div>
                )}
                
-               <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2">
-                   <CheckCircle size={18} /> Confirmar Venda
+               <button 
+                   type="submit" 
+                   disabled={!!orderMismatchWarning}
+                   className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+               >
+                   {orderMismatchWarning ? <XCircle size={18}/> : <CheckCircle size={18}/>} 
+                   {orderMismatchWarning ? 'Bloqueado por Segurança' : 'Confirmar Venda'}
                </button>
              </form>
           </div>
@@ -1805,7 +1858,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                                          <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 font-bold">-</button>
                                          <span className="w-6 text-center text-sm font-bold">{item.quantity}</span>
-                                         <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 font-bold">+</button>
+                                         <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm">+</button>
                                      </div>
                                      <p className="font-bold text-purple-700 w-16 text-right">{formatCurrency(item.finalPrice * item.quantity)}</p>
                                      <button type="button" onClick={() => updateManualOrderItemQuantity(`${item.id}|${item.selectedVariant}`, -999)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
@@ -1890,6 +1943,78 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
                 </div>
             </div>
         </div>
+      )}
+      {isScannerOpen && (
+          <BarcodeScanner 
+              onClose={() => setIsScannerOpen(false)} 
+              onCodeSubmit={(code) => {
+                  if (scannerMode === 'add_unit') {
+                      handleAddUnit(code);
+                      setIsScannerOpen(false);
+                  } else if (scannerMode === 'sell_unit') {
+                      handleSelectUnitForSale(code);
+                      setIsScannerOpen(false);
+                  } else if (scannerMode === 'search') {
+                      setSearchTerm(code);
+                      setIsScannerOpen(false);
+                  }
+              }} 
+          />
+      )}
+      
+      {/* NOTIFICATION MODAL */}
+      {notificationModalData && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                  <div className="bg-green-600 p-6 text-white flex justify-between items-center">
+                      <h3 className="font-bold text-xl flex items-center gap-2"><Mail size={24}/> Notificar Clientes</h3>
+                      <button onClick={() => setNotificationModalData(null)} className="p-1 hover:bg-white/20 rounded-full"><X size={24}/></button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                      <p className="text-gray-600">
+                          Existem <strong>{notificationModalData.alertsToDelete.length} clientes</strong> à espera do produto <strong>{notificationModalData.productName}</strong>.
+                      </p>
+                      
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded text-sm text-yellow-800">
+                          <strong>Como enviar:</strong><br/>
+                          1. Copie os emails abaixo (BCC).<br/>
+                          2. Abra o seu email e cole no campo "BCC" (Cópia Oculta).<br/>
+                          3. Copie o Assunto e o Corpo da mensagem.
+                      </div>
+
+                      <div className="space-y-3">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Emails (BCC)</label>
+                              <div className="flex gap-2">
+                                  <input readOnly value={notificationModalData.bcc} className="w-full p-2 bg-gray-50 border rounded text-xs" />
+                                  <button onClick={() => handleCopyToClipboard(notificationModalData.bcc, 'emails')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs">{copySuccess === 'emails' ? 'Copiado!' : 'Copiar'}</button>
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assunto</label>
+                              <div className="flex gap-2">
+                                  <input readOnly value={notificationModalData.subject} className="w-full p-2 bg-gray-50 border rounded text-xs" />
+                                  <button onClick={() => handleCopyToClipboard(notificationModalData.subject, 'subject')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs">{copySuccess === 'subject' ? 'Copiado!' : 'Copiar'}</button>
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mensagem</label>
+                              <div className="flex gap-2 items-start">
+                                  <textarea readOnly value={notificationModalData.body} className="w-full h-32 p-2 bg-gray-50 border rounded text-xs resize-none" />
+                                  <button onClick={() => handleCopyToClipboard(notificationModalData.body, 'body')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs h-full">{copySuccess === 'body' ? 'Copiado!' : 'Copiar'}</button>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
+                          <button onClick={() => setNotificationModalData(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                          <button onClick={handleClearSentAlerts} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2">
+                              <CheckCircle size={18} /> Já enviei, limpar lista
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );
