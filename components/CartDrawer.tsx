@@ -19,7 +19,7 @@ interface CartDrawerProps {
 const CartDrawer: React.FC<CartDrawerProps> = ({ 
   isOpen, onClose, cartItems, onRemoveItem, onUpdateQuantity, total, onCheckout, user, onOpenLogin
 }) => {
-  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'login-prompt' | 'info' | 'platform'>('cart');
+  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'login-prompt' | 'info' | 'platform' | 'success'>('cart');
   const [platform, setPlatform] = useState<'whatsapp' | 'telegram'>('whatsapp');
   const [isCopied, setIsCopied] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -32,7 +32,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
-    name: '', street: '', doorNumber: '', zip: '', city: '', phone: '', nif: '', paymentMethod: 'MB Way'
+    name: '', street: '', doorNumber: '', zip: '', city: '', phone: '', nif: '', paymentMethod: 'MB Way', email: ''
   });
 
   const SHIPPING_THRESHOLD = 50;
@@ -41,6 +41,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
+        // Se fechar, espera a animação para resetar
         setTimeout(() => {
             setCheckoutStep('cart');
             setCurrentOrderId('');
@@ -57,7 +58,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           const firstAddr = user.addresses?.[0];
           setUserInfo(prev => ({ 
               ...prev, 
-              name: user.name || '', 
+              name: user.name || '',
+              email: user.email || '',
               phone: user.phone || prev.phone,
               nif: user.nif || prev.nif,
               street: firstAddr?.street || prev.street,
@@ -129,8 +131,11 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           cartItemId: item.cartItemId,
           addedAt: new Date().toISOString()
         })),
-        userId: user?.uid,
-        shippingInfo: userInfo
+        userId: user?.uid || null,
+        shippingInfo: {
+            ...userInfo,
+            email: (user?.email || userInfo.email).toLowerCase()
+        }
     };
   };
 
@@ -145,9 +150,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           if (platform === 'whatsapp') {
               window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
           }
-          onClose();
+          // Em vez de fechar, vamos para o passo de sucesso
+          setCheckoutStep('success');
       }
-      // Se não for sucesso, o utilizador já foi alertado pela função onCheckout.
       setIsFinalizing(false);
   };
   
@@ -160,18 +165,38 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
       if (success) {
           window.open(TELEGRAM_LINK, '_blank');
-          setTimeout(() => {
-              onClose();
-          }, 500);
+          setCheckoutStep('success');
       }
       setIsFinalizing(false);
   };
 
+  const copyToClipboard = (text: string): boolean => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    let successful = false;
+    try {
+      successful = document.execCommand('copy');
+    } catch (err) {
+      console.error('Fallback: Oops, unable to copy', err);
+    }
+    document.body.removeChild(textArea);
+    return successful;
+  };
+
   const handleCopyToClipboard = () => {
-      navigator.clipboard.writeText(orderMessage).then(() => {
+      const success = copyToClipboard(orderMessage);
+      if (success) {
           setIsCopied(true);
           setTimeout(() => setIsCopied(false), 2000);
-      });
+      } else {
+          alert("Não foi possível copiar a mensagem automaticamente. Por favor, copie o texto manualmente da caixa de texto.");
+      }
   };
 
   const handleGoBack = () => {
@@ -188,12 +213,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-2">
-              {checkoutStep !== 'cart' && <button onClick={handleGoBack} className="p-1 hover:bg-gray-100 rounded-full mr-1"><ChevronLeft size={20}/></button>}
+              {checkoutStep !== 'cart' && checkoutStep !== 'success' && <button onClick={handleGoBack} className="p-1 hover:bg-gray-100 rounded-full mr-1"><ChevronLeft size={20}/></button>}
               <h2 className="text-xl font-bold text-gray-900">
                 {checkoutStep === 'cart' && 'O seu Carrinho'}
                 {checkoutStep === 'login-prompt' && 'Identificação'}
                 {checkoutStep === 'info' && 'Dados de Envio'}
                 {checkoutStep === 'platform' && 'Confirmar Pedido'}
+                {checkoutStep === 'success' && 'Pedido Registado!'}
               </h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
@@ -247,6 +273,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 <form id="infoForm" onSubmit={handleProceedToPlatform} className="space-y-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4">
                         <input type="text" required placeholder="Nome Completo" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        {!user && <input type="email" required placeholder="Email (para receber o estado)" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />}
                         <input type="tel" required placeholder="Telemóvel" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         <input type="text" placeholder="NIF (Opcional, para fatura)" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
                         
@@ -307,6 +334,30 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     )}
                 </div>
             )}
+
+            {/* NEW: SUCCESS STEP */}
+            {checkoutStep === 'success' && (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 animate-fade-in-up">
+                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-inner">
+                        <Check size={48} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Pedido Registado!</h2>
+                    <p className="text-gray-500 mb-6 max-w-xs">
+                        A sua encomenda <strong>{currentOrderId}</strong> foi registada com sucesso na nossa base de dados.
+                    </p>
+                    <div className="bg-white p-4 rounded-xl border border-green-100 text-left w-full shadow-sm mb-6">
+                        <h4 className="font-bold text-green-800 mb-2 flex items-center gap-2"><Smartphone size={16}/> Próximos Passos:</h4>
+                        <ul className="text-sm text-gray-600 space-y-2">
+                            <li>1. Se ainda não enviou a mensagem na App, faça-o agora.</li>
+                            <li>2. A nossa equipa irá confirmar o stock e dados de pagamento.</li>
+                            <li>3. Irá receber o tracking assim que for enviado.</li>
+                        </ul>
+                    </div>
+                    <button onClick={onClose} className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
+                        Voltar à Loja
+                    </button>
+                </div>
+            )}
         </div>
 
         <div className="p-4 border-t bg-white shadow-lg shrink-0">
@@ -322,26 +373,28 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
             )}
 
-            <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-gray-500 text-sm"><span>Subtotal</span><span>{total.toFixed(2)}€</span></div>
-                <div className="flex justify-between text-gray-500 text-sm">
-                    <span>Portes de Envio</span>
-                    <span className={shippingCost === 0 ? 'font-bold text-green-600' : ''}>{shippingCost > 0 ? `${shippingCost.toFixed(2)}€` : 'Grátis'}</span>
-                </div>
-                {checkoutStep !== 'cart' && paymentFee > 0 && (
+            {checkoutStep !== 'success' && (
+                <div className="space-y-2 mb-4">
+                    <div className="flex justify-between text-gray-500 text-sm"><span>Subtotal</span><span>{total.toFixed(2)}€</span></div>
                     <div className="flex justify-between text-gray-500 text-sm">
-                        <span>Taxa de Cobrança</span>
-                        <span>{paymentFee.toFixed(2)}€</span>
+                        <span>Portes de Envio</span>
+                        <span className={shippingCost === 0 ? 'font-bold text-green-600' : ''}>{shippingCost > 0 ? `${shippingCost.toFixed(2)}€` : 'Grátis'}</span>
                     </div>
-                )}
-                {appliedCoupon && (
-                    <div className="flex justify-between text-green-600 text-sm font-medium">
-                        <span>Desconto ({appliedCoupon.code})</span>
-                        <span>-{discount.toFixed(2)}€</span>
-                    </div>
-                )}
-                <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2"><span>Total</span><span>{finalTotal.toFixed(2)}€</span></div>
-            </div>
+                    {checkoutStep !== 'cart' && paymentFee > 0 && (
+                        <div className="flex justify-between text-gray-500 text-sm">
+                            <span>Taxa de Cobrança</span>
+                            <span>{paymentFee.toFixed(2)}€</span>
+                        </div>
+                    )}
+                    {appliedCoupon && (
+                        <div className="flex justify-between text-green-600 text-sm font-medium">
+                            <span>Desconto ({appliedCoupon.code})</span>
+                            <span>-{discount.toFixed(2)}€</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between text-xl font-bold pt-2 border-t mt-2"><span>Total</span><span>{finalTotal.toFixed(2)}€</span></div>
+                </div>
+            )}
 
             {checkoutStep === 'cart' ? (
                  <>
