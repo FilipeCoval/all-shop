@@ -2,11 +2,17 @@
 <html lang="pt-PT">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
     <!-- SEO & Metadata -->
     <title>Allshop Store | Eletrónica e Gadgets</title>
     <meta name="description" content="A sua loja virtual de confiança. Smartphones, TV Boxes e Cabos. Portes grátis em compras acima de 50€." />
+    
+    <!-- Mobile App Standalone Mode -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#3b82f6">
     
     <!-- Open Graph / Facebook / Telegram -->
     <meta property="og:site_name" content="Allshop Store" />
@@ -64,7 +70,7 @@
       }
     </script>
     <style>
-        body { background-color: #f8fafc; scroll-behavior: smooth; }
+        body { background-color: #f8fafc; scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
