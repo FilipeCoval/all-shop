@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -68,47 +68,88 @@ const KpiCard: React.FC<{ title: string; value: string | number; icon: React.Rea
   );
 };
 
-// --- COMPONENTE DE SCANNER COM MOTOR ZXING ---
-const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: () => void }> = ({ onCodeSubmit, onClose }) => {
+// --- COMPONENTE DE SCANNER COM MOTOR ZXING OTIMIZADO ---
+interface BarcodeScannerProps { 
+    onCodeSubmit: (code: string) => void; 
+    onClose: () => void;
+    mode: 'serial' | 'product'; // 'serial' = Code 128/39 (S/N), 'product' = EAN/UPC/QR
+}
+
+const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, mode }) => {
     const [error, setError] = useState<string | null>(null);
     const [isTorchOn, setIsTorchOn] = useState(false);
     const [manualCode, setManualCode] = useState('');
+    const [zoom, setZoom] = useState(1);
+    const [maxZoom, setMaxZoom] = useState(1);
+    const [hasZoom, setHasZoom] = useState(false);
+    
     const videoRef = useRef<HTMLVideoElement>(null);
     const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const trackRef = useRef<MediaStreamTrack | null>(null);
 
     useEffect(() => {
         const startScanner = async () => {
             if (!videoRef.current) return;
             
             const hints = new Map();
-            // Adicionar formatos específicos de S/N (Code 128 é o mais comum para S/Ns densos)
-            const formats = [
-                BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-                BarcodeFormat.CODE_93, BarcodeFormat.CODABAR,
-                BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, 
-                BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, 
-                BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
-                BarcodeFormat.ITF
-            ];
-            hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
-            hints.set(3, true);    // 3 = DecodeHintType.TRY_HARDER (Tenta mais devagar, mas com mais precisão)
+            let formats;
 
-            codeReaderRef.current = new BrowserMultiFormatReader(hints, 500); // Delay aumentado para 500ms para estabilizar foco
+            // CONFIGURAÇÃO CRÍTICA DE FORMATOS
+            if (mode === 'serial') {
+                // MODO S/N: Ignora EAN/UPC para não ler o código errado
+                // Foca em Code 128 (padrão Xiaomi S/N) e Code 39/93
+                formats = [
+                    BarcodeFormat.CODE_128, 
+                    BarcodeFormat.CODE_39,
+                    BarcodeFormat.CODE_93, 
+                    BarcodeFormat.CODABAR,
+                    BarcodeFormat.DATA_MATRIX // Alguns S/N são DataMatrix
+                ];
+            } else {
+                // MODO PRODUTO: Foca em EAN, UPC, QR
+                formats = [
+                    BarcodeFormat.EAN_13, 
+                    BarcodeFormat.EAN_8, 
+                    BarcodeFormat.UPC_A, 
+                    BarcodeFormat.UPC_E, 
+                    BarcodeFormat.QR_CODE
+                ];
+            }
+
+            hints.set(2, formats); // 2 = DecodeHintType.POSSIBLE_FORMATS
+            hints.set(3, true);    // 3 = DecodeHintType.TRY_HARDER
+
+            codeReaderRef.current = new BrowserMultiFormatReader(hints, 300);
 
             try {
-                // Tentar obter a resolução mais alta possível (Full HD) para ler códigos densos
+                // Pedir resolução máxima (4K) para apanhar as barras finas do S/N
                 const constraints = { 
                     video: { 
                         facingMode: 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        focusMode: 'continuous' // Tenta forçar foco continuo
+                        width: { ideal: 3840 }, // Tenta 4K
+                        height: { ideal: 2160 },
+                        focusMode: 'continuous'
                     } 
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints as any);
                 streamRef.current = stream;
+                
+                const track = stream.getVideoTracks()[0];
+                trackRef.current = track;
+
+                // Configurar Capacidades de Zoom
+                const capabilities = track.getCapabilities() as any;
+                if (capabilities.zoom) {
+                    setHasZoom(true);
+                    setMaxZoom(capabilities.zoom.max);
+                    // Começar com um ligeiro zoom (1.5x) ajuda a focar
+                    if (mode === 'serial' && capabilities.zoom.max >= 1.5) {
+                        track.applyConstraints({ advanced: [{ zoom: 1.5 }] } as any).catch(console.warn);
+                        setZoom(1.5);
+                    }
+                }
                 
                 if (videoRef.current) {
                     await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
@@ -133,25 +174,31 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
         };
-    }, [onCodeSubmit]);
+    }, [onCodeSubmit, mode]);
 
     const toggleTorch = async () => {
-        if (streamRef.current) {
-            const track = streamRef.current.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-            
-            if ((capabilities as any).torch) {
+        if (trackRef.current) {
+            const capabilities = trackRef.current.getCapabilities() as any;
+            if (capabilities.torch) {
                 try {
-                    await track.applyConstraints({
+                    await trackRef.current.applyConstraints({
                         advanced: [{ torch: !isTorchOn } as any]
                     });
                     setIsTorchOn(!isTorchOn);
-                } catch(e) {
-                    console.warn("Lanterna não pôde ser ativada:", e);
-                }
-            } else {
-                console.warn("Lanterna não suportada por este dispositivo.");
+                } catch(e) { console.warn(e); }
             }
+        }
+    };
+
+    const handleZoomChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newZoom = parseFloat(e.target.value);
+        setZoom(newZoom);
+        if (trackRef.current && hasZoom) {
+            try {
+                await trackRef.current.applyConstraints({
+                    advanced: [{ zoom: newZoom } as any]
+                });
+            } catch (err) { console.warn(err); }
         }
     };
     
@@ -166,34 +213,64 @@ const BarcodeScanner: React.FC<{ onCodeSubmit: (code: string) => void; onClose: 
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4">
             <button onClick={onClose} className="absolute top-6 right-6 bg-white/10 p-3 rounded-full text-white z-[110] border border-white/20 active:scale-90 transition-all shadow-2xl"><X size={24}/></button>
             
-            <div className="w-full max-w-sm">
+            <div className="w-full max-w-sm relative">
+                <div className="absolute top-[-40px] left-0 right-0 flex justify-center gap-4 z-50">
+                    <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full ${mode === 'serial' ? 'bg-indigo-600 text-white shadow-lg border border-indigo-400' : 'bg-white/10 text-gray-400'}`}>
+                        Modo S/N
+                    </span>
+                    <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full ${mode === 'product' ? 'bg-indigo-600 text-white shadow-lg border border-indigo-400' : 'bg-white/10 text-gray-400'}`}>
+                        Modo EAN
+                    </span>
+                </div>
+
                 <div className="relative aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
                     <video ref={videoRef} className="w-full h-full object-cover scale-110" muted playsInline />
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        {/* Caixa de mira reduzida para 80px para forçar precisão no código de barras correto */}
-                        <div className="w-[90%] max-w-[300px] h-[80px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)]">
+                        {/* Mira estreita para S/N */}
+                        <div className={`w-[90%] max-w-[300px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)] ${mode === 'serial' ? 'h-[60px]' : 'h-[150px]'} transition-all duration-300`}>
                             <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>
-                            <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">Aponte para o S/N</div>
+                            <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">
+                                {mode === 'serial' ? 'Aponte para o S/N (Barras Finas)' : 'Aponte para o Código de Barras'}
+                            </div>
                         </div>
                     </div>
                     {error && <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-8 text-center z-50"><AlertCircle size={40} className="text-red-500 mb-4" /><p className="text-sm font-bold">{error}</p><button onClick={onClose} className="mt-6 bg-white/10 px-6 py-2 rounded-full font-bold text-xs">Voltar</button></div>}
                 </div>
                 
-                <div className="mt-6 flex justify-center">
-                    <button onClick={toggleTorch} className={`w-16 h-16 rounded-full transition-all shadow-lg flex flex-col items-center justify-center border-2 ${isTorchOn ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 text-white border-white/20'}`}>
-                        {isTorchOn ? <Zap size={24} fill="currentColor" /> : <ZapOff size={24} />}
-                        <span className="text-[9px] font-bold mt-1 uppercase">{isTorchOn ? 'ON' : 'Flash'}</span>
-                    </button>
+                {/* Controles de Câmara */}
+                <div className="mt-6 flex flex-col items-center gap-4">
+                    <div className="flex gap-4 items-center w-full justify-center">
+                        <button onClick={toggleTorch} className={`w-12 h-12 rounded-full transition-all shadow-lg flex flex-col items-center justify-center border-2 ${isTorchOn ? 'bg-yellow-400 text-black border-white' : 'bg-white/5 text-white border-white/20'}`}>
+                            {isTorchOn ? <Zap size={20} fill="currentColor" /> : <ZapOff size={20} />}
+                        </button>
+                        
+                        {/* Slider de Zoom */}
+                        {hasZoom && (
+                            <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full border border-white/10">
+                                <ZoomIn size={16} className="text-white/70"/>
+                                <input 
+                                    type="range" 
+                                    min="1" 
+                                    max={Math.min(maxZoom, 5)} 
+                                    step="0.1" 
+                                    value={zoom} 
+                                    onChange={handleZoomChange}
+                                    className="w-24 accent-indigo-500 h-1"
+                                />
+                                <span className="text-xs text-white font-mono w-8 text-right">{zoom.toFixed(1)}x</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="text-center text-gray-400 text-xs font-bold my-6">OU</div>
+                <div className="text-center text-gray-400 text-xs font-bold my-6">OU DIGITE MANUALMENTE</div>
 
                 <form onSubmit={handleManualSubmit} className="flex gap-2">
                     <input 
                         type="tel" 
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
-                        placeholder="Digite os números do código"
+                        placeholder="Digite o código aqui"
                         className="flex-1 bg-white/5 border border-white/20 text-white rounded-lg px-4 py-3 text-center tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
                     />
                     <button type="submit" className="bg-indigo-600 text-white font-bold px-4 rounded-lg hover:bg-indigo-700 transition-colors">
@@ -931,7 +1008,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           units: modalUnits, 
           status: productStatus, 
           badges: formData.badges, 
-          images: formData.images,
+          images: formData.images, 
           features: formData.features,
           comingSoon: formData.comingSoon
       }; 
@@ -2078,6 +2155,7 @@ publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<
       )}
       {isScannerOpen && (
           <BarcodeScanner 
+              mode={(scannerMode === 'add_unit' || scannerMode === 'sell_unit' || scannerMode === 'verify_product') ? 'serial' : 'product'}
               onClose={() => setIsScannerOpen(false)} 
               onCodeSubmit={(code) => {
                   if (scannerMode === 'add_unit') {
