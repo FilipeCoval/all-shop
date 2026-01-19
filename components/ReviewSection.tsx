@@ -1,7 +1,7 @@
-
 import React, { useState, useRef } from 'react';
-import { Star, Upload, Image as ImageIcon, X, ThumbsUp, CheckCircle } from 'lucide-react';
+import { Star, Upload, Image as ImageIcon, X, ThumbsUp, CheckCircle, Loader2 } from 'lucide-react';
 import { Review, User } from '../types';
+import { storage } from '../services/firebaseConfig';
 
 interface ReviewSectionProps {
   productId: number;
@@ -18,6 +18,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
   const [userName, setUserName] = useState(currentUser?.name || '');
   const [images, setImages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filtra reviews apenas deste produto
@@ -37,42 +38,69 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
     return name; // Se for só um nome (ex: "Maria"), mostra normal
   };
 
-  // Função para comprimir imagem antes de salvar (para não estourar o localStorage)
-  const processImage = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+  // Função para comprimir imagem antes de enviar
+  const processAndUploadImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (event) => {
         const img = new Image();
         img.src = event.target?.result as string;
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 600;
+          const MAX_WIDTH = 800; // Redimensionar para poupar dados
           const scaleSize = MAX_WIDTH / img.width;
           canvas.width = MAX_WIDTH;
           canvas.height = img.height * scaleSize;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          // Comprime para JPEG qualidade 0.7
-          resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+          
+          // Converter para Data URL (JPEG qualidade 0.8)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          try {
+              // Upload para Firebase Storage
+              const filename = `reviews/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+              const storageRef = storage.ref().child(filename);
+              
+              await storageRef.putString(dataUrl, 'data_url');
+              const downloadUrl = await storageRef.getDownloadURL();
+              resolve(downloadUrl);
+          } catch (error) {
+              console.error("Upload failed:", error);
+              reject(error);
+          }
         };
       };
+      reader.onerror = error => reject(error);
     });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newImages: string[] = [];
-      setIsSubmitting(true); // Bloqueia enquanto processa
-      
-      for (let i = 0; i < e.target.files.length; i++) {
-        if (images.length + newImages.length >= 3) break; // Máximo 3 fotos
-        const base64 = await processImage(e.target.files[i]);
-        newImages.push(base64);
+      setIsSubmitting(true); // Bloqueia UI
+      const files = Array.from(e.target.files);
+      const remainingSlots = 3 - images.length;
+      const filesToProcess = files.slice(0, remainingSlots);
+
+      let processedCount = 0;
+      const newImageUrls: string[] = [];
+
+      try {
+          for (const file of filesToProcess) {
+              const url = await processAndUploadImage(file);
+              newImageUrls.push(url);
+              processedCount++;
+              setUploadProgress((processedCount / filesToProcess.length) * 100);
+          }
+          setImages(prev => [...prev, ...newImageUrls]);
+      } catch (error) {
+          alert("Erro ao fazer upload da imagem. Tente novamente.");
+      } finally {
+          setIsSubmitting(false);
+          setUploadProgress(0);
+          if (fileInputRef.current) fileInputRef.current.value = '';
       }
-      
-      setImages(prev => [...prev, ...newImages]);
-      setIsSubmitting(false);
     }
   };
 
@@ -199,7 +227,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                     <label className="block text-sm font-medium text-gray-700 mb-2">Fotos (Opcional - Máx 3)</label>
                     <div className="flex flex-wrap gap-4">
                         {images.map((img, idx) => (
-                            <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                            <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group bg-white">
                                 <img src={img} alt="Preview" className="w-full h-full object-cover" />
                                 <button 
                                     type="button"
@@ -211,7 +239,14 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                             </div>
                         ))}
                         
-                        {images.length < 3 && (
+                        {isSubmitting && (
+                            <div className="w-20 h-20 border border-gray-200 rounded-lg flex flex-col items-center justify-center bg-gray-100">
+                                <Loader2 size={24} className="animate-spin text-primary" />
+                                <span className="text-[10px] mt-1 text-gray-500">{Math.round(uploadProgress)}%</span>
+                            </div>
+                        )}
+
+                        {images.length < 3 && !isSubmitting && (
                             <button 
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
@@ -226,6 +261,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                             ref={fileInputRef} 
                             className="hidden" 
                             accept="image/*"
+                            multiple
                             onChange={handleImageUpload}
                         />
                     </div>
@@ -236,7 +272,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                     disabled={isSubmitting || !comment}
                     className="w-full bg-secondary hover:bg-gray-800 text-white font-bold py-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    {isSubmitting ? 'A processar...' : 'Publicar Avaliação'}
+                    {isSubmitting ? 'A carregar imagens...' : 'Publicar Avaliação'}
                 </button>
             </form>
         </div>
@@ -252,7 +288,6 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                             {review.userName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            {/* AQUI APLICAMOS A FORMATAÇÃO DE PRIVACIDADE */}
                             <h4 className="font-bold text-gray-900 leading-tight">
                                 {formatDisplayName(review.userName)}
                             </h4>
@@ -287,11 +322,10 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
                                 key={idx} 
                                 src={img} 
                                 alt="Foto do cliente" 
-                                className="w-24 h-24 object-cover rounded-lg border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                className="w-24 h-24 object-cover rounded-lg border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity bg-gray-50"
                                 onClick={() => {
-                                    // Simples visualizador em nova aba para simplicidade
                                     const w = window.open("");
-                                    w?.document.write(`<img src="${img}" style="max-width:100%"/>`);
+                                    w?.document.write(`<body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#000;"><img src="${img}" style="max-width:100%;max-height:100%"/></body>`);
                                 }}
                             />
                         ))}
