@@ -89,21 +89,42 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // URL Híbrido: Tenta usar a API de OG para bots, mas o link final para humanos
-    // Se o produto for dos iniciais, o api/og vai gerar imagem bonita.
-    // Se for novo, vai mostrar imagem genérica, mas o link funciona.
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}`; 
-    const hashUrl = `${PUBLIC_URL}/#product/${product.id}`;
+    // --- LÓGICA DE PARTILHA MELHORADA ---
+    // Codificamos os detalhes do produto (nome, imagem, preço) no URL.
+    // Assim, o nosso servidor (api/og.ts) consegue gerar o cartão de partilha
+    // sem precisar de consultar a base de dados.
+    const params = new URLSearchParams();
+    
+    // Adiciona título, mas remove caracteres estranhos para evitar erros no URL
+    params.append('title', product.name.replace(/[^\w\s\u00C0-\u00FF,-]/g, ''));
+    
+    // Adiciona a imagem atual selecionada
+    if (selectedImage) {
+        params.append('image', selectedImage);
+    }
+    
+    // Adiciona descrição curta
+    if (product.description) {
+        const shortDesc = product.description.substring(0, 100).replace(/\n/g, ' ');
+        params.append('desc', shortDesc);
+    }
+    
+    // Adiciona o preço
+    params.append('price', currentPrice.toFixed(2));
+
+    // URL Final com todos os dados "embutidos"
+    const shareUrl = `${PUBLIC_URL}/product/${product.id}?${params.toString()}`;
+    const hashUrl = `${PUBLIC_URL}/#product/${product.id}`; // Fallback direto para app
 
     // Dados para partilha nativa (Mobile)
     const shareData: ShareData = {
-      title: `${product.name}`,
+      title: product.name,
       text: `Olha o que encontrei na ${STORE_NAME} por apenas ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}!`,
-      url: shareUrl, // Tenta usar o URL limpo primeiro
+      url: shareUrl, 
     };
 
     try {
-      // 2. Tentar Web Share API (Menu Nativo do Android/iOS)
+      // Tentar Web Share API (Menu Nativo do Android/iOS)
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
         setShareFeedback('shared');
@@ -111,13 +132,13 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      // 3. Fallback: Copiar link seguro (com Hash) para garantir que abre na app
+      // Fallback: Copiar link inteligente para a área de transferência
       try {
-        await navigator.clipboard.writeText(hashUrl);
+        await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
       } catch (clipboardErr) {
         console.warn("Share fallback failed", clipboardErr);
-        prompt("Copie o link:", hashUrl);
+        prompt("Copie o link:", shareUrl);
       }
     }
 
