@@ -89,33 +89,11 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // --- LÓGICA DE PARTILHA MELHORADA ---
-    // Codificamos os detalhes do produto (nome, imagem, preço) no URL.
-    // Assim, o nosso servidor (api/og.ts) consegue gerar o cartão de partilha
-    // sem precisar de consultar a base de dados.
-    const params = new URLSearchParams();
+    // --- LÓGICA DE PARTILHA LIMPA ---
+    // Agora usamos apenas o link curto e profissional.
+    // O backend (api/og.ts) encarrega-se de ir buscar a imagem correta.
+    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
     
-    // Adiciona título, mas remove caracteres estranhos para evitar erros no URL
-    params.append('title', product.name.replace(/[^\w\s\u00C0-\u00FF,-]/g, ''));
-    
-    // Adiciona a imagem atual selecionada
-    if (selectedImage) {
-        params.append('image', selectedImage);
-    }
-    
-    // Adiciona descrição curta
-    if (product.description) {
-        const shortDesc = product.description.substring(0, 100).replace(/\n/g, ' ');
-        params.append('desc', shortDesc);
-    }
-    
-    // Adiciona o preço
-    params.append('price', currentPrice.toFixed(2));
-
-    // URL Final com todos os dados "embutidos"
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}?${params.toString()}`;
-    const hashUrl = `${PUBLIC_URL}/#product/${product.id}`; // Fallback direto para app
-
     // Dados para partilha nativa (Mobile)
     const shareData: ShareData = {
       title: product.name,
@@ -132,7 +110,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      // Fallback: Copiar link inteligente para a área de transferência
+      // Fallback: Copiar link curto
       try {
         await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
