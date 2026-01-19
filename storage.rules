@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Funções auxiliares
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email in [
+        "filipe_coval_90@hotmail.com", 
+        "mcpoleca@gmail.com", 
+        "filipe@teste.com"
+      ];
+    }
+
+    // Regra global de leitura: Todos podem ver as imagens
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+
+    // Imagens de Produtos (Dashboard): Apenas Admin
+    match /products/{imageId} {
+      allow write: if isAdmin();
+    }
+
+    // Imagens de Avaliações (ReviewSection): Qualquer utilizador
+    match /reviews/{imageId} {
+      allow write: if true;
+    }
+  }
+}
