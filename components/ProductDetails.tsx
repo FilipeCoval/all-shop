@@ -89,9 +89,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // --- LÓGICA DE PARTILHA LIMPA ---
-    // Agora usamos apenas o link curto e profissional.
-    // O backend (api/og.ts) encarrega-se de ir buscar a imagem correta.
+    // --- LÓGICA DE PARTILHA CORRIGIDA ---
+    // Usamos o link curto padrão. O api/og.ts agora tem a API Key
+    // para ir à base de dados buscar a imagem correta.
     const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
     
     // Dados para partilha nativa (Mobile)
