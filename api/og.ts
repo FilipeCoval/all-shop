@@ -1,27 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { INITIAL_PRODUCTS } from '../constants';
-// Importação segura para ambiente Node.js na Vercel
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
 
-// Configuração do Firebase In-Line para evitar dependências de ambiente complexas no Edge
-const firebaseConfig = {
-  apiKey: "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE",
-  authDomain: "allshop-store-70851.firebaseapp.com",
-  projectId: "allshop-store-70851",
-  storageBucket: "allshop-store-70851.firebasestorage.app",
-  messagingSenderId: "1066114053908",
-  appId: "1:1066114053908:web:34f8ae5e231a5c73f0f401"
+// ID do Projeto Firebase (Retirado do firebaseConfig)
+const PROJECT_ID = "allshop-store-70851";
+
+// Helper para limpar campos do Firestore REST API
+// A API devolve: { fields: { name: { stringValue: "..." }, price: { doubleValue: 10 } } }
+// Nós queremos apenas: { name: "...", price: 10 }
+const parseFirestoreField = (field: any) => {
+    if (!field) return null;
+    if (field.stringValue) return field.stringValue;
+    if (field.integerValue) return parseInt(field.integerValue);
+    if (field.doubleValue) return parseFloat(field.doubleValue);
+    if (field.arrayValue && field.arrayValue.values) {
+        return field.arrayValue.values.map((v: any) => parseFirestoreField(v));
+    }
+    return null;
 };
-
-// Inicialização segura do Firebase (Singleton)
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-} else {
-  firebase.app(); // Se já existe, usa a existente
-}
-
-const db = firebase.firestore();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
@@ -34,55 +29,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const productId = parseInt(id as string, 10);
     
-    // --- 1. Procura na Lista Estática (Ultra Rápido) ---
-    // Isto cobre os produtos iniciais sem gastar leituras da BD
-    let productData = INITIAL_PRODUCTS.find(p => p.id === productId);
+    let title = 'Allshop Store';
+    let description = 'As melhores ofertas em tecnologia.';
+    let image = 'https://i.imgur.com/nSiZKBf.png'; // Logo por defeito
+    let price = null;
+
+    // 1. Tentar encontrar na lista estática primeiro (Zero latência)
+    const staticProduct = INITIAL_PRODUCTS.find(p => p.id === productId);
     
-    let title = productData ? productData.name : 'Produto Allshop';
-    let description = productData ? productData.description : 'Descubra este produto na nossa loja.';
-    let image = productData ? productData.image : 'https://i.imgur.com/nSiZKBf.png';
-    let price = productData ? productData.price : null;
-
-    // --- 2. Procura na Base de Dados (Para Produtos Novos) ---
-    // Se não encontrou na estática, vai ao Firestore buscar os dados reais
-    if (!productData) {
+    if (staticProduct) {
+        title = staticProduct.name;
+        description = staticProduct.description;
+        image = staticProduct.image;
+        price = staticProduct.price;
+    } else {
+        // 2. Se não estiver na estática, buscar via REST API do Firestore
+        // Isto funciona com QUALQUER link de imagem que você tenha salvo no Dashboard
         try {
-            // Tenta encontrar pelo campo 'id' (número) na coleção pública
-            // Nota: Os IDs públicos são strings na chave do documento, mas vamos tentar ler
-            const docRef = db.collection('products_public').doc(id as string);
-            const docSnap = await docRef.get();
-
-            if (docSnap.exists) {
-                const data = docSnap.data();
-                if (data) {
-                    title = data.name;
-                    description = data.description || description;
-                    image = data.image || image;
-                    price = data.price;
+            const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/products_public/${id}`;
+            const apiRes = await fetch(firestoreUrl);
+            
+            if (apiRes.ok) {
+                const json = await apiRes.json();
+                if (json.fields) {
+                    title = parseFirestoreField(json.fields.name) || title;
+                    description = parseFirestoreField(json.fields.description) || description;
+                    image = parseFirestoreField(json.fields.image) || image;
+                    price = parseFirestoreField(json.fields.price);
                 }
             } else {
-                // Fallback: Tenta pesquisar se o ID for numérico mas o doc for diferente
-                // (Caso raro de inconsistência de IDs)
-                console.log(`Produto ${id} não encontrado diretamente, a tentar query...`);
+                console.error(`Product ${id} not found in DB via REST`);
             }
-        } catch (dbError) {
-            console.error("Erro ao ler da BD no Serverless:", dbError);
-            // Em caso de erro, mantém os valores genéricos (imagem roxa)
-            // mas o link funciona na mesma.
+        } catch (err) {
+            console.error("Firestore REST Error:", err);
         }
     }
 
-    // --- 3. Formatação Final ---
-    // Corta descrições gigantes
-    const safeDesc = description.substring(0, 150) + (description.length > 150 ? '...' : '');
+    // 3. Formatação Final
+    const safeDesc = description ? (description.substring(0, 150) + (description.length > 150 ? '...' : '')) : '';
     const safeTitle = price ? `${title} (${price}€)` : title;
     
     const protocol = host?.includes('localhost') ? 'http' : 'https';
     const cleanUrl = `${protocol}://${host}/product/${id}`;
     const storeUrl = `${protocol}://${host}/#product/${id}`;
 
-    // --- 4. Geração do HTML ---
-    // Este HTML é o que o WhatsApp/Facebook lêem.
     const html = `
       <!DOCTYPE html>
       <html lang="pt-PT">
@@ -107,11 +97,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <meta property="twitter:description" content="${safeDesc}">
         <meta property="twitter:image" content="${image}">
 
-        <!-- Redirecionamento Automático para a App (SPA) -->
+        <!-- Redirecionamento Automático para a App -->
         <script>
             window.location.href = "${storeUrl}";
         </script>
-        <!-- Fallback meta refresh se JS estiver desativado -->
+        <!-- Fallback -->
         <meta http-equiv="refresh" content="0;url=${storeUrl}">
       </head>
       <body style="font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #334155;">
@@ -124,8 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    // Cache de 1 hora no CDN para ser rápido na próxima vez
-    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate'); 
+    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate'); 
     return res.status(200).send(html);
 
   } catch (error) {
