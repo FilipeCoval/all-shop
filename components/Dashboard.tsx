@@ -218,11 +218,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
         
         // Verifica se o vídeo está pronto
         if (videoRef.current.readyState < 2) {
-            alert("A câmara ainda está a iniciar. Aguarde um momento.");
+            // Em vez de alert, define erro no ecrã
+            setError("A câmara ainda está a iniciar...");
             return;
         }
 
         setIsAiProcessing(true);
+        setError(null); // Limpar erros anteriores
 
         try {
             // 1. Capture Image from Video
@@ -244,13 +246,19 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                 beep.play().catch(() => {});
                 onCodeSubmit(code.toUpperCase());
             } else {
-                alert("A IA não conseguiu ler o código. Tente focar melhor ou limpar a etiqueta.");
+                setError("A IA não conseguiu ler. Tente focar e limpar a etiqueta.");
             }
 
         } catch (error: any) {
             console.error("AI Scan Error:", error);
-            // Mostrar erro real ao utilizador no telemóvel para diagnóstico
-            alert(`Erro IA: ${error.message || JSON.stringify(error)}`);
+            const msg = error.message || JSON.stringify(error);
+            
+            // TRATAMENTO INTELIGENTE DO ERRO "API DISABLED"
+            if (msg.includes("Generative Language API") || msg.includes("PERMISSION_DENIED")) {
+                setError("API_DISABLED");
+            } else {
+                setError(`Erro IA: ${msg.substring(0, 50)}...`);
+            }
         } finally {
             setIsAiProcessing(false);
         }
@@ -276,7 +284,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                     {/* Overlay de Scan */}
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className={`w-[90%] max-w-[300px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)] ${mode === 'serial' ? 'h-[60px]' : 'h-[150px]'} transition-all duration-300`}>
-                            {!isAiProcessing && <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>}
+                            {!isAiProcessing && !error && <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>}
                             
                             {/* AI Processing Animation */}
                             {isAiProcessing && (
@@ -288,9 +296,11 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                                 </div>
                             )}
 
-                            <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">
-                                {mode === 'serial' ? 'Aponte para o S/N' : 'Aponte para o Código'}
-                            </div>
+                            {!error && !isAiProcessing && (
+                                <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">
+                                    {mode === 'serial' ? 'Aponte para o S/N' : 'Aponte para o Código'}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -306,7 +316,32 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                         </button>
                     </div>
 
-                    {error && <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-8 text-center z-50"><AlertCircle size={40} className="text-red-500 mb-4" /><p className="text-sm font-bold">{error}</p><button onClick={onClose} className="mt-6 bg-white/10 px-6 py-2 rounded-full font-bold text-xs">Voltar</button></div>}
+                    {error && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-6 text-center z-50 animate-fade-in">
+                            <AlertCircle size={40} className="text-red-500 mb-4" />
+                            
+                            {error === 'API_DISABLED' ? (
+                                <div className="flex flex-col items-center">
+                                    <p className="text-sm font-bold mb-4">A API de Inteligência Artificial precisa de ser ativada.</p>
+                                    <a 
+                                        href="https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=1066114053908"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-xs font-bold mb-4 w-full shadow-lg pointer-events-auto"
+                                    >
+                                        Ativar API (Google Cloud) ↗
+                                    </a>
+                                    <p className="text-[10px] text-gray-400">Clique acima, ative e aguarde 2 minutos.</p>
+                                </div>
+                            ) : (
+                                <p className="text-sm font-bold mb-6">{error}</p>
+                            )}
+                            
+                            <button onClick={() => { setError(null); }} className="mt-4 bg-white/10 px-6 py-2 rounded-full font-bold text-xs pointer-events-auto">
+                                Tentar de Novo
+                            </button>
+                        </div>
+                    )}
                 </div>
                 
                 {/* Controles de Câmara */}
