@@ -215,6 +215,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
     // --- AI OCR FEATURE ---
     const handleAiScan = async () => {
         if (!videoRef.current || isAiProcessing) return;
+        
+        // Verifica se o vídeo está pronto
+        if (videoRef.current.readyState < 2) {
+            alert("A câmara ainda está a iniciar. Aguarde um momento.");
+            return;
+        }
+
         setIsAiProcessing(true);
 
         try {
@@ -223,7 +230,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             canvas.width = videoRef.current.videoWidth;
             canvas.height = videoRef.current.videoHeight;
             const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error("Canvas Error");
+            if (!ctx) throw new Error("Erro ao criar imagem (Canvas).");
             
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
             const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // Remove header
@@ -237,12 +244,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                 beep.play().catch(() => {});
                 onCodeSubmit(code.toUpperCase());
             } else {
-                alert("A IA não conseguiu identificar um código nítido. Tente aproximar ou focar melhor.");
+                alert("A IA não conseguiu ler o código. Tente focar melhor ou limpar a etiqueta.");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("AI Scan Error:", error);
-            alert("Erro ao usar IA. Verifique a consola.");
+            // Mostrar erro real ao utilizador no telemóvel para diagnóstico
+            alert(`Erro IA: ${error.message || JSON.stringify(error)}`);
         } finally {
             setIsAiProcessing(false);
         }
