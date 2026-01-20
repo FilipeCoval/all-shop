@@ -253,9 +253,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             console.error("AI Scan Error:", error);
             const msg = error.message || JSON.stringify(error);
             
-            // TRATAMENTO INTELIGENTE DO ERRO "API DISABLED"
-            if (msg.includes("Generative Language API") || msg.includes("PERMISSION_DENIED")) {
-                setError("API_DISABLED");
+            // TRATAMENTO INTELIGENTE DO ERRO "API DISABLED" ou "PERMISSION DENIED"
+            if (msg.includes("Generative Language API") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
+                setError("API_KEY_RESTRICTED");
             } else {
                 setError(`Erro IA: ${msg.substring(0, 50)}...`);
             }
@@ -320,24 +320,33 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-6 text-center z-50 animate-fade-in">
                             <AlertCircle size={40} className="text-red-500 mb-4" />
                             
-                            {error === 'API_DISABLED' ? (
+                            {error === 'API_KEY_RESTRICTED' ? (
                                 <div className="flex flex-col items-center">
-                                    <p className="text-sm font-bold mb-4">A API de Inteligência Artificial precisa de ser ativada.</p>
+                                    <p className="text-sm font-bold mb-2">Acesso Negado à IA</p>
+                                    <p className="text-[10px] mb-4 text-gray-300">A API está ativa, mas a Chave está restrita.</p>
+                                    
                                     <a 
-                                        href="https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=1066114053908"
+                                        href="https://console.cloud.google.com/apis/credentials?project=allshop-store-70851"
                                         target="_blank"
                                         rel="noreferrer"
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-xs font-bold mb-4 w-full shadow-lg pointer-events-auto"
                                     >
-                                        Ativar API (Google Cloud) ↗
+                                        1. Abrir Credenciais Google ↗
                                     </a>
-                                    <p className="text-[10px] text-gray-400">Clique acima, ative e aguarde 2 minutos.</p>
+                                    
+                                    <div className="text-[10px] text-gray-400 bg-white/5 p-3 rounded text-left w-full border border-white/10">
+                                        <strong>Como resolver:</strong><br/>
+                                        1. Clique no botão acima.<br/>
+                                        2. Clique no nome da sua Chave (API Key).<br/>
+                                        3. Em "Restrições de API", adicione a <strong>Generative Language API</strong>.<br/>
+                                        4. Guarde.
+                                    </div>
                                 </div>
                             ) : (
                                 <p className="text-sm font-bold mb-6">{error}</p>
                             )}
                             
-                            <button onClick={() => { setError(null); }} className="mt-4 bg-white/10 px-6 py-2 rounded-full font-bold text-xs pointer-events-auto">
+                            <button onClick={() => { setError(null); }} className="mt-4 bg-white/10 px-6 py-2 rounded-full font-bold text-xs pointer-events-auto hover:bg-white/20">
                                 Tentar de Novo
                             </button>
                         </div>
@@ -1116,7 +1125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           status: productStatus, 
           badges: formData.badges, 
           images: formData.images, 
-          features: formData.features,
+          features: formData.features, 
           comingSoon: formData.comingSoon
       }; 
       
