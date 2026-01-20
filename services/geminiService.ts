@@ -95,3 +95,39 @@ export const getInventoryAnalysis = async (products: InventoryProduct[], userPro
         return "Ocorreu um erro ao comunicar com o serviço de IA. Verifique a consola para mais detalhes."; 
     }
 };
+
+/**
+ * Extrai o Número de Série (S/N) ou Código de Barras de uma imagem Base64.
+ * Ideal para etiquetas difíceis (Xiaomi, alta densidade, reflexos).
+ */
+export const extractSerialNumberFromImage = async (base64Image: string): Promise<string | null> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image', // Modelo otimizado para visão e rapidez
+            contents: {
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: base64Image
+                        }
+                    },
+                    {
+                        text: "Look at this product label. Locate the Serial Number (S/N), SN, IMEI, or the main alphanumeric barcode string. Return ONLY the code itself (letters and numbers). Do not include prefixes like 'S/N:', 'SN', or explanations. If multiple codes exist, prefer the one labeled S/N. If nothing is found, return 'NOT_FOUND'."
+                    }
+                ]
+            }
+        });
+
+        const text = response.text?.trim();
+        if (!text || text.includes('NOT_FOUND')) return null;
+        
+        // Limpeza extra para garantir que só vem o código
+        return text.replace(/[^a-zA-Z0-9\-\/]/g, '');
+    } catch (error) {
+        console.error("Gemini OCR Error:", error);
+        return null;
+    }
+};
