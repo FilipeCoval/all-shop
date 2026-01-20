@@ -104,8 +104,10 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     try {
+        // Usar gemini-3-flash-preview que é multimodal (vê imagens e texto)
+        // O anterior 'flash-image' pode estar restrito a geração de imagem.
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image', // Modelo otimizado para visão e rapidez
+            model: 'gemini-3-flash-preview', 
             contents: {
                 parts: [
                     {
@@ -128,6 +130,7 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
         return text.replace(/[^a-zA-Z0-9\-\/]/g, '');
     } catch (error) {
         console.error("Gemini OCR Error:", error);
-        return null;
+        // Lança o erro para que o Dashboard o possa mostrar no alert
+        throw error;
     }
 };
