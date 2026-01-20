@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
-import { getInventoryAnalysis } from '../services/geminiService';
+import { getInventoryAnalysis, extractSerialNumberFromImage } from '../services/geminiService';
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 // FIX: Importar firebase da config centralizada para evitar erros de build (Rollup/Vite)
 import { db, storage, firebase } from '../services/firebaseConfig';
@@ -82,6 +82,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
     const [zoom, setZoom] = useState(1);
     const [maxZoom, setMaxZoom] = useState(1);
     const [hasZoom, setHasZoom] = useState(false);
+    
+    // AI State
+    const [isAiProcessing, setIsAiProcessing] = useState(false);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -209,6 +212,42 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
       }
     };
 
+    // --- AI OCR FEATURE ---
+    const handleAiScan = async () => {
+        if (!videoRef.current || isAiProcessing) return;
+        setIsAiProcessing(true);
+
+        try {
+            // 1. Capture Image from Video
+            const canvas = document.createElement('canvas');
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Canvas Error");
+            
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // Remove header
+
+            // 2. Send to Gemini Service
+            const code = await extractSerialNumberFromImage(base64Image);
+
+            if (code) {
+                // Success! Play beep and submit
+                const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // Camera shutter / beep
+                beep.play().catch(() => {});
+                onCodeSubmit(code.toUpperCase());
+            } else {
+                alert("A IA não conseguiu identificar um código nítido. Tente aproximar ou focar melhor.");
+            }
+
+        } catch (error) {
+            console.error("AI Scan Error:", error);
+            alert("Erro ao usar IA. Verifique a consola.");
+        } finally {
+            setIsAiProcessing(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4">
             <button onClick={onClose} className="absolute top-6 right-6 bg-white/10 p-3 rounded-full text-white z-[110] border border-white/20 active:scale-90 transition-all shadow-2xl"><X size={24}/></button>
@@ -225,15 +264,40 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
 
                 <div className="relative aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
                     <video ref={videoRef} className="w-full h-full object-cover scale-110" muted playsInline />
+                    
+                    {/* Overlay de Scan */}
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        {/* Mira estreita para S/N */}
                         <div className={`w-[90%] max-w-[300px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)] ${mode === 'serial' ? 'h-[60px]' : 'h-[150px]'} transition-all duration-300`}>
-                            <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>
+                            {!isAiProcessing && <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>}
+                            
+                            {/* AI Processing Animation */}
+                            {isAiProcessing && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-xl">
+                                    <div className="flex flex-col items-center">
+                                        <Loader2 size={32} className="text-white animate-spin mb-2" />
+                                        <span className="text-white text-xs font-bold animate-pulse">A analisar com IA...</span>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="absolute -top-6 left-0 right-0 text-center text-white/80 text-[10px] font-bold uppercase tracking-wider">
-                                {mode === 'serial' ? 'Aponte para o S/N (Barras Finas)' : 'Aponte para o Código de Barras'}
+                                {mode === 'serial' ? 'Aponte para o S/N' : 'Aponte para o Código'}
                             </div>
                         </div>
                     </div>
+
+                    {/* AI Button Overlay */}
+                    <div className="absolute bottom-4 right-4 z-[60]">
+                        <button 
+                            onClick={handleAiScan}
+                            disabled={isAiProcessing}
+                            className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-full shadow-lg border-2 border-white/20 flex items-center gap-2 transition-all active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isAiProcessing ? <BrainCircuit size={24} className="animate-pulse" /> : <Camera size={24} />}
+                            <span className="text-xs font-bold hidden sm:inline">IA Scan</span>
+                        </button>
+                    </div>
+
                     {error && <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-8 text-center z-50"><AlertCircle size={40} className="text-red-500 mb-4" /><p className="text-sm font-bold">{error}</p><button onClick={onClose} className="mt-6 bg-white/10 px-6 py-2 rounded-full font-bold text-xs">Voltar</button></div>}
                 </div>
                 
