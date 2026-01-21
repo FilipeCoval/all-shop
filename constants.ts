@@ -5,8 +5,8 @@ export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
 // URL OFICIAL DA LOJA
-// Atualizado para o domínio oficial com www
-export const PUBLIC_URL = "https://www.all-shop.net";
+// Atualizado para o domínio que aparece no seu browser (sem www)
+export const PUBLIC_URL = "https://all-shop.net";
 
 export const SELLER_PHONE = "351933865907"; 
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
