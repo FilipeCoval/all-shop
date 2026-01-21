@@ -116,7 +116,7 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
                         }
                     },
                     {
-                        text: "Analyze this image of a product label. Locate the Serial Number (S/N), SN, IMEI, or the main alphanumeric identifier code. Return ONLY the code itself (letters and numbers). Remove any prefixes like 'S/N:', 'SN', 'IMEI:' or spaces. If multiple codes exist, prefer the one explicitly labeled 'S/N' or 'SN'. If the image is too blurry or no code is found, return 'NOT_FOUND'."
+                        text: "Look for a product barcode, Serial Number (S/N), SN, IMEI, or alphanumeric identifier. Return ONLY the code found. Remove labels like 'S/N:', 'IMEI:', 'Batch:'. If multiple codes exist, prefer S/N. If unclear, return 'NOT_FOUND'."
                     }
                 ]
             }
