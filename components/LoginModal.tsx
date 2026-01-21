@@ -45,14 +45,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
       console.error("Auth error", err);
       const errorMessage = err.message || '';
       
-      if (errorMessage.includes('requests-from-referer')) {
+      // Deteta erro de referer (Domínio bloqueado)
+      if (errorMessage.includes('requests-from-referer') || errorMessage.includes('403')) {
           // Tenta extrair o domínio exato que veio no erro
-          // Ex: auth/requests-from-referer-https://meusite.com-are-blocked
           const matches = errorMessage.match(/requests-from-referer-(.*?)-are-blocked/);
-          const domain = matches ? matches[1] : window.location.hostname;
+          
+          // Se conseguir extrair do erro, usa. Se não, usa o domínio atual do browser (seguro para mobile).
+          const domain = matches ? matches[1] : window.location.origin;
           
           setBlockedDomain(domain);
-          setError('Domínio não autorizado pela Google.');
+          setError('Domínio não autorizado (Erro 403).');
           setIsConfigError(true);
       } else if (
           err.code === 'auth/invalid-credential' || 
@@ -67,7 +69,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
       } else if (err.code === 'auth/operation-not-allowed') {
           setError('Erro de configuração: Login por email/password não está ativo no Firebase.');
       } else {
-          setError('Ocorreu um erro. Tente novamente.');
+          setError('Ocorreu um erro inesperado: ' + errorMessage);
       }
   };
 
@@ -208,17 +210,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                     </div>
                     {isConfigError && blockedDomain && (
                         <div className="pl-8 text-xs text-orange-700">
-                            <p className="mb-1"><strong>Copie este link EXATO e adicione à Google Cloud:</strong></p>
+                            <p className="mb-1"><strong>Copie este link e adicione como "*Link*" na Google Cloud:</strong></p>
                             <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
-                                <code className="flex-1 break-all select-all font-mono">{blockedDomain}/*</code>
+                                <code className="flex-1 break-all select-all font-mono text-[10px]">{blockedDomain}</code>
                                 <button 
-                                    onClick={() => navigator.clipboard.writeText(blockedDomain + "/*")}
+                                    onClick={() => navigator.clipboard.writeText(blockedDomain)}
                                     className="p-1 hover:bg-orange-200 rounded text-orange-800"
                                     title="Copiar"
                                 >
                                     <Copy size={14} />
                                 </button>
                             </div>
+                            <p className="mt-2 text-[10px] text-gray-500 italic">Dica: Adicione <strong>*.goog/*</strong> na Cloud para corrigir de vez.</p>
                         </div>
                     )}
                 </div>
