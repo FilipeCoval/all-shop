@@ -240,9 +240,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                             {error === 'API_KEY_RESTRICTED' ? (
                                 <div className="flex flex-col items-center w-full">
                                     <WifiOff size={48} className="text-red-500 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Acesso Bloqueado pela Google</h3>
+                                    <h3 className="text-lg font-bold mb-2">Segurança: Domínio não autorizado</h3>
                                     <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
-                                        A sua Chave API tem restrições que impedem este site de a usar.
+                                        Este link do site não está na lista segura da Google. Autorize uma vez na Cloud para funcionar em todos os dispositivos.
                                     </p>
                                     
                                     <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
@@ -266,12 +266,12 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                                     </div>
 
                                     <a 
-                                        href="https://console.cloud.google.com/apis/credentials"
+                                        href="https://console.cloud.google.com/apis/credentials?project=allshop-store-70851"
                                         target="_blank"
                                         rel="noreferrer"
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
                                     >
-                                        Ir para Google Cloud <ExternalLink size={14} />
+                                        Ir para Google Cloud (Projeto Allshop) <ExternalLink size={14} />
                                     </a>
                                 </div>
                             ) : (
@@ -960,6 +960,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const cogs = p.quantitySold * p.purchasePrice; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
   const handleOpenCashbackModal = () => { setDetailsModalData({ title: "Cashback Pendente", data: products.filter(p => p.cashbackStatus === 'PENDING').map(p => ({ id: p.id, name: p.name, val: p.cashbackValue })), total: stats.pendingCashback, columns: [{ header: "Produto", accessor: "name" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
   const handleImportProducts = async () => { if (!window.confirm("Importar produtos?")) return; setIsImporting(true); try { for (const p of INITIAL_PRODUCTS) await addProduct({ name: p.name, category: p.category, description: p.description, publicProductId: p.id, variant: null, purchaseDate: new Date().toISOString(), quantityBought: p.stock || 10, quantitySold: 0, purchasePrice: p.price * 0.6, salePrice: p.price, status: (p.stock || 0) > 0 ? 'IN_STOCK' : 'SOLD', images: p.images || (p.image ? [p.image] : []), features: p.features || [], comingSoon: p.comingSoon || false, cashbackStatus: 'NONE', cashbackValue: 0 }); alert("Importação concluída."); } catch (e) { alert("Erro."); } finally { setIsImporting(false); } };
+
+  if (!isAdmin) {
+    return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+            <ShieldAlert size={64} className="text-red-500 mb-6" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Restrito</h1>
+            <p className="text-gray-500 mb-8">Esta área é reservada para administradores.</p>
+            <a href="#/" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">Voltar à Loja</a>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
