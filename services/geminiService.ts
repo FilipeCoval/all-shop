@@ -105,7 +105,6 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
     
     try {
         // Usar gemini-3-flash-preview que é multimodal (vê imagens e texto)
-        // O anterior 'flash-image' pode estar restrito a geração de imagem.
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
             contents: {
@@ -117,20 +116,24 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
                         }
                     },
                     {
-                        text: "Look at this product label. Locate the Serial Number (S/N), SN, IMEI, or the main alphanumeric barcode string. Return ONLY the code itself (letters and numbers). Do not include prefixes like 'S/N:', 'SN', or explanations. If multiple codes exist, prefer the one labeled S/N. If nothing is found, return 'NOT_FOUND'."
+                        text: "Analyze this image of a product label. Locate the Serial Number (S/N), SN, IMEI, or the main alphanumeric identifier code. Return ONLY the code itself (letters and numbers). Remove any prefixes like 'S/N:', 'SN', 'IMEI:' or spaces. If multiple codes exist, prefer the one explicitly labeled 'S/N' or 'SN'. If the image is too blurry or no code is found, return 'NOT_FOUND'."
                     }
                 ]
             }
         });
 
         const text = response.text?.trim();
+        
         if (!text || text.includes('NOT_FOUND')) return null;
         
-        // Limpeza extra para garantir que só vem o código
-        return text.replace(/[^a-zA-Z0-9\-\/]/g, '');
+        // Limpeza extra para garantir que só vem o código (remove espaços e caracteres especiais indesejados)
+        // Mantém letras, números, hífens e barras que são comuns em S/Ns
+        const cleanCode = text.replace(/[^a-zA-Z0-9\-\/]/g, '');
+        
+        return cleanCode.length > 3 ? cleanCode : null; // Filtra leituras muito curtas/ruído
     } catch (error) {
         console.error("Gemini OCR Error:", error);
-        // Lança o erro para que o Dashboard o possa mostrar no alert
+        // Lança o erro para que o Dashboard o possa mostrar no alert (incluindo erros de permissão)
         throw error;
     }
 };
