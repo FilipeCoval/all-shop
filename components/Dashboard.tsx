@@ -21,21 +21,54 @@ const getSafeItems = (items: any): (OrderItem | string)[] => {
     return [];
 };
 
+// --- SOUND UTILITY (NATIVE) ---
+const playSound = (type: 'success' | 'notification' | 'error') => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        if (type === 'success') {
+            // Beep agudo e curto (Scan OK)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.15);
+        } else if (type === 'notification') {
+            // Ding dong suave (Nova Encomenda)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(500, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.5);
+        } else if (type === 'error') {
+            // Buzz grave (Erro)
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.25);
+        }
+    } catch (e) { console.error("Audio play failed", e); }
+};
+
 // --- Tipos Locais para o Dashboard ---
 interface ManualOrderItem extends Product {
     quantity: number;
     selectedVariant: string; // Vazio se não houver variante
     finalPrice: number;
-}
-
-interface SalesLedgerItem {
-    id: string;
-    date: string;
-    type: 'Online' | 'Manual';
-    items: string[];
-    customer: string;
-    total: number;
-    sourceId: string; // ID da Order ou ID do SaleRecord
 }
 
 // Utility para formatação de moeda
@@ -128,7 +161,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                 
                 if (videoRef.current) {
                     await codeReaderRef.current.decodeFromStream(stream, videoRef.current, (result, err) => {
-                        if (result) onCodeSubmit(result.getText().trim().toUpperCase());
+                        if (result) {
+                            playSound('success');
+                            onCodeSubmit(result.getText().trim().toUpperCase());
+                        }
                     });
                 }
             } catch (err) {
@@ -185,16 +221,17 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             const code = await extractSerialNumberFromImage(base64Image);
 
             if (code) {
-                const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                beep.play().catch(() => {});
+                playSound('success');
                 onCodeSubmit(code.toUpperCase());
                 setAiStatus('ready');
             } else {
+                playSound('error');
                 setError("A IA não conseguiu ler. Tente focar e limpar a etiqueta.");
             }
         } catch (error: any) {
             console.error("AI Scan Error:", error);
             const msg = error.message || JSON.stringify(error);
+            playSound('error');
             
             setAiStatus('offline'); // Marca visualmente como offline
 
@@ -226,7 +263,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className={`w-[90%] max-w-[300px] border-2 border-white/20 rounded-2xl relative shadow-[0_0_0_2000px_rgba(0,0,0,0.7)] ${mode === 'serial' ? 'h-[60px]' : 'h-[150px]'} transition-all duration-300`}>
                             {!isAiProcessing && !error && <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)] animate-pulse"></div>}
-                            {isAiProcessing && <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-xl"><Loader2 size={32} className="text-white animate-spin" /></div>}
+                            {isAiProcessing && <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-xl gap-2"><Loader2 size={32} className="text-white animate-spin" /><span className="text-white text-xs font-bold animate-pulse">A Analisar...</span></div>}
                         </div>
                     </div>
                     <div className="absolute bottom-4 right-4 z-[60]">
@@ -329,7 +366,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [notifications, setNotifications] = useState<Order[]>([]);
   const [showToast, setShowToast] = useState<Order | null>(null);
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [isOnlineDetailsOpen, setIsOnlineDetailsOpen] = useState(false);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -419,7 +455,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   useEffect(() => {
     if(!isAdmin) return;
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
     const mountTime = Date.now();
     const unsubscribe = db.collection('orders').orderBy('date', 'desc').limit(10).onSnapshot(snapshot => {
         snapshot.docChanges().forEach(change => {
@@ -428,7 +463,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 if (new Date(order.date).getTime() > (mountTime - 2000)) {
                     setNotifications(prev => [order, ...prev]);
                     setShowToast(order);
-                    if (audioRef.current) audioRef.current.play().catch(() => {});
+                    playSound('notification');
                     setTimeout(() => setShowToast(null), 5000);
                 }
             }
