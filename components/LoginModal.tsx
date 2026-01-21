@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy } from 'lucide-react';
 import { User as UserType } from '../types';
 import { auth, db } from '../services/firebaseConfig';
 
@@ -22,6 +21,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConfigError, setIsConfigError] = useState(false); // Novo estado para erros de configuração
+  const [blockedDomain, setBlockedDomain] = useState<string>(''); // Para mostrar o domínio exato
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,6 +30,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     if (isOpen) {
       setView('login');
       setError(null);
+      setIsConfigError(false);
+      setBlockedDomain('');
       setSuccessMsg(null);
       setPassword('');
       setConfirmPassword('');
@@ -37,13 +40,45 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
   if (!isOpen) return null;
 
+  // Função auxiliar para extrair o domínio do erro
+  const handleAuthError = (err: any) => {
+      console.error("Auth error", err);
+      const errorMessage = err.message || '';
+      
+      if (errorMessage.includes('requests-from-referer')) {
+          // Tenta extrair o domínio exato que veio no erro
+          // Ex: auth/requests-from-referer-https://meusite.com-are-blocked
+          const matches = errorMessage.match(/requests-from-referer-(.*?)-are-blocked/);
+          const domain = matches ? matches[1] : window.location.hostname;
+          
+          setBlockedDomain(domain);
+          setError('Domínio não autorizado pela Google.');
+          setIsConfigError(true);
+      } else if (
+          err.code === 'auth/invalid-credential' || 
+          err.code === 'auth/user-not-found' || 
+          err.code === 'auth/wrong-password'
+      ) {
+          setError('Dados incorretos. Verifique o email e palavra-passe.');
+      } else if (err.code === 'auth/too-many-requests') {
+          setError('Muitas tentativas falhadas. Tente novamente mais tarde.');
+      } else if (err.code === 'auth/email-already-in-use') {
+          setError('Este email já está registado.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+          setError('Erro de configuração: Login por email/password não está ativo no Firebase.');
+      } else {
+          setError('Ocorreu um erro. Tente novamente.');
+      }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsConfigError(false);
     setIsLoading(true);
 
     try {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email.trim(), password);
         const firebaseUser = userCredential.user;
 
         if (!firebaseUser) throw new Error("Falha ao obter utilizador");
@@ -66,7 +101,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                 };
             }
         } catch (dbErr) {
-            // CORREÇÃO DO LOGIN ERROR: Se o Firestore bloquear, usamos os dados do Auth e prosseguimos
             console.warn("Database restricted. Using Auth profile only.");
             userData = {
                 uid: firebaseUser.uid,
@@ -80,18 +114,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         onClose();
 
     } catch (err: any) {
-        console.error("Auth error", err);
-        if (
-            err.code === 'auth/invalid-credential' || 
-            err.code === 'auth/user-not-found' || 
-            err.code === 'auth/wrong-password'
-        ) {
-            setError('Dados incorretos. Verifique o email e palavra-passe.');
-        } else if (err.code === 'auth/too-many-requests') {
-            setError('Muitas tentativas falhadas. Tente novamente mais tarde.');
-        } else {
-            setError('Erro ao entrar. Tente novamente.');
-        }
+        handleAuthError(err);
     } finally {
         setIsLoading(false);
     }
@@ -100,6 +123,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsConfigError(false);
 
     if (password.length < 6) {
         setError('A palavra-passe deve ter pelo menos 6 caracteres.');
@@ -114,7 +138,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     setIsLoading(true);
 
     try {
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const userCredential = await auth.createUserWithEmailAndPassword(email.trim(), password);
         const firebaseUser = userCredential.user;
 
         if (!firebaseUser) throw new Error("Falha ao criar utilizador");
@@ -124,7 +148,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         const newUser: UserType = {
             uid: firebaseUser.uid,
             name,
-            email,
+            email: email.trim(),
             addresses: []
         };
 
@@ -136,12 +160,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         onClose();
 
     } catch (err: any) {
-        console.error("Register error", err);
-        if (err.code === 'auth/email-already-in-use') {
-            setError('Este email já está registado.');
-        } else {
-            setError('Erro ao criar conta.');
-        }
+        handleAuthError(err);
     } finally {
         setIsLoading(false);
     }
@@ -150,14 +169,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsConfigError(false);
     setIsLoading(true);
 
     try {
-        await auth.sendPasswordResetEmail(email);
-        setSuccessMsg(`Email de recuperação enviado para ${email}.`);
+        await auth.sendPasswordResetEmail(email.trim());
+        setSuccessMsg(`Email de recuperação enviado para ${email.trim()}.`);
         setTimeout(() => setView('login'), 5000);
     } catch (err: any) {
-        setError('Erro ao enviar email de recuperação.');
+        handleAuthError(err);
     } finally {
         setIsLoading(false);
     }
@@ -181,9 +201,26 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
         <div className="p-8 pt-0 overflow-y-auto">
             {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 animate-slide-in">
-                    <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
-                    <span className="text-sm font-medium">{error}</span>
+                <div className={`mb-6 p-4 border rounded-xl flex flex-col gap-2 ${isConfigError ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-100 text-red-600'} animate-slide-in`}>
+                    <div className="flex items-start gap-3">
+                        {isConfigError ? <WifiOff size={20} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />}
+                        <span className="text-sm font-medium">{error}</span>
+                    </div>
+                    {isConfigError && blockedDomain && (
+                        <div className="pl-8 text-xs text-orange-700">
+                            <p className="mb-1"><strong>Copie este link EXATO e adicione à Google Cloud:</strong></p>
+                            <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
+                                <code className="flex-1 break-all select-all font-mono">{blockedDomain}/*</code>
+                                <button 
+                                    onClick={() => navigator.clipboard.writeText(blockedDomain + "/*")}
+                                    className="p-1 hover:bg-orange-200 rounded text-orange-800"
+                                    title="Copiar"
+                                >
+                                    <Copy size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -282,4 +319,3 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 };
 
 export default LoginModal;
-
