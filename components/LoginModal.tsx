@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy, Globe, Key, ExternalLink } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy, Globe, Key, ExternalLink, AlertTriangle } from 'lucide-react';
 import { User as UserType } from '../types';
 import { auth, db } from '../services/firebaseConfig';
 
@@ -218,24 +218,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                     {isConfigError && blockedDomain && (
                         <div className="pl-8 text-xs text-orange-700 space-y-3 mt-2">
                             <div>
-                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] uppercase text-gray-500"><Globe size={10}/> 1. Adicione este link à Google Cloud:</p>
+                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] text-yellow-400 uppercase"><AlertTriangle size={10}/> SOLUÇÃO RÁPIDA:</p>
+                                <p className="text-[10px] text-gray-500 mb-1">Vá à Consola Google > Credenciais e selecione:</p>
                                 <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
-                                    <code className="flex-1 break-all select-all font-mono text-[10px]">{blockedDomain}/*</code>
-                                    <button 
-                                        onClick={() => navigator.clipboard.writeText(blockedDomain + "/*")}
-                                        className="p-1 hover:bg-orange-200 rounded text-orange-800"
-                                        title="Copiar"
-                                    >
-                                        <Copy size={12} />
-                                    </button>
+                                    <code className="flex-1 font-mono text-[10px] text-green-700 font-bold">◉ Não restringir a chave</code>
                                 </div>
-                            </div>
-                            <div>
-                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] uppercase text-gray-500"><Key size={10}/> 2. Verifique se a Chave é a sua:</p>
-                                <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
-                                    <code className="flex-1 break-all select-all font-mono text-[10px] text-blue-600">{getApiKeyHint()}</code>
-                                </div>
-                                <p className="text-[9px] text-gray-400 mt-1">Se não for a sua, edite o <code>vite.config.ts</code>.</p>
+                                <p className="text-[9px] text-gray-400 mt-1">Isto corrige o erro de permissões da API do Identity Toolkit.</p>
                             </div>
                             <div className="pt-2">
                                 <a 
