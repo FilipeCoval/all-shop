@@ -239,10 +239,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
 
             // DIAGNÓSTICO INTELIGENTE DE ERRO DE DOMÍNIO
             if (msg.includes("API key not valid") || msg.includes("referer") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
-                // Tenta apanhar o domínio exato do erro se disponível, senão usa o atual
-                const matches = msg.match(/requests-from-referer-(.*?)-are-blocked/);
-                const domain = matches ? matches[1] : window.location.origin;
-                setBlockedDomain(domain);
                 setError("API_KEY_RESTRICTED");
             } else {
                 setError(`Erro IA: ${msg.substring(0, 50)}...`);
@@ -250,13 +246,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
         } finally {
             setIsAiProcessing(false);
         }
-    };
-
-    // Helper para mostrar a API Key (mascarada) para depuração
-    const getApiKeyHint = () => {
-        const key = process.env.API_KEY || '';
-        if (key.length > 10) return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
-        return 'Não encontrada';
     };
 
     return (
@@ -290,35 +279,21 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                             {error === 'API_KEY_RESTRICTED' ? (
                                 <div className="flex flex-col items-center w-full">
                                     <WifiOff size={48} className="text-red-500 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Acesso Negado pela Google</h3>
+                                    <h3 className="text-lg font-bold mb-2">Bloqueio de Segurança</h3>
                                     <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
-                                        A API Key está a bloquear este site.
+                                        A API Key está bloqueada pela Google Cloud.
                                     </p>
                                     
                                     <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left space-y-3">
                                         <div>
-                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1 flex items-center gap-1"><Globe size={10}/> 1. Adicione este link à Google Cloud:</p>
-                                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
-                                                <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">
-                                                    {blockedDomain || window.location.origin}/*
-                                                </code>
-                                                <button 
-                                                    onClick={() => navigator.clipboard.writeText((blockedDomain || window.location.origin) + "/*")}
-                                                    className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white"
-                                                >
-                                                    <Copy size={12} />
-                                                </button>
+                                            <p className="text-[10px] text-yellow-400 uppercase font-bold mb-1 flex items-center gap-1"><AlertTriangle size={10}/> SOLUÇÃO RÁPIDA:</p>
+                                            <p className="text-xs text-white">Vá à consola da Google e selecione a opção:</p>
+                                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10 mt-1">
+                                                <code className="text-xs font-bold text-green-400">◉ Não restringir a chave</code>
                                             </div>
-                                        </div>
-
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1 flex items-center gap-1"><Key size={10}/> 2. Verifique se a Chave é a sua:</p>
-                                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
-                                                <code className="text-xs font-mono text-blue-300 flex-1 truncate">
-                                                    {getApiKeyHint()}
-                                                </code>
-                                            </div>
-                                            <p className="text-[9px] text-gray-500 mt-1">Se a chave não for a sua, edite o ficheiro <code>vite.config.ts</code>.</p>
+                                            <p className="text-[9px] text-gray-400 mt-2 leading-relaxed">
+                                                Isso corrige o erro de "Restrições de API" onde a IA do Gemini pode não estar selecionada.
+                                            </p>
                                         </div>
                                     </div>
 
