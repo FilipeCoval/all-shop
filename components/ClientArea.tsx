@@ -3,10 +3,6 @@ import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, 
 // FIX: Imported the 'X' icon from lucide-react to fix the 'Cannot find name X' error.
 import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
-import { db } from '../services/firebaseConfig';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
-
 // FIX: Centralized firebase import to prevent duplicate import errors in build
 import { db, firebase } from '../services/firebaseConfig';
 
@@ -57,7 +53,7 @@ const CircularProgress: React.FC<{ progress: number; size: number; strokeWidth: 
 
 const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
-
+  
   // State for Profile Form
   const [profileForm, setProfileForm] = useState({
     name: user?.name || '',
@@ -131,10 +127,10 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               status: 'Cancelado',
               cancellationReason: cancellationReason.trim()
           });
-
+          
           // O stock NÃO é reposto automaticamente pelo cliente.
           // Esta ação fica pendente de revisão pelo administrador no Dashboard.
-
+          
           setCancellationModalOrder(null);
           setCancellationReason('');
 
@@ -150,7 +146,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   // --- LOYALTY LOGIC ---
   const handleRedeemReward = async (reward: typeof LOYALTY_REWARDS[0]) => {
       const currentPoints = user.loyaltyPoints || 0;
-
+      
       if (currentPoints < reward.cost) {
           alert("Pontos insuficientes.");
           return;
@@ -163,7 +159,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       try {
           // 1. Gerar Código Único
           const code = `REWARD-${user.uid?.substring(0,4).toUpperCase()}-${Date.now().toString().substring(7)}`;
-
+          
           const newCoupon: Coupon = {
               code,
               type: 'FIXED',
@@ -186,7 +182,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
           const updatedPoints = currentPoints - reward.cost;
           const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
-
+          
           // FIX: Usar 'firebase.firestore.FieldValue' importado de forma segura via firebaseConfig se necessário, 
           // ou atualização direta como aqui
           await db.collection('users').doc(user.uid).update({
@@ -214,7 +210,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const currentPoints = user.loyaltyPoints || 0;
   const currentTotalSpent = user.totalSpent || 0;
   const currentTier = user.tier || 'Bronze';
-
+  
   // Tier Progress
   let nextTierLabel = null;
   let tierProgress = 0;
@@ -240,7 +236,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   let rewardProgress = 0;
   let rewardGoalText = "Recompensa Máxima!";
-
+  
   if (nextReward) {
       rewardProgress = (currentPoints / nextReward.cost) * 100;
       rewardGoalText = `${currentPoints} / ${nextReward.cost} pts para Vale de ${nextReward.value}€`;
@@ -270,7 +266,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     const dateFormatted = new Date(order.date).toLocaleDateString('pt-PT', {
         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-
+    
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0);
     const safeItems = getSafeItems(order.items);
 
@@ -424,25 +420,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     <>
       <div className="container mx-auto px-4 py-12 animate-fade-in">
         <div className="flex flex-col md:flex-row gap-8">
-
+          
           {/* Sidebar */}
           <aside className="w-full md:w-1/4 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
               <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative">
                 {(user.name || 'C').charAt(0).toUpperCase()}
-
+                
                 <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
                   ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
                 `} title={`Nível ${currentTier}`}>
                     {currentTier === 'Ouro' ? 'G' : currentTier === 'Prata' ? 'S' : 'B'}
                 </div>
               </div>
-
+              
               <h2 className="font-bold text-xl text-gray-900">{user.name || 'Cliente'}</h2>
               <div className="inline-block px-3 py-1 rounded-full bg-blue-50 text-primary text-xs font-bold mt-1 mb-4">
                   {user.loyaltyPoints || 0} AllPoints
               </div>
-
+              
               <button 
                 onClick={onLogout}
                 className="w-full py-2 px-4 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
@@ -475,12 +471,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
           {/* Main Content */}
           <div className="flex-1">
-
+            
             {/* --- OVERVIEW TAB --- */}
             {activeTab === 'overview' && (
               <div className="animate-fade-in space-y-6">
                   <h2 className="text-2xl font-bold text-gray-800">Olá, {user.name ? user.name.split(' ')[0] : 'Cliente'}! 👋</h2>
-
+                  
                   {/* KPI Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><p className="text-xs text-gray-500 font-bold uppercase flex items-center gap-1"><DollarSign size={12}/>Total Gasto</p><p className="text-xl font-bold text-gray-800 mt-1">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(totalSpent)}</p></div>
@@ -573,7 +569,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                       <Package className="text-primary" /> Histórico de Encomendas
                   </h3>
                   </div>
-
+                  
                   <div className="overflow-x-auto">
                   <table className="w-full text-left">
                       <thead className="bg-gray-50 text-xs uppercase text-gray-500">
@@ -597,7 +593,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                              <div className="text-xs text-gray-600 space-y-2">
                                  {/* VACINA ANTI-CRASH APLICADA AQUI TAMBÉM */}
                                  {getSafeItems(order.items).slice(0, 3).map((item, idx) => {
-
+                                     
                                      // Renderização segura de String vs Objeto
                                      if (typeof item === 'string') {
                                          return (
@@ -607,7 +603,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                              </div>
                                          );
                                      }
-
+                                     
                                      const itemObject = item as OrderItem;
                                      return (
                                          <div key={idx} className="flex flex-col border-b border-gray-100 pb-1 last:border-0">
@@ -679,7 +675,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                       </tbody>
                   </table>
                   </div>
-
+                  
                   {(!orders || orders.length === 0) && (
                   <div className="p-12 text-center flex flex-col items-center justify-center">
                       <div className="bg-gray-100 p-4 rounded-full mb-4">
@@ -803,7 +799,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           <Heart className="text-primary" /> Os Meus Favoritos
                       </h3>
                   </div>
-
+                  
                   {favoriteProducts.length === 0 ? (
                       <div className="p-12 text-center">
                           <p className="text-gray-500 mb-4">Ainda não guardou nenhum produto.</p>
@@ -1015,7 +1011,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           </div>
         </div>
       </div>
-
+      
       {/* Cancellation Modal */}
       {cancellationModalOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
