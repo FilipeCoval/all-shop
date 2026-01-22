@@ -116,6 +116,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
     const [maxZoom, setMaxZoom] = useState(1);
     const [hasZoom, setHasZoom] = useState(false);
     const [isAiProcessing, setIsAiProcessing] = useState(false);
+    const [blockedDomain, setBlockedDomain] = useState<string>(''); // Novo: Domínio bloqueado
     
     // Auto-diagnóstico
     const [aiStatus, setAiStatus] = useState<'ready' | 'offline'>('ready');
@@ -207,6 +208,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
 
         setIsAiProcessing(true);
         setError(null);
+        setBlockedDomain('');
 
         try {
             const canvas = document.createElement('canvas');
@@ -233,10 +235,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             const msg = error.message || JSON.stringify(error);
             playSound('error');
             
-            setAiStatus('offline'); // Marca visualmente como offline
+            setAiStatus('offline'); 
 
             // DIAGNÓSTICO INTELIGENTE DE ERRO DE DOMÍNIO
             if (msg.includes("API key not valid") || msg.includes("referer") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
+                // Tenta apanhar o domínio exato do erro se disponível, senão usa o atual
+                const matches = msg.match(/requests-from-referer-(.*?)-are-blocked/);
+                const domain = matches ? matches[1] : window.location.origin;
+                setBlockedDomain(domain);
                 setError("API_KEY_RESTRICTED");
             } else {
                 setError(`Erro IA: ${msg.substring(0, 50)}...`);
@@ -277,22 +283,23 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                             {error === 'API_KEY_RESTRICTED' ? (
                                 <div className="flex flex-col items-center w-full">
                                     <WifiOff size={48} className="text-red-500 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Segurança: Domínio não autorizado</h3>
+                                    <h3 className="text-lg font-bold mb-2">Domínio Bloqueado na Cloud</h3>
                                     <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
-                                        Este link do site não está na lista segura da Google. Autorize uma vez na Cloud para funcionar em todos os dispositivos.
+                                        A API Key está restrita e não autoriza este link. Adicione o seguinte domínio à Google Cloud:
                                     </p>
                                     
                                     <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução: Adicione este link</p>
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Adicione este link com /*</p>
                                         <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
                                             <Globe size={14} className="text-blue-400" />
                                             <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">
-                                                {window.location.hostname}
+                                                {blockedDomain || window.location.origin}
                                             </code>
                                             <button 
                                                 onClick={() => {
-                                                    navigator.clipboard.writeText(window.location.hostname);
-                                                    alert("Copiado!");
+                                                    const textToCopy = (blockedDomain || window.location.origin) + "/*";
+                                                    navigator.clipboard.writeText(textToCopy);
+                                                    alert("Copiado: " + textToCopy);
                                                 }}
                                                 className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white transition-colors"
                                                 title="Copiar"
@@ -303,12 +310,12 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                                     </div>
 
                                     <a 
-                                        href="https://console.cloud.google.com/apis/credentials?project=allshop-store-70851"
+                                        href="https://console.cloud.google.com/apis/credentials"
                                         target="_blank"
                                         rel="noreferrer"
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
                                     >
-                                        Ir para Google Cloud (Projeto Allshop) <ExternalLink size={14} />
+                                        Ir para Google Cloud <ExternalLink size={14} />
                                     </a>
                                 </div>
                             ) : (
