@@ -320,7 +320,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                                                     {getApiKeyHint()}
                                                 </code>
                                             <p className="text-[10px] text-yellow-400 uppercase font-bold mb-1 flex items-center gap-1"><AlertTriangle size={10}/> SOLUÇÃO RÁPIDA:</p>
-                                            <p className="text-xs text-white">Vá à consola da Google e selecione a opção:</p>
+                                            <p className="text-xs text-white"-Vá à consola da Google e selecione a opção:</p>
                                             <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10 mt-1">
                                                 <code className="text-xs font-bold text-green-400">◉ Não restringir a chave</code>
                                             </div>
