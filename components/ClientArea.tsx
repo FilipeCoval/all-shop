@@ -311,7 +311,18 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
           th { text-align: left; padding: 12px 10px; border-bottom: 2px solid #eee; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
           td { padding: 16px 10px; border-bottom: 1px solid #eee; font-size: 14px; color: #333; }
-          .serial-numbers { font-size: 11px; color: #666; margin-top: 4px; font-family: monospace; background: #f9f9f9; padding: 4px; border-radius: 4px; display: inline-block; }
+          .serial-numbers { 
+            font-size: 12px; 
+            color: #000; 
+            font-weight: bold; 
+            margin-top: 6px; 
+            font-family: monospace; 
+            background: #fff; 
+            border: 1px solid #ccc;
+            padding: 6px 8px; 
+            border-radius: 4px; 
+            display: inline-block; 
+          }
           .total-row td { border-top: 2px solid #333; border-bottom: none; padding-top: 20px; }
           .total-label { font-weight: bold; font-size: 14px; text-transform: uppercase; }
           .total-amount { font-weight: bold; font-size: 20px; color: #2563eb; }
