@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy, Globe, Key, ExternalLink, AlertTriangle } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { User as UserType } from '../types';
 import { auth, db } from '../services/firebaseConfig';
 
@@ -21,8 +21,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isConfigError, setIsConfigError] = useState(false); // Novo estado para erros de configuração
-  const [blockedDomain, setBlockedDomain] = useState<string>(''); // Para mostrar o domínio exato
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,8 +28,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     if (isOpen) {
       setView('login');
       setError(null);
-      setIsConfigError(false);
-      setBlockedDomain('');
       setSuccessMsg(null);
       setPassword('');
       setConfirmPassword('');
@@ -40,50 +36,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
   if (!isOpen) return null;
 
-  // Helper para mostrar a API Key (mascarada) para depuração
-  const getApiKeyHint = () => {
-      const key = process.env.API_KEY || '';
-      if (key.length > 10) return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
-      return 'Não encontrada';
-  };
-
-  // Função auxiliar para extrair o domínio do erro
-  const handleAuthError = (err: any) => {
-      console.error("Auth error", err);
-      const errorMessage = err.message || '';
-      
-      // Deteta erro de referer (Domínio bloqueado)
-      if (errorMessage.includes('requests-from-referer') || errorMessage.includes('403')) {
-          // Tenta extrair o domínio exato que veio no erro
-          const matches = errorMessage.match(/requests-from-referer-(.*?)-are-blocked/);
-          
-          // Se conseguir extrair do erro, usa. Se não, usa o domínio atual do browser (seguro para mobile).
-          const domain = matches ? matches[1] : window.location.origin;
-          
-          setBlockedDomain(domain);
-          setError('Domínio não autorizado (Erro 403).');
-          setIsConfigError(true);
-      } else if (
-          err.code === 'auth/invalid-credential' || 
-          err.code === 'auth/user-not-found' || 
-          err.code === 'auth/wrong-password'
-      ) {
-          setError('Dados incorretos. Verifique o email e palavra-passe.');
-      } else if (err.code === 'auth/too-many-requests') {
-          setError('Muitas tentativas falhadas. Tente novamente mais tarde.');
-      } else if (err.code === 'auth/email-already-in-use') {
-          setError('Este email já está registado.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-          setError('Erro de configuração: Login por email/password não está ativo no Firebase.');
-      } else {
-          setError('Ocorreu um erro inesperado: ' + errorMessage);
-      }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsConfigError(false);
     setIsLoading(true);
 
     try {
@@ -110,6 +65,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                 };
             }
         } catch (dbErr) {
+            // CORREÇÃO DO LOGIN ERROR: Se o Firestore bloquear, usamos os dados do Auth e prosseguimos
             console.warn("Database restricted. Using Auth profile only.");
             userData = {
                 uid: firebaseUser.uid,
@@ -123,7 +79,20 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         onClose();
 
     } catch (err: any) {
-        handleAuthError(err);
+        console.error("Auth error", err);
+        if (
+            err.code === 'auth/invalid-credential' || 
+            err.code === 'auth/user-not-found' || 
+            err.code === 'auth/wrong-password'
+        ) {
+            setError('Dados incorretos. Verifique o email e palavra-passe.');
+        } else if (err.code === 'auth/too-many-requests') {
+            setError('Muitas tentativas falhadas. Tente novamente mais tarde.');
+        } else if (err.code === 'auth/operation-not-allowed') {
+            setError('Erro de configuração: Login por email/password não está ativo no Firebase.');
+        } else {
+            setError('Erro ao entrar. Tente novamente.');
+        }
     } finally {
         setIsLoading(false);
     }
@@ -132,7 +101,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsConfigError(false);
 
     if (password.length < 6) {
         setError('A palavra-passe deve ter pelo menos 6 caracteres.');
@@ -169,7 +137,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         onClose();
 
     } catch (err: any) {
-        handleAuthError(err);
+        console.error("Register error", err);
+        if (err.code === 'auth/email-already-in-use') {
+            setError('Este email já está registado.');
+        } else if (err.code === 'auth/operation-not-allowed') {
+            setError('Erro de configuração: Registo por email/password não está ativo no Firebase.');
+        } else {
+            setError('Erro ao criar conta.');
+        }
     } finally {
         setIsLoading(false);
     }
@@ -178,7 +153,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsConfigError(false);
     setIsLoading(true);
 
     try {
@@ -186,7 +160,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         setSuccessMsg(`Email de recuperação enviado para ${email.trim()}.`);
         setTimeout(() => setView('login'), 5000);
     } catch (err: any) {
-        handleAuthError(err);
+        setError('Erro ao enviar email de recuperação.');
     } finally {
         setIsLoading(false);
     }
@@ -210,33 +184,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
         <div className="p-8 pt-0 overflow-y-auto">
             {error && (
-                <div className={`mb-6 p-4 border rounded-xl flex flex-col gap-2 ${isConfigError ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-100 text-red-600'} animate-slide-in`}>
-                    <div className="flex items-start gap-3">
-                        {isConfigError ? <WifiOff size={20} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />}
-                        <span className="text-sm font-medium">{error}</span>
-                    </div>
-                    {isConfigError && blockedDomain && (
-                        <div className="pl-8 text-xs text-orange-700 space-y-3 mt-2">
-                            <div>
-                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] text-yellow-400 uppercase"><AlertTriangle size={10}/> SOLUÇÃO RÁPIDA:</p>
-                                <p className="text-[10px] text-gray-500 mb-1">Vá à Consola Google > Credenciais e selecione:</p>
-                                <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
-                                    <code className="flex-1 font-mono text-[10px] text-green-700 font-bold">◉ Não restringir a chave</code>
-                                </div>
-                                <p className="text-[9px] text-gray-400 mt-1">Isto corrige o erro de permissões da API do Identity Toolkit.</p>
-                            </div>
-                            <div className="pt-2">
-                                <a 
-                                    href="https://console.cloud.google.com/apis/credentials"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="block text-center bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded text-xs font-bold w-full transition-colors flex items-center justify-center gap-1"
-                                >
-                                    Ir para Google Cloud <ExternalLink size={10} />
-                                </a>
-                            </div>
-                        </div>
-                    )}
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 animate-slide-in">
+                    <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
+                    <span className="text-sm font-medium">{error}</span>
                 </div>
             )}
 
