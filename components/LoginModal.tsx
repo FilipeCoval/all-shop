@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, WifiOff, Copy, Globe, Key, ExternalLink } from 'lucide-react';
 import { User as UserType } from '../types';
 import { auth, db } from '../services/firebaseConfig';
 
@@ -39,6 +39,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  // Helper para mostrar a API Key (mascarada) para depuração
+  const getApiKeyHint = () => {
+      const key = process.env.API_KEY || '';
+      if (key.length > 10) return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+      return 'Não encontrada';
+  };
 
   // Função auxiliar para extrair o domínio do erro
   const handleAuthError = (err: any) => {
@@ -209,19 +216,37 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                         <span className="text-sm font-medium">{error}</span>
                     </div>
                     {isConfigError && blockedDomain && (
-                        <div className="pl-8 text-xs text-orange-700">
-                            <p className="mb-1"><strong>Copie este link e adicione como "*Link*" na Google Cloud:</strong></p>
-                            <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
-                                <code className="flex-1 break-all select-all font-mono text-[10px]">{blockedDomain}</code>
-                                <button 
-                                    onClick={() => navigator.clipboard.writeText(blockedDomain)}
-                                    className="p-1 hover:bg-orange-200 rounded text-orange-800"
-                                    title="Copiar"
-                                >
-                                    <Copy size={14} />
-                                </button>
+                        <div className="pl-8 text-xs text-orange-700 space-y-3 mt-2">
+                            <div>
+                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] uppercase text-gray-500"><Globe size={10}/> 1. Adicione este link à Google Cloud:</p>
+                                <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
+                                    <code className="flex-1 break-all select-all font-mono text-[10px]">{blockedDomain}/*</code>
+                                    <button 
+                                        onClick={() => navigator.clipboard.writeText(blockedDomain + "/*")}
+                                        className="p-1 hover:bg-orange-200 rounded text-orange-800"
+                                        title="Copiar"
+                                    >
+                                        <Copy size={12} />
+                                    </button>
+                                </div>
                             </div>
-                            <p className="mt-2 text-[10px] text-gray-500 italic">Dica: Adicione <strong>*.goog/*</strong> na Cloud para corrigir de vez.</p>
+                            <div>
+                                <p className="mb-1 flex items-center gap-1 font-bold text-[10px] uppercase text-gray-500"><Key size={10}/> 2. Verifique se a Chave é a sua:</p>
+                                <div className="flex items-center gap-2 bg-white/50 p-2 rounded border border-orange-200">
+                                    <code className="flex-1 break-all select-all font-mono text-[10px] text-blue-600">{getApiKeyHint()}</code>
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-1">Se não for a sua, edite o <code>vite.config.ts</code>.</p>
+                            </div>
+                            <div className="pt-2">
+                                <a 
+                                    href="https://console.cloud.google.com/apis/credentials"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block text-center bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded text-xs font-bold w-full transition-colors flex items-center justify-center gap-1"
+                                >
+                                    Ir para Google Cloud <ExternalLink size={10} />
+                                </a>
+                            </div>
                         </div>
                     )}
                 </div>
