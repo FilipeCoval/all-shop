@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Printer
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Printer, Key
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -252,6 +252,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
         }
     };
 
+    // Helper para mostrar a API Key (mascarada) para depuração
+    const getApiKeyHint = () => {
+        const key = process.env.API_KEY || '';
+        if (key.length > 10) return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+        return 'Não encontrada';
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4">
             <button onClick={onClose} className="absolute top-6 right-6 bg-white/10 p-3 rounded-full text-white z-[110] border border-white/20 active:scale-90 transition-all shadow-2xl"><X size={24}/></button>
@@ -283,29 +290,35 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                             {error === 'API_KEY_RESTRICTED' ? (
                                 <div className="flex flex-col items-center w-full">
                                     <WifiOff size={48} className="text-red-500 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Domínio Bloqueado na Cloud</h3>
+                                    <h3 className="text-lg font-bold mb-2">Acesso Negado pela Google</h3>
                                     <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
-                                        A API Key está restrita e não autoriza este link. Adicione o seguinte domínio à Google Cloud:
+                                        A API Key está a bloquear este site.
                                     </p>
                                     
-                                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Adicione este link com /*</p>
-                                        <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
-                                            <Globe size={14} className="text-blue-400" />
-                                            <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">
-                                                {blockedDomain || window.location.origin}
-                                            </code>
-                                            <button 
-                                                onClick={() => {
-                                                    const textToCopy = (blockedDomain || window.location.origin) + "/*";
-                                                    navigator.clipboard.writeText(textToCopy);
-                                                    alert("Copiado: " + textToCopy);
-                                                }}
-                                                className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white transition-colors"
-                                                title="Copiar"
-                                            >
-                                                <Copy size={14} />
-                                            </button>
+                                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left space-y-3">
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1 flex items-center gap-1"><Globe size={10}/> 1. Adicione este link à Google Cloud:</p>
+                                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
+                                                <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">
+                                                    {blockedDomain || window.location.origin}/*
+                                                </code>
+                                                <button 
+                                                    onClick={() => navigator.clipboard.writeText((blockedDomain || window.location.origin) + "/*")}
+                                                    className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white"
+                                                >
+                                                    <Copy size={12} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1 flex items-center gap-1"><Key size={10}/> 2. Verifique se a Chave é a sua:</p>
+                                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
+                                                <code className="text-xs font-mono text-blue-300 flex-1 truncate">
+                                                    {getApiKeyHint()}
+                                                </code>
+                                            </div>
+                                            <p className="text-[9px] text-gray-500 mt-1">Se a chave não for a sua, edite o ficheiro <code>vite.config.ts</code>.</p>
                                         </div>
                                     </div>
 
