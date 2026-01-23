@@ -356,6 +356,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [salesSearchTerm, setSalesSearchTerm] = useState('');
   const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
   const [isPublicIdEditable, setIsPublicIdEditable] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', description: '', category: '', publicProductId: '' as string, variant: '',
@@ -619,8 +620,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleCopy = (text: string) => { if (!copyToClipboard(text)) alert("Não foi possível copiar."); };
   const handleAskAi = async () => { if (!aiQuery.trim()) return; setIsAiLoading(true); setAiResponse(null); try { setAiResponse(await getInventoryAnalysis(products, aiQuery)); } catch (e) { setAiResponse("Não foi possível processar o pedido."); } finally { setIsAiLoading(false); } };
   
-  const chartData = useMemo(() => { const numDays = chartTimeframe === '1y' ? 365 : chartTimeframe === '30d' ? 30 : 7; const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: Number(s.quantity) * Number(s.unitPrice) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: Number(o.total) })); const allSales = [...manualSales, ...onlineOrders]; const today = new Date(); let totalPeriod = 0; if (chartTimeframe === '1y') { const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(today.getMonth() - i, 1); return d; }).reverse(); const monthlyData = months.map(monthStart => { const year = monthStart.getFullYear(); const month = monthStart.getMonth() + 1; const monthStr = `${year}-${month.toString().padStart(2, '0')}`; const totalForMonth = allSales.reduce((acc, sale) => { return sale.date.startsWith(monthStr) ? acc + sale.total : acc; }, 0); totalPeriod += totalForMonth; return { label: monthStart.toLocaleDateString('pt-PT', { month: 'short' }), value: totalForMonth }; }); const maxValue = Math.max(...monthlyData.map(d => d.value), 1); return { days: monthlyData, maxValue, totalPeriod }; } else { const days = []; for (let i = numDays - 1; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { day: 'numeric' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; } }, [allOrders, products, chartTimeframe]);
-  const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = p.purchasePrice * p.quantityBought; totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + (sale.quantity * sale.unitPrice), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else revenue = p.quantitySold * p.salePrice; realizedRevenue += revenue; const cogs = p.quantitySold * p.purchasePrice; const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; const remainingStock = p.quantityBought - p.quantitySold; if (remainingStock > 0 && p.targetSalePrice) potentialProfit += (p.targetSalePrice - p.purchasePrice) * remainingStock; }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
+  const chartData = useMemo(() => { const numDays = chartTimeframe === '1y' ? 365 : chartTimeframe === '30d' ? 30 : 7; const toLocalISO = (dateStr: string) => { if (!dateStr) return ''; const d = new Date(dateStr); if (isNaN(d.getTime())) return ''; if (dateStr.length === 10 && !dateStr.includes('T')) return dateStr; const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; }; const manualSales = products.flatMap(p => (p.salesHistory || []).map(s => ({ date: toLocalISO(s.date), total: (Number(s.quantity) || 0) * (Number(s.unitPrice) || 0) }))); const onlineOrders = allOrders.filter(o => o.status !== 'Cancelado').map(o => ({ date: toLocalISO(o.date), total: (Number(o.total) || 0) })); const allSales = [...manualSales, ...onlineOrders]; const today = new Date(); let totalPeriod = 0; if (chartTimeframe === '1y') { const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setMonth(today.getMonth() - i, 1); return d; }).reverse(); const monthlyData = months.map(monthStart => { const year = monthStart.getFullYear(); const month = monthStart.getMonth() + 1; const monthStr = `${year}-${month.toString().padStart(2, '0')}`; const totalForMonth = allSales.reduce((acc, sale) => { return sale.date.startsWith(monthStr) ? acc + sale.total : acc; }, 0); totalPeriod += totalForMonth; return { label: monthStart.toLocaleDateString('pt-PT', { month: 'short' }), value: totalForMonth }; }); const maxValue = Math.max(...monthlyData.map(d => d.value), 1); return { days: monthlyData, maxValue, totalPeriod }; } else { const days = []; for (let i = numDays - 1; i >= 0; i--) { const d = new Date(); d.setDate(today.getDate() - i); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); const dateLabel = `${year}-${month}-${day}`; const totalForDay = allSales.reduce((acc, sale) => sale.date === dateLabel ? acc + sale.total : acc, 0); totalPeriod += totalForDay; days.push({ label: d.toLocaleDateString('pt-PT', { day: 'numeric' }), date: dateLabel, value: totalForDay }); } const maxValue = Math.max(...days.map(d => d.value), 1); return { days, maxValue, totalPeriod }; } }, [allOrders, products, chartTimeframe]);
+  const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   
   const handleEdit = (product: InventoryProduct) => { 
       setEditingId(product.id); 
@@ -719,25 +720,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
     const hasUnits = selectedProductForSale.units && selectedProductForSale.units.length > 0;
     const orderItem = getSafeItems(linkedOrder.items).find(item => typeof item === 'object' && item.productId === selectedProductForSale.publicProductId) as OrderItem | undefined;
-    const qty = hasUnits ? selectedUnitsForSale.length : (orderItem?.quantity || 1);
+    const qty = hasUnits ? selectedUnitsForSale.length : (Number(saleForm.quantity) || orderItem?.quantity || 1);
     
     if (qty <= 0) return alert("Quantidade inválida.");
-    const remainingStock = selectedProductForSale.quantityBought - selectedProductForSale.quantitySold;
+    const remainingStock = (selectedProductForSale.quantityBought || 0) - (selectedProductForSale.quantitySold || 0);
     if (qty > remainingStock) return alert(`Stock insuficiente.`);
 
     const batch = db.batch();
     const invProductRef = db.collection('products_inventory').doc(selectedProductForSale.id);
-    const newSaleRecord: SaleRecord = { id: `ORDER-${linkedOrderId}-${selectedProductForSale.publicProductId}`, date: new Date().toISOString(), quantity: qty, unitPrice: Number(saleForm.unitPrice) || orderItem?.price || 0, shippingCost: Number(saleForm.shippingCost) || 0, notes: `Venda Online - Pedido ${linkedOrderId}` };
+    const newSaleRecord: SaleRecord = { 
+        id: `ORDER-${linkedOrderId}-${selectedProductForSale.publicProductId}`, 
+        date: new Date().toISOString(), 
+        quantity: qty, 
+        unitPrice: Number(saleForm.unitPrice) || orderItem?.price || 0, 
+        shippingCost: Number(saleForm.shippingCost) || 0, 
+        notes: `Venda Online - Pedido ${linkedOrderId}` 
+    };
+
+    const existingHistory = selectedProductForSale.salesHistory || [];
+    const newHistory = existingHistory.filter(s => s.id !== newSaleRecord.id);
+    newHistory.push(newSaleRecord);
 
     let updatedUnits = selectedProductForSale.units || [];
     if (hasUnits) updatedUnits = updatedUnits.map(u => selectedUnitsForSale.includes(u.id) ? { ...u, status: 'SOLD' } : u);
 
-    const newQuantitySold = hasUnits ? updatedUnits.filter(u => u.status === 'SOLD').length : selectedProductForSale.quantitySold + qty;
-    let newStatus: ProductStatus = 'IN_STOCK';
-    if (newQuantitySold >= selectedProductForSale.quantityBought && selectedProductForSale.quantityBought > 0) newStatus = 'SOLD';
-    else if (newQuantitySold > 0) newStatus = 'PARTIAL';
+    const newQuantitySold = hasUnits ? updatedUnits.filter(u => u.status === 'SOLD').length : (selectedProductForSale.quantitySold || 0) + qty;
     
-    const invUpdatePayload: Partial<InventoryProduct> = { status: newStatus, quantitySold: newQuantitySold, salesHistory: firebase.firestore.FieldValue.arrayUnion(newSaleRecord) as any };
+    let newStatus: ProductStatus = 'IN_STOCK';
+    if (newQuantitySold >= selectedProductForSale.quantityBought && selectedProductForSale.quantityBought > 0) {
+        newStatus = 'SOLD';
+    } else if (newQuantitySold > 0) {
+        newStatus = 'PARTIAL';
+    }
+    
+    const invUpdatePayload: Partial<InventoryProduct> = { 
+        status: newStatus, 
+        quantitySold: newQuantitySold, 
+        salesHistory: newHistory 
+    };
     if (hasUnits) invUpdatePayload.units = updatedUnits;
     
     batch.update(invProductRef, invUpdatePayload);
@@ -765,6 +785,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString()));
         await batch.commit();
     } catch (e) { alert("Erro ao apagar grupo."); }
+  };
+  
+  const handleRecalculateData = async () => {
+    if (!window.confirm("Esta ação irá verificar todos os produtos, remover registos de vendas duplicados e corrigir os totais de stock vendido. É recomendado para corrigir erros de dados. Deseja continuar?")) return;
+
+    setIsRecalculating(true);
+    let correctedCount = 0;
+    try {
+      for (const product of products) {
+        if (!product.salesHistory || product.salesHistory.length === 0) continue;
+
+        // 1. Remover vendas duplicadas (baseado no ID da venda)
+        const uniqueSales = new Map<string, SaleRecord>();
+        for (const sale of product.salesHistory) {
+          uniqueSales.set(sale.id, sale);
+        }
+        const newSalesHistory = Array.from(uniqueSales.values());
+
+        // 2. Recalcular 'quantitySold' a partir do histórico limpo
+        const newQuantitySold = newSalesHistory.reduce((acc, sale) => acc + (sale.quantity || 0), 0);
+
+        // 3. Recalcular o 'status' do produto
+        let newStatus: ProductStatus = 'IN_STOCK';
+        if (product.quantityBought > 0 && newQuantitySold >= product.quantityBought) {
+          newStatus = 'SOLD';
+        } else if (newQuantitySold > 0) {
+          newStatus = 'PARTIAL';
+        }
+
+        // 4. Verificar se houve alguma alteração
+        const hasChanges = (
+          newSalesHistory.length !== product.salesHistory.length ||
+          newQuantitySold !== product.quantitySold ||
+          newStatus !== product.status
+        );
+
+        if (hasChanges) {
+          correctedCount++;
+          await updateProduct(product.id, {
+            salesHistory: newSalesHistory,
+            quantitySold: newQuantitySold,
+            status: newStatus,
+          });
+        }
+      }
+      if (correctedCount > 0) {
+        alert(`Verificação concluída! ${correctedCount} produto(s) foram corrigidos.`);
+      } else {
+        alert("Verificação concluída. Não foram encontrados erros de dados.");
+      }
+    } catch (error) {
+      alert("Ocorreu um erro durante a verificação. Verifique a consola.");
+      console.error("Data recalculation error:", error);
+    } finally {
+      setIsRecalculating(false);
+    }
   };
 
   const filteredProducts = products.filter(p => { 
@@ -844,6 +920,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {products.filter(p => p.status !== 'SOLD').length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {products.filter(p => p.status === 'SOLD').length}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
             <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
             <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar e Corrigir Produtos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
+            <button onClick={handleRecalculateData} disabled={isRecalculating} className="bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1" title="Recalcular Stock e Vendas">{isRecalculating ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}</button>
             <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
             
             <div className="overflow-x-auto">
@@ -854,7 +931,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {groupedInventory.map(([groupId, items]) => {
                     const mainItem = items[0]; const isExpanded = expandedGroups.includes(groupId);
-                    const totalStock = items.reduce((acc, i) => acc + Math.max(0, i.quantityBought - i.quantitySold), 0);
+                    const totalStock = items.reduce((acc, i) => acc + Math.max(0, (i.quantityBought || 0) - (i.quantitySold || 0)), 0);
                     return (
                       <React.Fragment key={groupId}>
                         <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''}`}>
@@ -866,7 +943,55 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                           <td className="px-4 py-4 text-right"><div className="flex justify-end gap-1"><button onClick={() => handleEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Edit2 size={14} /> Editar Loja</button><button onClick={() => handleCreateVariant(mainItem)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><Layers size={16} /></button><button onClick={() => handleDeleteGroup(groupId, items)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={16} /></button></div></td>
                         </tr>
                         {isExpanded && (
-                            <tr className="bg-gray-50/50 border-b border-gray-200"><td colSpan={6} className="px-4 py-4"><div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10"><table className="w-full text-xs"><thead className="bg-gray-100 text-gray-500 uppercase"><tr><th className="px-4 py-2 text-left">Lote / Variante</th><th className="px-4 py-2 text-left">Origem</th><th className="px-4 py-2 text-center">Stock</th><th className="px-4 py-2 text-right">Compra</th><th className="px-4 py-2 text-right">Venda (Estimada)</th><th className="px-4 py-2 text-center">Cashback / Lucro</th><th className="px-4 py-2 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{items.map(p => { const batchStock = p.quantityBought - p.quantitySold; return ( <tr key={p.id} className="hover:bg-blue-50 transition-colors"><td className="px-4 py-3"><div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>{p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}<div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div></td><td className="px-4 py-3">{p.supplierName ? (<div className="flex flex-col"><div className="flex items-center gap-1 font-bold text-gray-700 text-[10px]"><Globe size={10} className="text-indigo-500" /> {p.supplierName}</div>{p.supplierOrderId && (<div className="text-[10px] text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar"><FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" /></div>)}</div>) : <span className="text-gray-400 text-xs">-</span>}</td><td className="px-4 py-3 text-center"><div className="flex justify-between text-[10px] mb-1 font-medium text-gray-600"><span>{batchStock} un.</span></div><div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden mx-auto"><div className={`h-full rounded-full ${p.quantityBought > 0 && (p.quantitySold / p.quantityBought) === 1 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${p.quantityBought > 0 ? (p.quantitySold / p.quantityBought) * 100 : 0}%` }}></div></div></td><td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-3 text-right text-gray-500">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-3 text-center">{p.cashbackValue > 0 ? (<div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={8} />}</div></div>) : (<span className="text-gray-300 text-[10px]">-</span>)}</td><td className="px-4 py-3 text-right flex justify-end gap-1">{batchStock > 0 && <button onClick={() => openSaleModal(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote"><DollarSign size={14}/></button>}<button onClick={() => handleEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote"><Edit2 size={14}/></button><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:bg-red-50 p-1.5 rounded bg-white border border-red-200 shadow-sm" title="Apagar lote"><Trash2 size={14}/></button></td></tr> ); })}</tbody></table></div></td></tr>
+                            <tr className="bg-gray-50/50 border-b border-gray-200"><td colSpan={6} className="px-4 py-4"><div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10"><table className="w-full text-xs"><thead className="bg-gray-100 text-gray-500 uppercase"><tr><th className="px-4 py-2 text-left">Lote / Variante</th><th className="px-4 py-2 text-left">Origem</th><th className="px-4 py-2 text-center">Stock</th><th className="px-4 py-2 text-right">Compra</th><th className="px-4 py-2 text-right">Venda (Estimada)</th><th className="px-4 py-2 text-center">Cashback / Lucro</th><th className="px-4 py-2 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{items.map(p => { const batchStock = (p.quantityBought || 0) - (p.quantitySold || 0); return ( <tr key={p.id} className="hover:bg-blue-50 transition-colors"><td className="px-4 py-3"><div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>{p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}<div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div></td>
+<td className="px-4 py-3">
+    {p.supplierName ? (
+        <div>
+            <div className="flex items-center gap-1 font-bold text-gray-700 text-[10px]">
+                <Globe size={10} className="text-indigo-500" /> {p.supplierName}
+            </div>
+            {p.supplierOrderId && (
+                <div className="text-[10px] text-gray-500 flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded w-fit mt-1 group cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleCopy(p.supplierOrderId!)} title="Clique para copiar">
+                    <FileText size={10} /> {p.supplierOrderId} <Copy size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+            )}
+        </div>
+    ) : <span className="text-gray-400 text-xs">-</span>}
+</td>
+<td className="px-4 py-3 text-center">
+    <div className="flex justify-center text-[10px] mb-1 font-medium text-gray-600"><span>{batchStock} un.</span></div>
+    <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden mx-auto">
+        <div className={`h-full rounded-full ${ (p.quantityBought || 0) > 0 && ((p.quantitySold || 0) / (p.quantityBought || 1)) >= 1 ? 'bg-gray-400' : 'bg-blue-500'}`} style={{ width: `${(p.quantityBought || 0) > 0 ? (((p.quantitySold || 0) / (p.quantityBought || 1)) * 100) : 0}%` }}></div>
+    </div>
+    {p.units && p.units.length > 0 && (
+    <div className="mt-2 pt-2 border-t border-gray-100 space-y-1 max-w-[200px] mx-auto">
+        {p.units.sort((a,b) => a.status.localeCompare(b.status)).map(unit => {
+            const statusColor = unit.status === 'AVAILABLE' 
+                ? 'bg-green-100 text-green-800' 
+                : unit.status === 'SOLD' 
+                ? 'bg-red-100 text-red-700' 
+                : 'bg-yellow-100 text-yellow-800';
+            const statusText = unit.status === 'AVAILABLE' ? 'Disponível' : unit.status === 'SOLD' ? 'Vendido' : 'Reservado';
+            
+            return (
+                <div key={unit.id} className="flex justify-between items-center text-[10px] group">
+                    <div className="flex items-center gap-2">
+                        <span className={`font-mono ${unit.status !== 'AVAILABLE' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{unit.id}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full font-medium ${statusColor}`}>{statusText}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span className="text-gray-400">{new Date(unit.addedAt).toLocaleDateString('pt-PT')}</span>
+                        <button onClick={() => handleCopy(unit.id)} title="Copiar S/N" className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Copy size={10} />
+                        </button>
+                    </div>
+                </div>
+            );
+        })}
+    </div>
+)}
+</td>
+<td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-3 text-right text-gray-500">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-3 text-center">{p.cashbackValue > 0 ? (<div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={8} />}</div></div>) : (<span className="text-gray-300 text-[10px]">-</span>)}</td><td className="px-4 py-3 text-right flex justify-end gap-1">{batchStock > 0 && <button onClick={() => openSaleModal(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote"><DollarSign size={14}/></button>}<button onClick={() => handleEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote"><Edit2 size={14}/></button><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:bg-red-50 p-1.5 rounded bg-white border border-red-200 shadow-sm" title="Apagar lote"><Trash2 size={14}/></button></td></tr> ); })}</tbody></table></div></td></tr>
                         )}
                       </React.Fragment>
                     );
@@ -885,7 +1010,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         )}
         
         {/* --- COUPONS TAB --- */}
-        {activeTab === 'coupons' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3><form onSubmit={handleAddCoupon} className="space-y-4"><div><label className="text-xs font-bold text-gray-500 uppercase">Código</label><input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-gray-500 uppercase">Tipo</label><select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded"><option value="PERCENTAGE">Percentagem (%)</option><option value="FIXED">Valor Fixo (€)</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Valor</label><input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label><input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div><button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button></form></div>
+        {activeTab === 'coupons' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in"><div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3><form onSubmit={handleAddCoupon} className="space-y-4"><div><label className="block text-xs font-bold text-gray-500 uppercase">Código</label><input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" /></div><div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-gray-500 uppercase">Tipo</label><select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded"><option value="PERCENTAGE">Percentagem (%)</option><option value="FIXED">Valor Fixo (€)</option></select></div><div><label className="text-xs font-bold text-gray-500 uppercase">Valor</label><input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div></div><div><label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label><input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" /></div><button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button></form></div>
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
       
