@@ -7,8 +7,7 @@ import 'firebase/compat/storage';
 // Configuração do Firebase da Allshop Store
 // Estas chaves são públicas e necessárias para o browser comunicar com o Firebase.
 const firebaseConfig = {
-  // Tenta ler do ambiente, senão usa uma string vazia (o que causará erro claro na consola em vez de erro de permissão silencioso)
-  apiKey: process.env.API_KEY || "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE", // Mantive esta apenas porque o utilizador pode não ter .env configurado localmente ainda
+  apiKey: "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE",
   authDomain: "allshop-store-70851.firebaseapp.com",
   projectId: "allshop-store-70851",
   storageBucket: "allshop-store-70851.firebasestorage.app",
