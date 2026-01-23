@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -188,11 +188,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             
             setAiStatus('offline'); // Marca visualmente como offline
 
-            // DIAGNÓSTICO INTELIGENTE DE ERRO DE DOMÍNIO
+            // DIAGNÓSTICO INTELIGENTE DE ERRO
             if (msg.includes("API key not valid") || msg.includes("referer") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
                 setError("API_KEY_RESTRICTED");
+            } else if (msg.includes("API key is missing")) {
+                setError("API_KEY_MISSING");
             } else {
-                setError(`Erro IA: ${msg.substring(0, 50)}...`);
+                setError(`Erro IA: ${msg}`);
             }
         } finally {
             setIsAiProcessing(false);
@@ -262,6 +264,33 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
                                     >
                                         Ir para Google Cloud <ExternalLink size={14} />
+                                    </a>
+                                </div>
+                            ) : error === 'API_KEY_MISSING' ? (
+                                <div className="flex flex-col items-center w-full">
+                                    <KeyIcon size={48} className="text-yellow-400 mb-4" />
+                                    <h3 className="text-lg font-bold mb-2">Chave API Não Encontrada</h3>
+                                    <p className="text-xs text-gray-300 mb-6 max-w-[280px]">
+                                        A chave de API do Google AI não foi configurada no ambiente de produção deste site.
+                                    </p>
+                                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução Rápida (Admin)</p>
+                                        <p className="text-xs text-gray-300">
+                                            Vá às definições do seu projeto de alojamento (ex: Vercel) e adicione uma Variável de Ambiente:
+                                        </p>
+                                        <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10 mt-2">
+                                            <code className="text-xs font-mono text-yellow-400">API_KEY</code>
+                                            <span className="text-gray-400">=</span>
+                                            <code className="text-xs font-mono text-gray-400">(a sua chave aqui)</code>
+                                        </div>
+                                    </div>
+                                    <a 
+                                        href="https://aistudio.google.com/app/apikey"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
+                                    >
+                                        Obter Chave no Google AI Studio <ExternalLink size={14} />
                                     </a>
                                 </div>
                             ) : (
