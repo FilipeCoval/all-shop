@@ -10,7 +10,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE",
   authDomain: "allshop-store-70851.firebaseapp.com",
   projectId: "allshop-store-70851",
-  storageBucket: "allshop-store-70851.firebasestorage.app",
+  storageBucket: "allshop-store-70851.appspot.com",
   messagingSenderId: "1066114053908",
   appId: "1:1066114053908:web:34f8ae5e231a5c73f0f401"
 };
