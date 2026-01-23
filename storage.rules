@@ -17,14 +17,16 @@ service firebase.storage {
       allow read: if true;
     }
 
-    // Imagens de Produtos (Dashboard): Apenas Admin
+    // Imagens de Produtos (Dashboard): Apenas Admin pode escrever.
+    // Esta regra permite a nova funcionalidade de upload.
     match /products/{imageId} {
       allow write: if isAdmin();
     }
 
-    // Imagens de Avaliações (ReviewSection): Qualquer utilizador
+    // Imagens de Avaliações (ReviewSection): Qualquer utilizador pode escrever.
     match /reviews/{imageId} {
       allow write: if true;
     }
   }
 }
+
