@@ -3,7 +3,8 @@ import { INITIAL_PRODUCTS } from '../constants';
 
 // Configuração Vital
 const PROJECT_ID = "allshop-store-70851";
-const API_KEY = "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE";
+// MELHORIA DE SEGURANÇA: Usar a variável de ambiente da Vercel
+const API_KEY = process.env.API_KEY;
 
 // Helper: Proxy de Imagem Inteligente
 const proxyImage = (url: string) => {
@@ -47,6 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!id) {
     return res.status(400).send('ID Required');
+  }
+
+  // Verificação de segurança
+  if (!API_KEY) {
+      console.error("FATAL: API_KEY environment variable is not set for OG image generator.");
+      // Devolve uma imagem de fallback se a chave não estiver configurada
+      const fallbackHtml = `
+        <!DOCTYPE html><html><head><title>Erro de Configuração</title></head>
+        <body>Erro: A API Key do servidor não está configurada.</body></html>
+      `;
+      return res.status(500).send(fallbackHtml);
   }
 
   try {
