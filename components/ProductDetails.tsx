@@ -330,7 +330,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   ))}
               </div>
           </div>
-      </div>
+      )}
+    </div>
   );
 };
 
