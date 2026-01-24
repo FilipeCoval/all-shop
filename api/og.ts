@@ -15,15 +15,22 @@ const proxyImage = (url: string) => {
     // Se a imagem estiver hospedada no Firebase Storage, usamos o link direto.
     if (url.includes('firebasestorage.googleapis.com')) {
         // O ?alt=media é crucial para o link direto em vez de uma página de visualização.
-        return url.includes('?') ? url : `${url}?alt=media`;
+        // Remove quaisquer parâmetros existentes e adiciona o ?alt=media limpo.
+        const baseUrl = url.split('?')[0];
+        return `${baseUrl}?alt=media`;
     }
     
     // Se a imagem for de um serviço conhecido e público (como Imgur), também é segura.
     if (url.includes('imgur.com')) {
         return url;
     }
+    
+    // Se a imagem já for um link direto (termina com .jpg, .jpeg, .png) de um domínio conhecido, usamos.
+    if (url.match(/\.(jpeg|jpg|png)$/) && (url.includes('androidpctv.com') || url.includes('techxreviews.com') || url.includes('m.media-amazon.com'))) {
+        return url;
+    }
 
-    // --- REGRA DE OURO #2: NUNCA USAR PROXY PARA OG:IMAGE ---
+    // --- REGRA DE OURO #2: USAR FALLBACK PARA IMAGENS NÃO CONFIÁVEIS ---
     // Para qualquer outra imagem externa (AliExpress, kwcdn, etc.), não arriscamos
     // passar por um proxy que pode ser bloqueado. Usamos o fallback seguro.
     // A solução a longo prazo é o admin fazer upload de todas as imagens para o Firebase.
@@ -101,7 +108,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const safeDesc = description ? (description.substring(0, 150) + (description.length > 150 ? '...' : '')) : '';
     const safeTitle = price ? `${title} (${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(price)})` : title;
     
-    // --- CORREÇÃO #2: URL CANÓNICO CORRETO ---
     const canonicalUrl = `${PUBLIC_URL}/product/${id}`; // O URL "bonito" para os bots
     const storeUrl = `${PUBLIC_URL}/#product/${id}`;    // O URL com hash para a SPA
     
