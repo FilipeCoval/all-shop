@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { INITIAL_PRODUCTS } from '../constants';
+import { INITIAL_PRODUCTS, PUBLIC_URL } from '../constants';
 
 // Configuração Vital
 const PROJECT_ID = "allshop-store-70851";
@@ -44,7 +44,6 @@ const parseFirestoreField = (field: any) => {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
-  const host = req.headers.host;
 
   if (!id) {
     return res.status(400).send('ID Required');
@@ -106,9 +105,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const safeDesc = description ? (description.substring(0, 150) + (description.length > 150 ? '...' : '')) : '';
     const safeTitle = price ? `${title} (${price}€)` : title;
     
-    const protocol = host?.includes('localhost') ? 'http' : 'https';
-    const cleanUrl = `${protocol}://${host}/product/${id}`;
-    const storeUrl = `${protocol}://${host}/#product/${id}`;
+    // --- CORREÇÃO ESTRUTURAL ---
+    // Construir os URLs a partir da constante PUBLIC_URL para garantir consistência
+    const ogUrl = `${PUBLIC_URL}/api/og?id=${id}`; // O URL canónico que os bots veem
+    const storeUrl = `${PUBLIC_URL}/#product/${id}`; // O URL final para onde o utilizador vai
+    
 
     // 5. HTML Otimizado
     const html = `
@@ -121,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         <!-- Open Graph / Facebook / WhatsApp -->
         <meta property="og:type" content="website">
-        <meta property="og:url" content="${cleanUrl}">
+        <meta property="og:url" content="${ogUrl}">
         <meta property="og:title" content="${safeTitle}">
         <meta property="og:description" content="${safeDesc}">
         <meta property="og:image" content="${finalImage}">
@@ -136,8 +137,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <meta property="twitter:description" content="${safeDesc}">
         <meta property="twitter:image" content="${finalImage}">
 
-        <!-- Delay para garantir leitura dos bots -->
-        <meta http-equiv="refresh" content="2;url=${storeUrl}">
+        <!-- Delay para garantir leitura dos bots e redirecionar utilizador -->
+        <meta http-equiv="refresh" content="0;url=${storeUrl}">
       </head>
       <body style="font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #334155;">
         <img src="https://i.imgur.com/nSiZKBf.png" alt="Logo" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 20px; opacity: 0.5;">
@@ -146,9 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         <p style="font-size: 12px; color: #94a3b8; margin-top: 20px;">Redirecionando...</p>
         
         <script>
-            setTimeout(function() {
-                window.location.href = "${storeUrl}";
-            }, 1500);
+            window.location.href = "${storeUrl}";
         </script>
       </body>
       </html>
