@@ -158,7 +158,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
             <img 
                 src={selectedImage} 
                 alt={product.name} 
-                referrerPolicy="no-referrer"
                 className={`w-full h-full object-contain p-4 transition-all duration-300 ${isUnavailable ? 'grayscale opacity-50' : ''}`} 
             />
             {isOutOfStock && !product.comingSoon && <div className="absolute inset-0 flex items-center justify-center"><span className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-xl shadow-lg transform -rotate-12 border-4 border-white">ESGOTADO</span></div>}
@@ -167,7 +166,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
           </div>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
              {uniqueImages.map((img, idx) => (
-                <button key={idx} onClick={() => setSelectedImage(img)} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`}><img src={img} alt={`Thumbnail ${idx}`} referrerPolicy="no-referrer" className="w-full h-full object-contain p-1" /></button>
+                <button key={idx} onClick={() => setSelectedImage(img)} className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 bg-white transition-all duration-200 ${selectedImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-100 hover:border-gray-300'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-contain p-1" /></button>
              ))}
           </div>
         </div>
@@ -321,7 +320,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   {relatedProducts.map(rel => (
                       <a href={`#product/${rel.id}`} key={rel.id} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all cursor-pointer">
                           <div className="aspect-square bg-gray-100 relative overflow-hidden">
-                              <img src={rel.image} alt={rel.name} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                              <img src={rel.image} alt={rel.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                           </div>
                           <div className="p-4">
                               <h3 className="font-bold text-gray-900 text-sm line-clamp-2 group-hover:text-primary transition-colors">{rel.name}</h3>
@@ -331,8 +330,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                   ))}
               </div>
           </div>
-      )}
-    </div>
+      </div>
   );
 };
 
