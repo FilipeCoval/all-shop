@@ -89,10 +89,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // --- LÓGICA DE PARTILHA DEFINITIVA ---
-    // Usamos o URL canónico (bonito) que será reescrito pelo vercel.json para os bots.
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
+    // --- LÓGICA DE PARTILHA CORRIGIDA ---
+    // Partilhamos SEMPRE o URL da API, que gera a pré-visualização e depois redireciona o utilizador.
+    // Esta é a solução robusta que garante que os bots veem os dados corretos.
+    const shareUrl = `${PUBLIC_URL}/api/og?id=${product.id}`;
     
+    // Dados para partilha nativa (Mobile)
     const shareData: ShareData = {
       title: product.name,
       text: `Olha o que encontrei na ${STORE_NAME} por apenas ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}!`,
@@ -100,6 +102,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     };
 
     try {
+      // Tentar Web Share API (Menu Nativo do Android/iOS)
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
         setShareFeedback('shared');
@@ -107,6 +110,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
+      // Fallback: Copiar link direto
       try {
         await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
