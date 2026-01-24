@@ -89,10 +89,11 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // --- LÓGICA DE PARTILHA CORRIGIDA ---
-    // Usamos o link curto padrão. O api/og.ts agora tem a API Key
-    // para ir à base de dados buscar a imagem correta.
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
+    // --- LÓGICA DE PARTILHA DEFINITIVA ---
+    // Em vez de usar um link "bonito" (/product/id) que depende de reescrita,
+    // usamos um link DIRETO para a função que gera a pré-visualização.
+    // Isto é mais robusto e garante que o bot do WhatsApp/Facebook vê sempre os dados corretos.
+    const shareUrl = `${PUBLIC_URL}/api/og?id=${product.id}`;
     
     // Dados para partilha nativa (Mobile)
     const shareData: ShareData = {
@@ -110,7 +111,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      // Fallback: Copiar link curto
+      // Fallback: Copiar link direto
       try {
         await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
