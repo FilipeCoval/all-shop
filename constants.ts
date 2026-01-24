@@ -5,7 +5,7 @@ export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
 // URL OFICIAL DA LOJA
-export const PUBLIC_URL = "https://allshop-store.vercel.app";
+export const PUBLIC_URL = "https://www.all-shop.net";
 
 export const SELLER_PHONE = "351933865907"; 
 export const TELEGRAM_LINK = "https://t.me/+EEj0ObcKXzJmNjc8"; 
