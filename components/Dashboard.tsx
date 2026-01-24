@@ -189,7 +189,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             setAiStatus('offline'); // Marca visualmente como offline
 
             // DIAGNÓSTICO INTELIGENTE DE ERRO
-            if (msg.includes("API key not valid") || msg.includes("referer") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
+            if (msg.includes("API key not valid")) {
+                setError("API_KEY_INVALID");
+            } else if (msg.includes("referer") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
                 setError("API_KEY_RESTRICTED");
             } else if (msg.includes("API key is missing")) {
                 setError("API_KEY_MISSING");
@@ -201,18 +203,64 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
         }
     };
 
+    const renderErrorContent = () => {
+        switch (error) {
+            case 'API_KEY_INVALID':
+                return (
+                    <div className="flex flex-col items-center w-full">
+                        <KeyIcon size={48} className="text-red-500 mb-4" />
+                        <h3 className="text-lg font-bold mb-2">Chave API Inválida</h3>
+                        <p className="text-xs text-gray-300 mb-6 max-w-[280px]">
+                            A chave API configurada para o Google AI é inválida ou foi revogada.
+                        </p>
+                        <div className="bg-white/10 p-4 rounded-xl border border-white/20 w-full text-left">
+                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução (Admin):</p>
+                            <p className="text-xs text-gray-300">
+                                1. Verifique a chave API na <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-400 underline">Google AI Studio</a>.
+                                <br/>2. Atualize a variável de ambiente `API_KEY` nas definições do seu projeto na Vercel.
+                            </p>
+                        </div>
+                    </div>
+                );
+            case 'API_KEY_RESTRICTED':
+                 return (
+                    <div className="flex flex-col items-center w-full">
+                        <WifiOff size={48} className="text-yellow-500 mb-4" />
+                        <h3 className="text-lg font-bold mb-2">Acesso Bloqueado pela Google</h3>
+                        <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
+                            A sua Chave API tem restrições que impedem este site de a usar.
+                        </p>
+                        <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
+                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução: Adicione este link</p>
+                            <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
+                                <Globe size={14} className="text-blue-400" />
+                                <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">{window.location.hostname}</code>
+                                <button onClick={() => navigator.clipboard.writeText(window.location.hostname)} className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white transition-colors" title="Copiar"><Copy size={14} /></button>
+                            </div>
+                        </div>
+                        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2">
+                            Ir para Google Cloud <ExternalLink size={14} />
+                        </a>
+                    </div>
+                );
+            default:
+                return (
+                    <>
+                        <AlertCircle size={40} className="text-red-500 mb-4" />
+                        <p className="text-sm font-bold mb-6">{error}</p>
+                    </>
+                );
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4">
             <button onClick={onClose} className="absolute top-6 right-6 bg-white/10 p-3 rounded-full text-white z-[110] border border-white/20 active:scale-90 transition-all shadow-2xl"><X size={24}/></button>
             <div className="w-full max-w-sm relative">
-                {/* Status Indicator */}
                 <div className="absolute top-4 left-4 z-[110] flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
                     <div className={`w-2 h-2 rounded-full animate-pulse ${aiStatus === 'ready' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">
-                        {aiStatus === 'ready' ? 'IA Online' : 'IA Offline'}
-                    </span>
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">{aiStatus === 'ready' ? 'IA Online' : 'IA Offline'}</span>
                 </div>
-
                 <div className="relative aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
                     <video ref={videoRef} className="w-full h-full object-cover scale-110" muted playsInline />
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -226,80 +274,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
                             {isAiProcessing ? <BrainCircuit size={24} className="animate-pulse" /> : <Camera size={24} />} <span className="text-xs font-bold hidden sm:inline">IA Scan</span>
                         </button>
                     </div>
-                    
                     {error && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 text-white p-6 text-center z-50 animate-fade-in">
-                            {error === 'API_KEY_RESTRICTED' ? (
-                                <div className="flex flex-col items-center w-full">
-                                    <WifiOff size={48} className="text-red-500 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Acesso Bloqueado pela Google</h3>
-                                    <p className="text-xs text-gray-300 mb-4 max-w-[250px]">
-                                        A sua Chave API tem restrições que impedem este site de a usar.
-                                    </p>
-                                    
-                                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução: Adicione este link</p>
-                                        <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10">
-                                            <Globe size={14} className="text-blue-400" />
-                                            <code className="text-xs font-mono text-yellow-400 flex-1 truncate select-all">
-                                                {window.location.hostname}
-                                            </code>
-                                            <button 
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(window.location.hostname);
-                                                    alert("Copiado!");
-                                                }}
-                                                className="p-1.5 bg-white/20 hover:bg-white/30 rounded text-white transition-colors"
-                                                title="Copiar"
-                                            >
-                                                <Copy size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <a 
-                                        href="https://console.cloud.google.com/apis/credentials"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
-                                    >
-                                        Ir para Google Cloud <ExternalLink size={14} />
-                                    </a>
-                                </div>
-                            ) : error === 'API_KEY_MISSING' ? (
-                                <div className="flex flex-col items-center w-full">
-                                    <KeyIcon size={48} className="text-yellow-400 mb-4" />
-                                    <h3 className="text-lg font-bold mb-2">Chave API Não Encontrada</h3>
-                                    <p className="text-xs text-gray-300 mb-6 max-w-[280px]">
-                                        A chave de API do Google AI não foi configurada no ambiente de produção deste site.
-                                    </p>
-                                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 mb-4 w-full text-left">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2 flex items-center gap-1"><CheckCircle size={10}/> Solução Rápida (Admin)</p>
-                                        <p className="text-xs text-gray-300">
-                                            Vá às definições do seu projeto de alojamento (ex: Vercel) e adicione uma Variável de Ambiente:
-                                        </p>
-                                        <div className="flex items-center gap-2 bg-black/50 p-2 rounded-lg border border-white/10 mt-2">
-                                            <code className="text-xs font-mono text-yellow-400">API_KEY</code>
-                                            <span className="text-gray-400">=</span>
-                                            <code className="text-xs font-mono text-gray-400">(a sua chave aqui)</code>
-                                        </div>
-                                    </div>
-                                    <a 
-                                        href="https://aistudio.google.com/app/apikey"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold w-full shadow-lg pointer-events-auto flex items-center justify-center gap-2 mb-2"
-                                    >
-                                        Obter Chave no Google AI Studio <ExternalLink size={14} />
-                                    </a>
-                                </div>
-                            ) : (
-                                <>
-                                    <AlertCircle size={40} className="text-red-500 mb-4" />
-                                    <p className="text-sm font-bold mb-6">{error}</p>
-                                </>
-                            )}
-                            <button onClick={() => setError(null)} className="mt-2 bg-white/10 px-6 py-2 rounded-full font-bold text-xs pointer-events-auto hover:bg-white/20">Tentar de Novo</button>
+                            {renderErrorContent()}
+                            <button onClick={() => { setError(null); setAiStatus('ready'); }} className="mt-2 bg-white/10 px-6 py-2 rounded-full font-bold text-xs pointer-events-auto hover:bg-white/20">Tentar de Novo</button>
                         </div>
                     )}
                 </div>
@@ -714,18 +692,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           },
           (error) => {
               console.error("Firebase Storage Upload Error:", error);
-              let userMessage = `Erro no upload: ${error.message}`;
-              switch (error.code) {
-                  case 'storage/unauthorized':
-                      userMessage = "Erro de permissão. Verifique se está logado como administrador e se as regras de segurança do Storage estão corretas.";
-                      break;
-                  case 'storage/canceled':
-                      userMessage = "Upload cancelado.";
-                      break;
-                  case 'storage/unknown':
-                      userMessage = "Ocorreu um erro desconhecido. Verifique a sua ligação à internet.";
-                      break;
+              let userMessage = `Erro no upload: ${error.code}`;
+              
+              if (error.code === 'storage/unauthorized') {
+                  userMessage = "ERRO DE PERMISSÃO (REGRAS): Verifique se está logado como administrador e se as 'storage.rules' no seu projeto permitem escrita no caminho 'products/'.";
+              } else if (error.code === 'storage/unknown' && navigator.onLine) {
+                   userMessage = "ERRO DE CORS: O seu domínio (www.all-shop.net) não está autorizado a fazer uploads. Isto é uma configuração de segurança no Google Cloud, não no código. Contacte o suporte para saber como configurar o CORS do seu bucket do Firebase Storage.";
+              } else if (!navigator.onLine) {
+                  userMessage = "ERRO DE REDE: Verifique a sua ligação à internet.";
               }
+
               alert(userMessage);
               setIsUploading(false);
               setUploadProgress(null);
