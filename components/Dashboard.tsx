@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -303,6 +304,135 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
     );
 };
 
+// --- MODAL DE DETALHES DA ENCOMENDA ---
+const OrderDetailsModal: React.FC<{
+  order: Order | null;
+  onClose: () => void;
+  onUpdateOrder: (orderId: string, updates: Partial<Order>) => void;
+  onUpdateTracking: (orderId: string, tracking: string) => void;
+  onCopy: (text: string) => void;
+}> = ({ order, onClose, onUpdateOrder, onUpdateTracking, onCopy }) => {
+    if (!order) return null;
+
+    const [tracking, setTracking] = useState(order.trackingNumber || '');
+    const [isUpdatingPoints, setIsUpdatingPoints] = useState(false);
+    const [manualPoints, setManualPoints] = useState(0);
+
+    const handleRevokePoints = async () => {
+        if (!window.confirm("Tem a certeza que quer anular os pontos desta encomenda? Isto irá permitir que sejam re-atribuídos.")) return;
+        setIsUpdatingPoints(true);
+        try {
+            await db.collection('orders').doc(order.id).update({ pointsAwarded: false });
+            onUpdateOrder(order.id, { pointsAwarded: false });
+            alert("Selo de pontos removido! Agora pode alterar o estado para 'Entregue' para re-atribuir os pontos corretamente.");
+        } catch (error) {
+            console.error("Erro ao anular pontos:", error);
+            alert("Ocorreu um erro. Tente novamente.");
+        } finally {
+            setIsUpdatingPoints(false);
+        }
+    };
+    
+    const handleManualPointsAward = async () => {
+        if (manualPoints <= 0) { alert("Insira um valor de pontos válido."); return; }
+        if (!order.userId) { alert("Esta encomenda não está associada a um utilizador registado."); return; }
+        if (!window.confirm(`Atribuir ${manualPoints} pontos a este cliente pela encomenda ${order.id}?`)) return;
+
+        setIsUpdatingPoints(true);
+        try {
+            const userRef = db.collection('users').doc(order.userId);
+            const orderRef = db.collection('orders').doc(order.id);
+
+            await db.runTransaction(async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists) throw new Error("Utilizador não encontrado.");
+
+                const userData = userDoc.data() as UserType;
+                const newPointsTotal = (userData.loyaltyPoints || 0) + manualPoints;
+                const newHistoryEntry: PointHistory = {
+                    id: `manual-${order.id}-${Date.now()}`,
+                    date: new Date().toISOString(),
+                    amount: manualPoints,
+                    reason: `Ajuste manual (Encomenda ${order.id})`,
+                    orderId: order.id
+                };
+                const newHistory = [newHistoryEntry, ...(userData.pointsHistory || [])];
+
+                transaction.update(userRef, { loyaltyPoints: newPointsTotal, pointsHistory: newHistory });
+                transaction.update(orderRef, { pointsAwarded: true });
+            });
+            
+            onUpdateOrder(order.id, { pointsAwarded: true });
+            alert("Pontos atribuídos com sucesso!");
+
+        } catch (error) {
+            console.error("Erro ao atribuir pontos manualmente:", error);
+            alert("Ocorreu um erro ao atribuir os pontos.");
+        } finally {
+            setIsUpdatingPoints(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                    <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><FileText size={20} className="text-indigo-600"/> Detalhes da Encomenda</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div><p className="text-xs text-gray-500 font-bold uppercase">ID Encomenda</p><p className="font-bold text-indigo-700 text-sm mt-1">{order.id}</p></div>
+                      <div><p className="text-xs text-gray-500 font-bold uppercase">Estado</p><p className="font-bold text-sm mt-1">{order.status}</p></div>
+                      <div><p className="text-xs text-gray-500 font-bold uppercase">Data</p><p className="font-bold text-sm mt-1">{new Date(order.date).toLocaleDateString()}</p></div>
+                      <div><p className="text-xs text-gray-500 font-bold uppercase">Total</p><p className="font-bold text-sm mt-1">{formatCurrency(order.total)}</p></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t">
+                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Cliente</h4><p className="text-sm">{order.shippingInfo.name}</p><p className="text-sm">{order.shippingInfo.email}</p><p className="text-sm">{order.shippingInfo.phone}</p><p className="text-sm">{order.shippingInfo.nif && `NIF: ${order.shippingInfo.nif}`}</p></div>
+                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Morada de Envio</h4><p className="text-sm">{order.shippingInfo.street}, {order.shippingInfo.doorNumber}</p><p className="text-sm">{order.shippingInfo.zip} {order.shippingInfo.city}</p></div>
+                    </div>
+
+                    <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3">Artigos</h4><div className="space-y-3">{getSafeItems(order.items).map((item, idx) => { const isObject = typeof item === 'object' && item !== null; const itemName = isObject ? (item as OrderItem).name : item as string; const itemQty = isObject ? (item as OrderItem).quantity : 1; const itemPrice = isObject ? (item as OrderItem).price : 0; const itemVariant = isObject && (item as OrderItem).selectedVariant ? `(${(item as OrderItem).selectedVariant})` : ''; const itemSerials = isObject && (item as OrderItem).serialNumbers; return (<div key={idx} className="flex justify-between items-center text-sm p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><span className="bg-gray-200 text-gray-700 font-bold text-xs w-6 h-6 flex items-center justify-center rounded-full">{itemQty}x</span><div><p className="font-medium text-gray-800">{itemName} {itemVariant}</p>{itemSerials && itemSerials.length > 0 && (<div className="text-[10px] text-green-700 font-mono mt-1 flex items-center gap-1"><QrCode size={12}/> {itemSerials.join(', ')}</div>)}</div></div><span className="font-bold text-gray-900">{formatCurrency(itemPrice * itemQty)}</span></div>); })}</div></div>
+
+                    <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><Truck size={16}/> Rastreio CTT</h4><div className="flex gap-2"><input type="text" value={tracking} onChange={e => setTracking(e.target.value)} placeholder="Ex: EA123456789PT" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button onClick={() => onUpdateTracking(order.id, tracking)} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700">Guardar</button></div></div>
+                    
+                    <div className="border-t pt-4">
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Coins size={16} className="text-yellow-500"/> Gestão de Pontos de Lealdade</h4>
+                        <div className="bg-gray-50 p-4 rounded-lg border space-y-4">
+                            <p className="text-sm">Estado: {order.pointsAwarded ? <span className="font-bold text-green-600 flex items-center gap-1"><CheckCircle size={14}/> Pontos Atribuídos</span> : <span className="font-bold text-orange-600 flex items-center gap-1"><AlertTriangle size={14}/> Pontos Pendentes</span>}</p>
+                            
+                            {order.pointsAwarded && (
+                                <button onClick={handleRevokePoints} disabled={isUpdatingPoints} className="bg-red-100 text-red-700 text-sm font-bold px-4 py-2 rounded-lg hover:bg-red-200 disabled:opacity-50 flex items-center gap-2">
+                                    {isUpdatingPoints ? <Loader2 className="animate-spin" /> : <><XCircle size={14}/>Anular Pontos Atribuídos</>}
+                                </button>
+                            )}
+
+                            <div className="space-y-2 pt-4 border-t">
+                                <label className="text-sm font-bold text-gray-600 block">Atribuição Manual</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="number" 
+                                        value={manualPoints === 0 ? '' : manualPoints}
+                                        onChange={(e) => setManualPoints(Number(e.target.value))}
+                                        className="w-32 p-2 border rounded-lg"
+                                        placeholder="Ex: 45"
+                                    />
+                                    <button onClick={handleManualPointsAward} disabled={isUpdatingPoints} className="bg-blue-500 text-white font-bold px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50">
+                                        {isUpdatingPoints ? <Loader2 className="animate-spin" /> : 'Atribuir'}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500">Use para corrigir ou dar pontos extra. Isto irá marcar a encomenda como "pontos atribuídos".</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- DASHBOARD COMPONENT ---
 interface DashboardProps {
     user: UserType | null;
@@ -494,6 +624,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     });
     return () => unsubscribe();
   }, [isAdmin]);
+
+  const handleUpdateOrderState = (orderId: string, updates: Partial<Order>) => {
+    setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+    if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
+        setSelectedOrderDetails(prev => prev ? { ...prev, ...updates } : null);
+    }
+  };
 
   const handleAddUnit = (code: string) => {
       if (modalUnits.some(u => u.id === code)) return alert("Este código já foi adicionado.");
@@ -1068,7 +1205,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         <div className="md:col-span-2 space-y-4">{isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}><div className="flex items-center gap-4"><div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div><div><h4 className="font-bold text-lg tracking-wider">{c.code}</h4><p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p><p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p></div></div><div className="flex items-center gap-2"><button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}</button><button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button></div></div>)}{coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}</div></div>}
       </div>
       
-      {/* ... (Rest of component including Modals) ... */}
+      {/* --- MODALS --- */}
+      <OrderDetailsModal 
+          order={selectedOrderDetails} 
+          onClose={() => setSelectedOrderDetails(null)} 
+          onUpdateOrder={handleUpdateOrderState}
+          onUpdateTracking={handleUpdateTracking}
+          onCopy={handleCopy}
+      />
+      
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{
       publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div>
       <div className="mt-4 pt-4 border-t border-blue-200"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}/><div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div>
@@ -1114,3 +1259,4 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
+
