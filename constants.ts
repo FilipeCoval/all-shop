@@ -18,7 +18,7 @@ export const TELEGRAM_CHAT_ID = "-1003494194252";
 export const ADMIN_EMAILS = [
   "filipe_coval_90@hotmail.com",
   "mcpoleca@gmail.com",
-  "andreferreira022020@gmail.com"
+  "andreferrei@gmail.com"
 ];
 
 export const LOYALTY_TIERS = {
