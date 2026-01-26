@@ -817,28 +817,40 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     }
   };
 
-  // --- MERGE ACCOUNTS LOGIC ---
+  // --- MERGE ACCOUNTS LOGIC (FIXED) ---
   const handleSearchDuplicate = async () => {
     if (!selectedUserDetails) return;
     const emailToSearch = mergeSearchEmail.trim().toLowerCase();
     
-    const usersRef = db.collection('users');
-    const snapshot = await usersRef
-        .where('email', '==', emailToSearch)
-        .where('uid', '!=', selectedUserDetails.uid)
-        .limit(1)
-        .get();
+    try {
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('email', '==', emailToSearch).get();
         
-    if (snapshot.empty) {
-        setFoundDuplicate(null);
-        setDuplicateOrdersCount(0);
-        alert("Nenhuma conta duplicada encontrada com este email.");
-    } else {
-        const duplicateData = { uid: snapshot.docs[0].id, ...snapshot.docs[0].data() } as UserType;
+        if (snapshot.docs.length < 2) {
+            setFoundDuplicate(null);
+            setDuplicateOrdersCount(0);
+            alert("Nenhuma conta duplicada encontrada com este email.");
+            return;
+        }
+
+        const duplicateDoc = snapshot.docs.find(doc => doc.id !== selectedUserDetails.uid);
+
+        if (!duplicateDoc) {
+             setFoundDuplicate(null);
+             setDuplicateOrdersCount(0);
+             alert("Nenhuma conta duplicada (diferente da atual) encontrada.");
+             return;
+        }
+
+        const duplicateData = { uid: duplicateDoc.id, ...duplicateDoc.data() } as UserType;
         setFoundDuplicate(duplicateData);
-        // Contar encomendas associadas à conta duplicada
+        
         const ordersSnapshot = await db.collection('orders').where('userId', '==', duplicateData.uid).get();
         setDuplicateOrdersCount(ordersSnapshot.size);
+
+    } catch (error) {
+        console.error("Erro ao procurar duplicado:", error);
+        alert("Ocorreu um erro ao procurar. Verifique a consola.");
     }
   };
 
