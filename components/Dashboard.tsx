@@ -652,7 +652,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (activeTab === 'clients' && isAdmin) {
           setIsUsersLoading(true);
           const unsubscribe = db.collection('users').onSnapshot(snapshot => {
-              setAllUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserType)));
+              setAllUsers(snapshot.docs.map(doc => ({ 
+                uid: doc.id,
+                ...doc.data() 
+              } as UserType)));
               setIsUsersLoading(false);
           });
           return () => unsubscribe();
@@ -831,7 +834,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         setDuplicateOrdersCount(0);
         alert("Nenhuma conta duplicada encontrada com este email.");
     } else {
-        const duplicateData = snapshot.docs[0].data() as UserType;
+        const duplicateData = { uid: snapshot.docs[0].id, ...snapshot.docs[0].data() } as UserType;
         setFoundDuplicate(duplicateData);
         // Contar encomendas associadas à conta duplicada
         const ordersSnapshot = await db.collection('orders').where('userId', '==', duplicateData.uid).get();
