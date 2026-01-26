@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -335,17 +336,42 @@ const OrderDetailsModal: React.FC<{
     
     const handleManualPointsAward = async () => {
         if (manualPoints <= 0) { alert("Insira um valor de pontos válido."); return; }
-        if (!order.userId) { alert("Esta encomenda não está associada a um utilizador registado."); return; }
-        if (!window.confirm(`Atribuir ${manualPoints} pontos a este cliente pela encomenda ${order.id}?`)) return;
+        if (!window.confirm(`Atribuir ${manualPoints} pontos ao cliente desta encomenda (${order.id})?`)) return;
 
         setIsUpdatingPoints(true);
         try {
-            const userRef = db.collection('users').doc(order.userId);
+            let userRef: firebase.firestore.DocumentReference | null = null;
+
+            // Estratégia 1: Tentar encontrar pelo userId da encomenda (mais fiável)
+            if (order.userId) {
+                const potentialUserRef = db.collection('users').doc(order.userId);
+                const userDoc = await potentialUserRef.get();
+                if (userDoc.exists) {
+                    userRef = potentialUserRef;
+                }
+            }
+
+            // Estratégia 2 (Fallback): Se o userId falhar, procurar pelo email
+            if (!userRef && order.shippingInfo.email) {
+                const userQuery = await db.collection('users')
+                    .where('email', '==', order.shippingInfo.email.trim().toLowerCase())
+                    .limit(1)
+                    .get();
+                
+                if (!userQuery.empty) {
+                    userRef = userQuery.docs[0].ref;
+                }
+            }
+            
+            if (!userRef) {
+                throw new Error("Utilizador não encontrado (nem por ID, nem por email). Verifique se o cliente tem conta criada.");
+            }
+
             const orderRef = db.collection('orders').doc(order.id);
 
             await db.runTransaction(async (transaction) => {
-                const userDoc = await transaction.get(userRef);
-                if (!userDoc.exists) throw new Error("Utilizador não encontrado.");
+                const userDoc = await transaction.get(userRef!);
+                if (!userDoc.exists) throw new Error("Utilizador não encontrado na base de dados.");
 
                 const userData = userDoc.data() as UserType;
                 const newPointsTotal = (userData.loyaltyPoints || 0) + manualPoints;
@@ -358,20 +384,21 @@ const OrderDetailsModal: React.FC<{
                 };
                 const newHistory = [newHistoryEntry, ...(userData.pointsHistory || [])];
 
-                transaction.update(userRef, { loyaltyPoints: newPointsTotal, pointsHistory: newHistory });
+                transaction.update(userRef!, { loyaltyPoints: newPointsTotal, pointsHistory: newHistory });
                 transaction.update(orderRef, { pointsAwarded: true });
             });
             
             onUpdateOrder(order.id, { pointsAwarded: true });
             alert("Pontos atribuídos com sucesso!");
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Erro ao atribuir pontos manualmente:", error);
-            alert("Ocorreu um erro ao atribuir os pontos.");
+            alert(`Ocorreu um erro ao atribuir os pontos: ${error.message}`);
         } finally {
             setIsUpdatingPoints(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -1259,4 +1286,3 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
-
