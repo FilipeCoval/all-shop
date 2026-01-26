@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct, Product, ProductVariant } from '../types';
@@ -39,8 +40,10 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   // Função auxiliar para mapear Produto de Inventário -> Produto Público
   const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicId: number): Product => {
-    // Garante que existe pelo menos uma imagem válida
-    const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) ? inv.images[0] : 'https://via.placeholder.com/300';
+    // Garante que existe pelo menos uma imagem válida ou usa um placeholder interno
+    const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) 
+        ? inv.images[0] 
+        : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23e2e8f0"/%3E%3C/svg%3E';
     
     return {
         id: publicId,
