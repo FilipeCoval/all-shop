@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus } from '../types';
 // FIX: Imported the 'X' icon from lucide-react to fix the 'Cannot find name X' error.
@@ -924,7 +925,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                               <h4 className="font-bold text-gray-900 mb-4">Adicionar Nova Morada</h4>
                               <div className="space-y-4">
                                   <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local (Alias)</label>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Local</label>
                                       <input 
                                           type="text" 
                                           placeholder="Ex: Casa, Trabalho"
