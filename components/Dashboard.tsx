@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -526,6 +526,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [clientsSearchTerm, setClientsSearchTerm] = useState('');
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
 
+  // Estados para a ferramenta de fusão de contas
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeSearchEmail, setMergeSearchEmail] = useState('');
+  const [foundDuplicate, setFoundDuplicate] = useState<UserType | null>(null);
+  const [duplicateOrdersCount, setDuplicateOrdersCount] = useState(0);
+
   const [formData, setFormData] = useState({
     name: '', description: '', category: '', publicProductId: '' as string, variant: '',
     purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', 
@@ -663,6 +669,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     return () => unsubscribe();
   }, [isAdmin]);
 
+  // Reset merge tool state when opening a new client detail modal
+  useEffect(() => {
+    if (selectedUserDetails) {
+      setMergeSearchEmail(selectedUserDetails.email);
+      setFoundDuplicate(null);
+      setDuplicateOrdersCount(0);
+    }
+  }, [selectedUserDetails]);
+
   const handleUpdateOrderState = (orderId: string, updates: Partial<Order>) => {
     setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
     if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
@@ -798,6 +813,75 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       db.collection('orders').doc(orderId).delete().then(() => alert('Encomenda apagada.')).catch((error: any) => alert("Erro ao apagar: " + error.message));
     }
   };
+
+  // --- MERGE ACCOUNTS LOGIC ---
+  const handleSearchDuplicate = async () => {
+    if (!selectedUserDetails) return;
+    const emailToSearch = mergeSearchEmail.trim().toLowerCase();
+    
+    const usersRef = db.collection('users');
+    const snapshot = await usersRef
+        .where('email', '==', emailToSearch)
+        .where('uid', '!=', selectedUserDetails.uid)
+        .limit(1)
+        .get();
+        
+    if (snapshot.empty) {
+        setFoundDuplicate(null);
+        setDuplicateOrdersCount(0);
+        alert("Nenhuma conta duplicada encontrada com este email.");
+    } else {
+        const duplicateData = snapshot.docs[0].data() as UserType;
+        setFoundDuplicate(duplicateData);
+        // Contar encomendas associadas à conta duplicada
+        const ordersSnapshot = await db.collection('orders').where('userId', '==', duplicateData.uid).get();
+        setDuplicateOrdersCount(ordersSnapshot.size);
+    }
+  };
+
+  const handleConfirmMerge = async () => {
+    if (!selectedUserDetails || !foundDuplicate) return;
+    if (!window.confirm(`Tem a CERTEZA ABSOLUTA que quer fundir a conta de ${foundDuplicate.name} na conta de ${selectedUserDetails.name}? Esta ação é irreversível.`)) return;
+
+    setIsMerging(true);
+    try {
+        const targetUserRef = db.collection('users').doc(selectedUserDetails.uid);
+        const sourceUserRef = db.collection('users').doc(foundDuplicate.uid);
+
+        // 1. Re-atribuir encomendas da conta duplicada
+        const ordersToUpdateSnapshot = await db.collection('orders').where('userId', '==', foundDuplicate.uid).get();
+        const batch = db.batch();
+        ordersToUpdateSnapshot.forEach(doc => {
+            batch.update(doc.ref, { userId: selectedUserDetails.uid });
+        });
+
+        // 2. Fundir dados no utilizador principal
+        const newPoints = (selectedUserDetails.loyaltyPoints || 0) + (foundDuplicate.loyaltyPoints || 0);
+        const newTotalSpent = (selectedUserDetails.totalSpent || 0) + (foundDuplicate.totalSpent || 0);
+        const mergedHistory = [...(selectedUserDetails.pointsHistory || []), ...(foundDuplicate.pointsHistory || [])].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        batch.update(targetUserRef, {
+            loyaltyPoints: newPoints,
+            totalSpent: newTotalSpent,
+            pointsHistory: mergedHistory
+        });
+
+        // 3. Apagar o utilizador duplicado
+        batch.delete(sourceUserRef);
+        
+        // Executar tudo
+        await batch.commit();
+
+        alert("Fusão concluída com sucesso! Os dados foram combinados e as encomendas reatribuídas.");
+        setSelectedUserDetails(null); // Fecha o modal
+    } catch (error) {
+        console.error("Erro na fusão de contas:", error);
+        alert("Ocorreu um erro crítico durante a fusão. Verifique a consola.");
+    } finally {
+        setIsMerging(false);
+    }
+  };
+
 
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { alert("Erro ao gravar rastreio"); } };
   const handleCopy = (text: string) => { if (!copyToClipboard(text)) alert("Não foi possível copiar."); };
@@ -1292,6 +1376,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     <div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(selectedUserDetails.totalSpent || 0)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
                     <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3">Histórico de Pontos</h4>
                     {(selectedUserDetails.pointsHistory && selectedUserDetails.pointsHistory.length > 0) ? (<div className="max-h-60 overflow-y-auto space-y-2 pr-2">{selectedUserDetails.pointsHistory.map(h => (<div key={h.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded-lg"><div className="flex flex-col"><span>{h.reason}</span><span className="text-xs text-gray-400">{new Date(h.date).toLocaleString()}</span></div><span className={`font-bold ${h.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{h.amount > 0 ? '+' : ''}{h.amount}</span></div>))}</div>) : (<p className="text-sm text-gray-500 italic">Sem histórico de pontos.</p>)}
+                    </div>
+
+                    {/* Ferramenta de Fusão de Contas */}
+                    <div className="pt-6 border-t border-dashed">
+                      <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4>
+                      <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4">
+                          <p className="text-sm font-bold text-orange-900">Fundir Contas Duplicadas</p>
+                          <div className="flex gap-2">
+                              <input 
+                                  type="email"
+                                  value={mergeSearchEmail}
+                                  onChange={(e) => setMergeSearchEmail(e.target.value)}
+                                  className="flex-1 p-2 border border-gray-300 rounded text-sm"
+                                  placeholder="Email da conta a fundir"
+                              />
+                              <button onClick={handleSearchDuplicate} className="bg-gray-700 text-white px-4 rounded font-bold text-sm hover:bg-gray-800">Procurar</button>
+                          </div>
+                          
+                          {foundDuplicate && (
+                            <div className="bg-white p-4 rounded border border-orange-300 animate-fade-in space-y-2">
+                                <h5 className="font-bold text-sm">Conta duplicada encontrada:</h5>
+                                <p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p>
+                                <p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p>
+                                <p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p>
+                                <p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(foundDuplicate.totalSpent || 0)}</p>
+                                <p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p>
+                                <button 
+                                  onClick={handleConfirmMerge} 
+                                  disabled={isMerging}
+                                  className="w-full mt-2 bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                  {isMerging ? <Loader2 className="animate-spin" /> : <><AlertTriangle size={14}/> Confirmar Fusão</>}
+                                </button>
+                            </div>
+                          )}
+                      </div>
                     </div>
                 </div>
             </div>
