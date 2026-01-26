@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem } from '../types';
 import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins } from 'lucide-react';
@@ -38,6 +39,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const SHIPPING_THRESHOLD = 50;
   const SHIPPING_COST = 4.99;
   const COD_FEE = 2.00; 
+
+  // Efeito para avançar automaticamente após o login
+  useEffect(() => {
+    if (checkoutStep === 'login-prompt' && user) {
+      setCheckoutStep('info');
+    }
+  }, [user, checkoutStep]);
 
   useEffect(() => {
     if (!isOpen) {
