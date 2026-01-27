@@ -46,7 +46,6 @@ const ProductList: React.FC<ProductListProps> = ({
   const filteredAndSortedProducts = useMemo(() => {
       if (!products) return [];
       let result = products.filter(product => {
-        // FIX: Add null checks to prevent crashes if name or description are missing
         const name = product.name || '';
         const description = product.description || '';
         const category = product.category || 'Outros';
@@ -58,9 +57,9 @@ const ProductList: React.FC<ProductListProps> = ({
       });
 
       if (sortOption === 'price-asc') {
-          result.sort((a, b) => a.price - b.price);
+          result.sort((a, b) => (a.variants && a.variants.length > 0 ? Math.min(...a.variants.map(v => v.price)) : a.price) - (b.variants && b.variants.length > 0 ? Math.min(...b.variants.map(v => v.price)) : b.price));
       } else if (sortOption === 'price-desc') {
-          result.sort((a, b) => b.price - a.price);
+          result.sort((a, b) => (b.variants && b.variants.length > 0 ? Math.min(...b.variants.map(v => v.price)) : b.price) - (a.variants && a.variants.length > 0 ? Math.min(...a.variants.map(v => v.price)) : a.price));
       }
       return result;
   }, [products, searchTerm, selectedCategory, sortOption]);
@@ -79,25 +78,23 @@ const ProductList: React.FC<ProductListProps> = ({
   };
 
   const getProductBadge = (product: Product) => {
-      // Prioridade máxima para "Em Breve"
       if (product.comingSoon) return { text: 'EM BREVE', color: 'bg-purple-600', icon: <CalendarClock size={10} /> };
-      
-      // Etiquetas Dinâmicas (Controladas pelo Dashboard)
       if (product.badges) {
           if (product.badges.includes('NOVIDADE')) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
           if (product.badges.includes('MAIS VENDIDO')) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
           if (product.badges.includes('PROMOÇÃO')) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
           if (product.badges.includes('ESSENCIAL')) return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
       }
-
-      // Fallback para lógica antiga caso não haja etiquetas definidas
-      if (!product.badges || product.badges.length === 0) {
-         if (product.id === 6) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
-         if (product.id === 1 || product.id === 8) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
-         if (product.id === 7) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
-         if (product.category === 'Cabos' || product.category === 'Adaptadores') return { text: 'ESSENCIAL', color: 'bg-blue-600', icon: <Star size={10} /> };
-      }
       return null;
+  };
+  
+  const getDisplayPrice = (product: Product) => {
+      const hasVariants = product.variants && product.variants.length > 0;
+      if (hasVariants) {
+          const minPrice = Math.min(...product.variants.map(v => v.price));
+          return { price: minPrice, prefix: "A partir de" };
+      }
+      return { price: product.price, prefix: null };
   };
 
   return (
@@ -161,6 +158,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 const stock = getStock(product.id);
                 const isOutOfStock = stock <= 0 && stock !== 999 && !product.comingSoon;
                 const badge = getProductBadge(product);
+                const { price: displayPrice, prefix: pricePrefix } = getDisplayPrice(product);
 
                 if (viewMode === 'list') {
                     return (
@@ -184,7 +182,10 @@ const ProductList: React.FC<ProductListProps> = ({
                                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{product.description}</p>
                                 </div>
                                 <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-4 min-w-[140px] sm:border-l border-gray-100 sm:pl-6">
-                                    <div className="text-right"><div className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</div></div>
+                                    <div className="text-right">
+                                        {pricePrefix && <div className="text-xs text-gray-500">{pricePrefix}</div>}
+                                        <div className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</div>
+                                    </div>
                                     {product.comingSoon ? (
                                         <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-bold transition-colors">Ver Detalhes</button>
                                     ) : (
@@ -225,7 +226,8 @@ const ProductList: React.FC<ProductListProps> = ({
                         <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-2">{product.description}</p>
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                             <div>
-                                <span className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</span>
+                                {pricePrefix && <span className="text-xs text-gray-500 block">{pricePrefix}</span>}
+                                <span className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</span>
                                 {product.comingSoon && <span className="text-xs text-purple-600 font-bold block uppercase">Em Breve</span>}
                             </div>
                             {product.comingSoon ? (
