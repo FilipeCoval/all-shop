@@ -1,11 +1,10 @@
 
-import React, { useState } from 'react';
+
+import React, { useState, useRef } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus } from '../types';
-// FIX: Imported the 'X' icon from lucide-react to fix the 'Cannot find name X' error.
-import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, Camera } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
-// FIX: Centralized firebase import to prevent duplicate import errors in build
-import { db, firebase } from '../services/firebaseConfig';
+import { db, firebase, storage } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
   user: User;
@@ -78,6 +77,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [cancellationReason, setCancellationReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // State for Profile Picture Upload
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   // --- FUNÇÃO AUXILIAR DE SEGURANÇA (A VACINA ANTI-CRASH) ---
   const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -143,6 +147,35 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       }
   };
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const storageRef = storage.ref(`profile_pictures/${user.uid}`);
+    const uploadTask = storageRef.put(file);
+
+    uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+        },
+        (error) => {
+            console.error(error);
+            alert("Erro ao carregar a imagem.");
+            setIsUploading(false);
+        },
+        async () => {
+            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+            onUpdateUser({ ...user, photoURL: downloadURL });
+            setIsUploading(false);
+        }
+    );
+  };
+
 
   // --- LOYALTY LOGIC ---
   const handleRedeemReward = async (reward: typeof LOYALTY_REWARDS[0]) => {
@@ -184,8 +217,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           const updatedPoints = currentPoints - reward.cost;
           const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
           
-          // FIX: Usar 'firebase.firestore.FieldValue' importado de forma segura via firebaseConfig se necessário, 
-          // ou atualização direta como aqui
           await db.collection('users').doc(user.uid).update({
               loyaltyPoints: updatedPoints,
               pointsHistory: updatedHistory
@@ -257,7 +288,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       return `#${id.slice(-6).toUpperCase()}`;
   };
 
-  // Wishlist Products Logic - A CORREÇÃO ESTÁ AQUI
   const favoriteProducts = (publicProducts || []).filter(p => (wishlist || []).includes(p.id));
 
   const handlePrintOrder = (order: Order) => {
@@ -271,7 +301,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0);
     const safeItems = getSafeItems(order.items);
 
-    // Lógica de retrocompatibilidade para a morada
     const shippingInfo = order.shippingInfo as any;
     let deliveryAddress = '<p>Morada não disponível</p>';
     if (shippingInfo) {
@@ -425,8 +454,28 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           {/* Sidebar */}
           <aside className="w-full md:w-1/4 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
-              <div className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative">
-                {(user.name || 'C').charAt(0).toUpperCase()}
+              <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/*" />
+              <div 
+                className="w-24 h-24 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold border-4 border-white shadow-sm relative group cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                title="Alterar foto de perfil"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 size={32} className="animate-spin text-blue-500" />
+                    <span className="absolute text-xs font-bold text-blue-800">{uploadProgress.toFixed(0)}%</span>
+                  </>
+                ) : user.photoURL ? (
+                  <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  (user.name || 'C').charAt(0).toUpperCase()
+                )}
+                
+                {!isUploading && (
+                  <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera size={24} />
+                  </div>
+                )}
                 
                 <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
                   ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
