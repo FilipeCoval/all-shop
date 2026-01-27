@@ -159,6 +159,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 const isOutOfStock = stock <= 0 && stock !== 999 && !product.comingSoon;
                 const badge = getProductBadge(product);
                 const { price: displayPrice, prefix: pricePrefix } = getDisplayPrice(product);
+                const hasVariants = product.variants && product.variants.length > 0;
 
                 if (viewMode === 'list') {
                     return (
@@ -186,10 +187,12 @@ const ProductList: React.FC<ProductListProps> = ({
                                         {pricePrefix && <div className="text-xs text-gray-500">{pricePrefix}</div>}
                                         <div className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</div>
                                     </div>
-                                    {product.comingSoon ? (
+                                    {hasVariants ? (
+                                        <button onClick={handleProductClick(product.id)} className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 bg-secondary hover:bg-primary text-white"><Eye size={16} /> Ver Opções</button>
+                                    ) : product.comingSoon ? (
                                         <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-bold transition-colors">Ver Detalhes</button>
                                     ) : (
-                                        <button onClick={() => !isOutOfStock && onAddToCart(product)} disabled={isOutOfStock} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>{isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}</button>
+                                        <button onClick={() => onAddToCart(product)} disabled={isOutOfStock} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>{isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}</button>
                                     )}
                                 </div>
                             </div>
@@ -230,10 +233,12 @@ const ProductList: React.FC<ProductListProps> = ({
                                 <span className="text-2xl font-bold text-gray-900">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</span>
                                 {product.comingSoon && <span className="text-xs text-purple-600 font-bold block uppercase">Em Breve</span>}
                             </div>
-                            {product.comingSoon ? (
-                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-full transition-colors"><ArrowRight size={20} /></button>
+                            {hasVariants ? (
+                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-secondary text-white hover:bg-primary rounded-full transition-colors shadow-md" title="Ver Opções"><Eye size={20} /></button>
+                            ) : product.comingSoon ? (
+                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-purple-100 text-purple-700 rounded-full" title="Ver Detalhes"><CalendarClock size={20} /></button>
                             ) : (
-                                <button onClick={() => !isOutOfStock && onAddToCart(product)} disabled={isOutOfStock} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}><Plus size={20} /></button>
+                                <button onClick={() => onAddToCart(product)} disabled={isOutOfStock} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}><Plus size={20} /></button>
                             )}
                         </div>
                     </div>
