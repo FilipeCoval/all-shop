@@ -24,10 +24,8 @@ interface ProductDetailsProps {
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
   product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist
 }) => {
-  const [selectedImage, setSelectedImage] = useState(product.image);
-  const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>(
-    product.variants && product.variants.length > 0 ? product.variants[0].name : undefined
-  );
+  const [selectedImage, setSelectedImage] = useState<string>(product.image);
+  const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
   const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared'>('idle');
   
   const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
@@ -35,24 +33,35 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
 
   useEffect(() => {
-    setSelectedImage(product.image);
+    // Lógica inteligente para selecionar a primeira variante disponível por defeito
     if (product.variants && product.variants.length > 0) {
-        setSelectedVariantName(product.variants[0].name);
+        const firstAvailableVariant = product.variants.find(v => getStock(product.id, v.name) > 0);
+        
+        if (firstAvailableVariant) {
+            // Se encontrarmos uma variante com stock, selecionamo-la
+            setSelectedVariantName(firstAvailableVariant.name);
+            setSelectedImage(firstAvailableVariant.image || product.image);
+        } else {
+            // Se todas estiverem esgotadas, selecionamos a primeira da lista na mesma
+            setSelectedVariantName(product.variants[0].name);
+            setSelectedImage(product.variants[0].image || product.image);
+        }
     } else {
+        // Se não houver variantes, limpa a seleção e usa a imagem principal
         setSelectedVariantName(undefined);
+        setSelectedImage(product.image);
     }
+    
     setAlertStatus('idle');
     setAlertEmail(currentUser?.email || '');
     window.scrollTo(0, 0);
 
-    // --- SEO & TAB TITLE UPDATE ---
     document.title = `${product.name} | ${STORE_NAME}`;
     
-    // Reset title on unmount
     return () => {
         document.title = STORE_NAME;
     };
-  }, [product, currentUser]);
+  }, [product, currentUser, getStock]);
 
   const uniqueImages = useMemo(() => {
     const imgs = new Set<string>();
@@ -89,12 +98,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    // --- LÓGICA DE PARTILHA CORRIGIDA ---
-    // Partilhamos SEMPRE o URL da API, que gera a pré-visualização e depois redireciona o utilizador.
-    // Esta é a solução robusta que garante que os bots veem os dados corretos.
-    const shareUrl = `${PUBLIC_URL}/api/og?id=${product.id}`;
+    // Usamos o URL canónico (bonito) que será reescrito pelo vercel.json para os bots.
+    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
     
-    // Dados para partilha nativa (Mobile)
     const shareData: ShareData = {
       title: product.name,
       text: `Olha o que encontrei na ${STORE_NAME} por apenas ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}!`,
@@ -102,7 +108,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     };
 
     try {
-      // Tentar Web Share API (Menu Nativo do Android/iOS)
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
         setShareFeedback('shared');
@@ -110,7 +115,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      // Fallback: Copiar link direto
       try {
         await navigator.clipboard.writeText(shareUrl);
         setShareFeedback('copied');
@@ -202,9 +206,27 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                <div className="mb-8">
                    <label className="block text-sm font-bold text-gray-700 mb-3">{product.variantLabel || 'Escolha uma opção:'}</label>
                    <div className="flex flex-wrap gap-3">
-                       {product.variants.map((v) => (
-                           <button key={v.name} onClick={() => handleVariantChange(v)} className={`px-4 py-3 rounded-lg border-2 text-sm font-bold transition-all ${selectedVariantName === v.name ? 'border-primary bg-blue-50 text-primary' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>{v.name}</button>
-                       ))}
+                       {product.variants.map((v) => {
+                           const variantStock = getStock(product.id, v.name);
+                           const isSoldOut = variantStock <= 0 && variantStock !== 999;
+                           return (
+                               <button 
+                                   key={v.name} 
+                                   onClick={() => !isSoldOut && handleVariantChange(v)}
+                                   disabled={isSoldOut}
+                                   className={`px-4 py-3 rounded-lg border-2 text-sm font-bold transition-all relative
+                                       ${selectedVariantName === v.name 
+                                           ? 'border-primary bg-blue-50 text-primary ring-2 ring-primary/20' 
+                                           : 'border-gray-200 bg-white text-gray-600'}
+                                       ${isSoldOut 
+                                           ? 'bg-gray-100 !border-gray-200 !text-gray-400 cursor-not-allowed line-through' 
+                                           : 'hover:border-gray-400'}
+                                   `}
+                               >
+                                   {v.name}
+                               </button>
+                           );
+                       })}
                    </div>
                </div>
            )}
