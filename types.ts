@@ -4,6 +4,7 @@ export interface User {
   uid: string;
   name: string;
   email: string;
+  photoURL?: string;
   phone?: string;
   nif?: string;
   addresses?: Address[];
