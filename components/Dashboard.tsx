@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -524,7 +525,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [clientsSearchTerm, setClientsSearchTerm] = useState('');
+  
+  // States para modal de detalhes do cliente
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
+  const [clientOrders, setClientOrders] = useState<Order[]>([]);
+  const [isRecalculatingClient, setIsRecalculatingClient] = useState(false);
 
   // Estados para a ferramenta de fusão de contas
   const [isMerging, setIsMerging] = useState(false);
@@ -673,15 +678,106 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     return () => unsubscribe();
   }, [isAdmin]);
 
-  // Reset merge tool state when opening a new client detail modal
+  // Efeito para buscar encomendas do cliente selecionado
   useEffect(() => {
-    if (selectedUserDetails) {
-      setMergeSearchEmail(selectedUserDetails.email);
-      setFoundDuplicate(null);
-      setDuplicateOrdersCount(0);
-      setDuplicateOrdersTotal(0);
-    }
+    const fetchClientData = async () => {
+        if (selectedUserDetails) {
+            const [userOrdersSnap, guestOrdersSnap] = await Promise.all([
+                db.collection("orders").where("userId", "==", selectedUserDetails.uid).get(),
+                db.collection('orders').where('shippingInfo.email', '==', selectedUserDetails.email.toLowerCase()).where('userId', '==', null).get()
+            ]);
+            const allClientOrders: Order[] = [];
+            userOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order));
+            guestOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order));
+            setClientOrders(allClientOrders);
+
+            setMergeSearchEmail(selectedUserDetails.email);
+            setFoundDuplicate(null);
+            setDuplicateOrdersCount(0);
+            setDuplicateOrdersTotal(0);
+        } else {
+            setClientOrders([]);
+        }
+    };
+    fetchClientData();
   }, [selectedUserDetails]);
+
+  const calculatedTotalSpent = useMemo(() => {
+      if (!selectedUserDetails) return 0;
+      return clientOrders
+          .filter(o => o.status !== 'Cancelado')
+          .reduce((sum, order) => sum + (order.total || 0), 0);
+  }, [clientOrders, selectedUserDetails]);
+
+  const handleRecalculateClientData = async () => {
+    if (!selectedUserDetails) return;
+
+    setIsRecalculatingClient(true);
+    try {
+        const userRef = db.collection('users').doc(selectedUserDetails.uid);
+
+        const totalSpent = calculatedTotalSpent;
+        
+        let correctTier: UserTier = 'Bronze';
+        if (totalSpent >= LOYALTY_TIERS.GOLD.threshold) correctTier = 'Ouro';
+        else if (totalSpent >= LOYALTY_TIERS.SILVER.threshold) correctTier = 'Prata';
+        
+        const ordersToAwardPoints = clientOrders.filter(o => o.status === 'Entregue' && !o.pointsAwarded);
+        
+        let missingPoints = 0;
+        const newHistoryItems: PointHistory[] = [];
+        if (ordersToAwardPoints.length > 0) {
+            const multiplier = LOYALTY_TIERS[correctTier.toUpperCase() as keyof typeof LOYALTY_TIERS].multiplier;
+            ordersToAwardPoints.forEach(o => {
+                const pointsForThisOrder = Math.floor((o.total || 0) * multiplier);
+                if (pointsForThisOrder > 0) {
+                    missingPoints += pointsForThisOrder;
+                    newHistoryItems.push({ id: `recalc-${o.id}`, date: new Date().toISOString(), amount: pointsForThisOrder, reason: `Compra #${o.id.slice(-6)} (Recálculo)`, orderId: o.id });
+                }
+            });
+        }
+        
+        const batch = db.batch();
+        const userUpdateData: any = {
+            totalSpent: totalSpent,
+            tier: correctTier
+        };
+        
+        if (missingPoints > 0) {
+            userUpdateData.loyaltyPoints = firebase.firestore.FieldValue.increment(missingPoints);
+            userUpdateData.pointsHistory = firebase.firestore.FieldValue.arrayUnion(...newHistoryItems);
+        }
+        
+        batch.update(userRef, userUpdateData);
+
+        // Migrar encomendas de convidado
+        clientOrders.filter(o => !o.userId).forEach(o => {
+            batch.update(db.collection('orders').doc(o.id), { userId: selectedUserDetails.uid });
+        });
+        
+        // Marcar pontos como atribuídos
+        ordersToAwardPoints.forEach(order => {
+            batch.update(db.collection('orders').doc(order.id), { pointsAwarded: true });
+        });
+        
+        await batch.commit();
+
+        // Atualizar estado local para refletir a mudança
+        const updatedUserDoc = await userRef.get();
+        if (updatedUserDoc.exists) {
+            setSelectedUserDetails(updatedUserDoc.data() as UserType);
+        }
+
+        alert("Dados do cliente recalculados e sincronizados com sucesso!");
+
+    } catch (error) {
+        console.error("Erro ao recalcular dados do cliente:", error);
+        alert("Ocorreu um erro. Verifique a consola.");
+    } finally {
+        setIsRecalculatingClient(false);
+    }
+  };
+
 
   const handleUpdateOrderState = (orderId: string, updates: Partial<Order>) => {
     setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
@@ -1017,7 +1113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]];
       setFormData(prev => ({ ...prev, images: newImages }));
   };
-  const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, prev.newFeature.trim()], newFeature: '' })); } };
+  const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
 
   const handleProductSubmit = async (e: React.FormEvent) => { 
@@ -1401,16 +1497,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     <div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p></div></div>
-                    <div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(selectedUserDetails.totalSpent || 0)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
+                    <div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
                     <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3">Histórico de Pontos</h4>
                     {(selectedUserDetails.pointsHistory && selectedUserDetails.pointsHistory.length > 0) ? (<div className="max-h-60 overflow-y-auto space-y-2 pr-2">{selectedUserDetails.pointsHistory.map(h => (<div key={h.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded-lg"><div className="flex flex-col"><span>{h.reason}</span><span className="text-xs text-gray-400">{new Date(h.date).toLocaleString()}</span></div><span className={`font-bold ${h.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{h.amount > 0 ? '+' : ''}{h.amount}</span></div>))}</div>) : (<p className="text-sm text-gray-500 italic">Sem histórico de pontos.</p>)}
                     </div>
 
-                    {/* Ferramenta de Fusão de Contas */}
                     <div className="pt-6 border-t border-dashed">
                       <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4>
                       <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4">
-                          <p className="text-sm font-bold text-orange-900">Fundir Contas Duplicadas</p>
+                          <p className="text-sm font-bold text-orange-900">1. Recalcular Dados de Lealdade</p>
+                          <p className="text-xs text-orange-800 -mt-2">Use esta função para corrigir o "Total Gasto", nível e pontos, com base em todas as encomendas associadas a este cliente.</p>
+                          <button onClick={handleRecalculateClientData} disabled={isRecalculatingClient} className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                            {isRecalculatingClient ? <Loader2 className="animate-spin" /> : <><RefreshCw size={14}/> Sincronizar Agora</>}
+                          </button>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4 mt-4">
+                          <p className="text-sm font-bold text-gray-800">2. Fundir Contas Duplicadas</p>
                           <div className="flex gap-2">
                               <input 
                                   type="email"
