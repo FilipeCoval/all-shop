@@ -4,7 +4,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- Helper Functions ---
+    // --- Funções Auxiliares ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -17,12 +17,15 @@ service cloud.firestore {
       ];
     }
 
-    // --- Collections Rules ---
+    // --- Regras das Coleções ---
 
-    // SECURED: Inventory should only be readable by admins to protect costs.
-    // The useStock hook is designed to handle permission errors for public users.
     match /products_inventory/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    match /products_public/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /reviews/{docId} {
@@ -30,44 +33,47 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
-    // UPDATED: Allow users to create coupons that are rewards.
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
 
-    // *** A CORREÇÃO CRÍTICA ESTÁ AQUI ***
-    // Permite que QUALQUER pessoa (mesmo não autenticada) crie uma subscrição.
-    // A leitura continua protegida para admins.
     match /newsletter_subscriptions/{docId} {
       allow create: if true;
       allow read, write, delete: if isAdmin();
     }
 
-    // User-specific data
+    // --- CORREÇÃO APLICADA AQUI ---
+    // A regra foi dividida para permitir explicitamente a criação de perfil.
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      // Utilizadores podem ler e alterar o seu próprio perfil. Admins podem gerir todos.
+      allow get, update, delete: if request.auth.uid == userId || isAdmin();
+      // Um utilizador autenticado pode CRIAR o seu próprio perfil de utilizador.
+      allow create: if request.auth.uid == userId || isAdmin();
     }
 
-    // UPDATED: Allow admins to list all orders, and users to update their own.
     match /orders/{orderId} {
       allow create: if true;
-      allow get: if isAdmin() || (request.auth.uid == resource.data.userId);
-      allow list: if isAdmin() || 
-                    (isSignedIn() && request.query.where.get('userId') == request.auth.uid) ||
-                    (isSignedIn() && request.query.where.get('shippingInfo.email') == request.auth.token.email);
-      allow update: if isAdmin() || (request.auth.uid == resource.data.userId);
+      allow list: if isSignedIn() || isAdmin();
+      allow get: if isAdmin() || 
+                   (isSignedIn() && resource.data.userId == request.auth.uid) ||
+                   (isSignedIn() && resource.data.shippingInfo.email == request.auth.token.email && resource.data.userId == null);
+      allow update: if isAdmin() ||
+                     (isSignedIn() && 
+                      request.auth.uid == resource.data.userId &&
+                      request.resource.data.status == 'Cancelado' &&
+                      resource.data.status in ['Processamento', 'Pago']);
       allow delete: if isAdmin();
     }
 
-    // Other collections
     match /stock_alerts/{alertId} {
       allow create: if true;
       allow read, delete: if isAdmin();
     }
+    
     match /online_users/{sessionId} {
-      allow write: if true; // Anyone can update their own session
+      allow write: if true;
       allow read: if isAdmin();
     }
   }
