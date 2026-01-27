@@ -559,34 +559,51 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const pendingOrders = useMemo(() => allOrders.filter(o => ['Processamento', 'Pago'].includes(o.status)), [allOrders]);
   
   useEffect(() => {
-      if (linkedOrderId) {
-          const order = allOrders.find(o => o.id === linkedOrderId);
-          setSelectedOrderForSaleDetails(order || null);
-          if (selectedProductForSale && order) {
-              const safeItems = getSafeItems(order.items);
-              const isCompatible = safeItems.some(item => {
-                  if (typeof item === 'string') return false; 
-                  const idMatch = item.productId === selectedProductForSale.publicProductId;
-                  const variantMatch = !selectedProductForSale.variant || (item.selectedVariant === selectedProductForSale.variant);
-                  return idMatch && variantMatch;
-              });
-              if (!isCompatible) setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!");
-              else setOrderMismatchWarning(null);
+    if (linkedOrderId) {
+        const order = allOrders.find(o => o.id === linkedOrderId);
+        setSelectedOrderForSaleDetails(order || null);
+        if (selectedProductForSale && order) {
+            const safeItems = getSafeItems(order.items);
+            const isCompatible = safeItems.some(item => {
+                if (typeof item === 'string') return false; 
+                const idMatch = item.productId === selectedProductForSale.publicProductId;
+                if (!idMatch) return false;
 
-              if (order) {
-                  const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined;
-                  if (item) {
-                      setSaleForm(prev => ({
-                          ...prev, unitPrice: item.price.toString(), shippingCost: (order.total - (item.price * item.quantity)).toFixed(2)
-                      }));
-                  }
-              }
-          }
-      } else {
-          setSelectedOrderForSaleDetails(null);
-          setOrderMismatchWarning(null);
-      }
-  }, [linkedOrderId, allOrders, selectedProductForSale]);
+                const inventoryHasVariant = !!selectedProductForSale.variant;
+                const orderHasVariant = !!item.selectedVariant;
+
+                if (inventoryHasVariant && orderHasVariant) {
+                    return item.selectedVariant === selectedProductForSale.variant;
+                }
+                if (!inventoryHasVariant && !orderHasVariant) {
+                    return true;
+                }
+                if (!inventoryHasVariant && orderHasVariant) {
+                    return false;
+                }
+                if (inventoryHasVariant && !orderHasVariant) {
+                    return true;
+                }
+
+                return false;
+            });
+            if (!isCompatible) setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!");
+            else setOrderMismatchWarning(null);
+
+            if (order) {
+                const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined;
+                if (item) {
+                    setSaleForm(prev => ({
+                        ...prev, unitPrice: item.price.toString(), shippingCost: (order.total - (item.price * item.quantity)).toFixed(2)
+                    }));
+                }
+            }
+        }
+    } else {
+        setSelectedOrderForSaleDetails(null);
+        setOrderMismatchWarning(null);
+    }
+}, [linkedOrderId, allOrders, selectedProductForSale]);
 
   useEffect(() => {
     if(!isAdmin) return;
