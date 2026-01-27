@@ -151,7 +151,7 @@ const App: React.FC = () => {
             try {
                 const userDocRef = db.collection("users").doc(firebaseUser.uid);
 
-                // --- INÍCIO DA LÓGICA DE SINCRONIZAÇÃO E LEALDADE (COMO ANTES) ---
+                // PASSO 1: Sincronização de dados de login (corrige contas de convidados, pontos, etc.)
                 const userDoc = await userDocRef.get();
                 if (!userDoc.exists) {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email, addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0, pointsHistory: [] };
@@ -203,9 +203,9 @@ const App: React.FC = () => {
                     }
                 }
                 
-                // --- FIM DA LÓGICA DE SINCRONIZAÇÃO ---
+                // PASSO 2: Ativar listeners para atualizações em tempo real
 
-                // ATIVAR LISTENERS DE DADOS EM TEMPO REAL
+                // Listener do perfil do utilizador
                 userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
                     if (docSnap.exists) {
                         const userData = docSnap.data() as User;
@@ -217,32 +217,19 @@ const App: React.FC = () => {
                     }
                 });
                 
-                // --- INÍCIO DA NOVA LÓGICA DE ORDERS ---
-                let userOrders: Order[] = [];
-                let guestOrders: Order[] = [];
-
-                const updateCombinedOrders = () => {
-                    const combined = [...userOrders, ...guestOrders];
-                    const uniqueOrders = Array.from(new Map(combined.map(o => [o.id, o])).values());
-                    uniqueOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                    setOrders(uniqueOrders);
-                };
-
-                const unsub1 = db.collection("orders").where("userId", "==", firebaseUser.uid).orderBy('date', 'desc').onSnapshot((snap) => {
-                    userOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-                    updateCombinedOrders();
-                });
-
-                const unsub2 = db.collection('orders').where('shippingInfo.email', '==', firebaseUser.email.toLowerCase()).where('userId', '==', null).onSnapshot((snap) => {
-                    guestOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-                    updateCombinedOrders();
-                });
-
-                ordersUnsubscribe = () => {
-                    unsub1();
-                    unsub2();
-                };
-                // --- FIM DA NOVA LÓGICA DE ORDERS ---
+                // Listener de encomendas (SIMPLIFICADO E CORRIGIDO)
+                // Após a sincronização acima, todas as encomendas (antigas e novas) terão o userId.
+                // Portanto, um único listener é suficiente e muito mais fiável.
+                ordersUnsubscribe = db.collection("orders")
+                    .where("userId", "==", firebaseUser.uid)
+                    .orderBy('date', 'desc')
+                    .onSnapshot((snap) => {
+                        const fetchedOrders = snap.docs.map(doc => ({id: doc.id, ...doc.data() } as Order));
+                        setOrders(fetchedOrders);
+                    }, (error) => {
+                        console.error("Erro ao carregar encomendas:", error);
+                        setOrders([]); // Garante que a lista fica vazia em caso de erro de permissão
+                    });
 
             } catch (error) {
                 console.error("Erro crítico durante a autenticação/sincronização do utilizador:", error);
