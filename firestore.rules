@@ -17,73 +17,77 @@ service cloud.firestore {
       ];
     }
 
-    // --- Regras das Coleções ---
+    // --- REGRAS DAS COLEÇÕES (VERSÃO CORRIGIDA E SIMPLIFICADA) ---
 
-    match /products_inventory/{docId} {
-      allow read, write: if isAdmin();
-    }
+    // Regras de acesso público ou apenas para admin
+    match /products_inventory/{docId} { allow read, write: if isAdmin(); }
+    match /products_public/{docId} { allow read: if true; allow write: if isAdmin(); }
+    match /reviews/{docId} { allow get, list, create: if true; allow update, delete: if isAdmin(); }
+    match /newsletter_subscriptions/{docId} { allow create: if true; allow read, write, delete: if isAdmin(); }
+    match /stock_alerts/{alertId} { allow create: if true; allow read, delete: if isAdmin(); }
+    match /online_users/{sessionId} { allow write: if true; allow read: if isAdmin(); }
 
-    match /products_public/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /reviews/{docId} {
-      allow get, list, create: if true;
-      allow update, delete: if isAdmin();
-    }
-    
+    // Regras para Cupões
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
 
-    match /newsletter_subscriptions/{docId} {
-      allow create: if true;
-      allow read, write, delete: if isAdmin();
-    }
-
-    // --- CORREÇÃO APLICADA AQUI ---
-    // A regra foi dividida para permitir explicitamente a criação de perfil.
+    // Regras para Utilizadores
     match /users/{userId} {
-      // Utilizadores podem ler e alterar o seu próprio perfil. Admins podem gerir todos.
-      allow get, update, delete: if request.auth.uid == userId || isAdmin();
-      // Um utilizador autenticado pode CRIAR o seu próprio perfil de utilizador.
       allow create: if request.auth.uid == userId || isAdmin();
+      allow get, update, delete: if request.auth.uid == userId || isAdmin();
     }
 
+    // --- REGRAS DE ENCOMENDAS (CORREÇÃO DEFINITIVA) ---
     match /orders/{orderId} {
+      // Qualquer pessoa pode criar uma encomenda (checkout de convidado)
       allow create: if true;
-      allow list: if isSignedIn() || isAdmin();
-      allow get: if isAdmin() || 
-                   (isSignedIn() && resource.data.userId == request.auth.uid) ||
-                   (isSignedIn() && resource.data.shippingInfo.email == request.auth.token.email && resource.data.userId == null);
+
+      // RELEITURA:
+      // - Admins podem ler tudo, incondicionalmente.
+      // - Um utilizador autenticado pode ler uma encomenda se:
+      //   a) O ID da encomenda já lhe pertence.
+      //   b) A encomenda ainda não tem dono (userId == null) E o email da encomenda corresponde ao seu.
+      //   (A verificação 'resource.data.keys().hasAll' evita erros em documentos antigos)
+      allow read: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          (
+            resource.data.userId == null &&
+            resource.data.keys().hasAll(['shippingInfo']) &&
+            resource.data.shippingInfo.keys().hasAll(['email']) &&
+            resource.data.shippingInfo.email == request.auth.token.email
+          )
+        )
+      );
       
-      // REGRA CORRIGIDA
-      allow update: if isAdmin() ||
-                     // Regra 1: Permite que um utilizador cancele a sua própria encomenda
-                     (isSignedIn() && 
-                      request.auth.uid == resource.data.userId &&
-                      request.resource.data.status == 'Cancelado' &&
-                      resource.data.status in ['Processamento', 'Pago']) ||
-                     // Regra 2: Permite que um utilizador "reclame" uma encomenda de convidado
-                     (isSignedIn() &&
-                      resource.data.userId == null && // Se a encomenda é de convidado
-                      resource.data.shippingInfo.email == request.auth.token.email && // E o email corresponde
-                      request.resource.data.userId == request.auth.uid); // E a única alteração é atribuir o ID do utilizador
+      // ESCRITA:
+      // - Admins podem escrever em tudo.
+      // - Um utilizador autenticado pode:
+      //   a) Mudar o estado da sua própria encomenda para 'Cancelado'.
+      //   b) "Reclamar" uma encomenda de convidado (mudar apenas o userId).
+      allow update: if isAdmin() || (
+        isSignedIn() && (
+          ( // Regra para cancelar
+            resource.data.userId == request.auth.uid &&
+            request.resource.data.status == 'Cancelado' &&
+            resource.data.status in ['Processamento', 'Pago']
+          ) ||
+          ( // Regra para reclamar encomenda de convidado
+            resource.data.userId == null &&
+            resource.data.keys().hasAll(['shippingInfo']) &&
+            resource.data.shippingInfo.keys().hasAll(['email']) &&
+            resource.data.shippingInfo.email == request.auth.token.email &&
+            request.resource.data.userId == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId'])
+          )
+        )
+      );
 
+      // APAGAR: Apenas Admins podem apagar encomendas.
       allow delete: if isAdmin();
-    }
-
-    match /stock_alerts/{alertId} {
-      allow create: if true;
-      allow read, delete: if isAdmin();
-    }
-    
-    match /online_users/{sessionId} {
-      allow write: if true;
-      allow read: if isAdmin();
     }
   }
 }
