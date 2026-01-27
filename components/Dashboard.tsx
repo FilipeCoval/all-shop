@@ -531,6 +531,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [mergeSearchEmail, setMergeSearchEmail] = useState('');
   const [foundDuplicate, setFoundDuplicate] = useState<UserType | null>(null);
   const [duplicateOrdersCount, setDuplicateOrdersCount] = useState(0);
+  const [duplicateOrdersTotal, setDuplicateOrdersTotal] = useState(0);
 
   const [formData, setFormData] = useState({
     name: '', description: '', category: '', publicProductId: '' as string, variant: '',
@@ -678,6 +679,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setMergeSearchEmail(selectedUserDetails.email);
       setFoundDuplicate(null);
       setDuplicateOrdersCount(0);
+      setDuplicateOrdersTotal(0);
     }
   }, [selectedUserDetails]);
 
@@ -829,6 +831,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         if (snapshot.docs.length < 2) {
             setFoundDuplicate(null);
             setDuplicateOrdersCount(0);
+            setDuplicateOrdersTotal(0);
             alert("Nenhuma conta duplicada encontrada com este email.");
             return;
         }
@@ -838,6 +841,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         if (!duplicateDoc) {
              setFoundDuplicate(null);
              setDuplicateOrdersCount(0);
+             setDuplicateOrdersTotal(0);
              alert("Nenhuma conta duplicada (diferente da atual) encontrada.");
              return;
         }
@@ -846,7 +850,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         setFoundDuplicate(duplicateData);
         
         const ordersSnapshot = await db.collection('orders').where('userId', '==', duplicateData.uid).get();
+        const totalToSum = ordersSnapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
         setDuplicateOrdersCount(ordersSnapshot.size);
+        setDuplicateOrdersTotal(totalToSum);
 
     } catch (error) {
         console.error("Erro ao procurar duplicado:", error);
@@ -863,17 +869,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         const targetUserRef = db.collection('users').doc(selectedUserDetails.uid);
         const sourceUserRef = db.collection('users').doc(foundDuplicate.uid);
 
-        // 1. Re-atribuir encomendas da conta duplicada
-        const ordersToUpdateSnapshot = await db.collection('orders').where('userId', '==', foundDuplicate.uid).get();
+        const targetUserOrdersSnap = await db.collection('orders').where('userId', '==', selectedUserDetails.uid).get();
+        const sourceUserOrdersSnap = await db.collection('orders').where('userId', '==', foundDuplicate.uid).get();
+        
         const batch = db.batch();
-        ordersToUpdateSnapshot.forEach(doc => {
+        sourceUserOrdersSnap.forEach(doc => {
             batch.update(doc.ref, { userId: selectedUserDetails.uid });
         });
 
-        // 2. Fundir dados no utilizador principal
+        const allMergedOrders = [
+            ...targetUserOrdersSnap.docs.map(d => d.data() as Order),
+            ...sourceUserOrdersSnap.docs.map(d => d.data() as Order)
+        ];
+
+        const newTotalSpent = allMergedOrders
+            .filter(o => o.status !== 'Cancelado')
+            .reduce((sum, o) => sum + (o.total || 0), 0);
+        
         const newPoints = (selectedUserDetails.loyaltyPoints || 0) + (foundDuplicate.loyaltyPoints || 0);
-        const newTotalSpent = (selectedUserDetails.totalSpent || 0) + (foundDuplicate.totalSpent || 0);
-        const mergedHistory = [...(selectedUserDetails.pointsHistory || []), ...(foundDuplicate.pointsHistory || [])].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const mergedHistory = [...(selectedUserDetails.pointsHistory || []), ...(foundDuplicate.pointsHistory || [])]
+            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
         batch.update(targetUserRef, {
             loyaltyPoints: newPoints,
@@ -881,14 +896,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             pointsHistory: mergedHistory
         });
 
-        // 3. Apagar o utilizador duplicado
         batch.delete(sourceUserRef);
         
-        // Executar tudo
         await batch.commit();
 
         alert("Fusão concluída com sucesso! Os dados foram combinados e as encomendas reatribuídas.");
-        setSelectedUserDetails(null); // Fecha o modal
+        setSelectedUserDetails(null);
     } catch (error) {
         console.error("Erro na fusão de contas:", error);
         alert("Ocorreu um erro crítico durante a fusão. Verifique a consola.");
@@ -1415,7 +1428,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                 <p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p>
                                 <p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p>
                                 <p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p>
-                                <p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(foundDuplicate.totalSpent || 0)}</p>
+                                <p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(duplicateOrdersTotal || 0)}</p>
                                 <p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p>
                                 <button 
                                   onClick={handleConfirmMerge} 
