@@ -198,7 +198,11 @@ const App: React.FC = () => {
                         }
                         if (Object.keys(userUpdateData).length > 0) batch.update(userDocRef, userUpdateData);
                         ordersToMigrate.forEach(doc => batch.update(doc.ref, { userId: firebaseUser.uid }));
-                        ordersToAwardPoints.forEach(order => batch.update(db.collection('orders').doc(order.id), { pointsAwarded: true }));
+                        
+                        // A LINHA ABAIXO FOI REMOVIDA
+                        // Esta lógica é agora da responsabilidade do admin no dashboard para evitar falhas de segurança/lógica.
+                        // ordersToAwardPoints.forEach(order => batch.update(db.collection('orders').doc(order.id), { pointsAwarded: true }));
+                        
                         await batch.commit();
                     }
                 }
