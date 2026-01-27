@@ -33,35 +33,19 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
 
   useEffect(() => {
-    // Lógica inteligente para selecionar a primeira variante disponível por defeito
-    if (product.variants && product.variants.length > 0) {
-        const firstAvailableVariant = product.variants.find(v => getStock(product.id, v.name) > 0);
-        
-        if (firstAvailableVariant) {
-            // Se encontrarmos uma variante com stock, selecionamo-la
-            setSelectedVariantName(firstAvailableVariant.name);
-            setSelectedImage(firstAvailableVariant.image || product.image);
-        } else {
-            // Se todas estiverem esgotadas, selecionamos a primeira da lista na mesma
-            setSelectedVariantName(product.variants[0].name);
-            setSelectedImage(product.variants[0].image || product.image);
-        }
-    } else {
-        // Se não houver variantes, limpa a seleção e usa a imagem principal
-        setSelectedVariantName(undefined);
-        setSelectedImage(product.image);
-    }
+    // Não seleciona nenhuma variante por defeito, forçando o utilizador a escolher.
+    setSelectedVariantName(undefined);
+    setSelectedImage(product.image);
     
     setAlertStatus('idle');
     setAlertEmail(currentUser?.email || '');
     window.scrollTo(0, 0);
-
     document.title = `${product.name} | ${STORE_NAME}`;
     
     return () => {
         document.title = STORE_NAME;
     };
-  }, [product, currentUser, getStock]);
+  }, [product, currentUser]);
 
   const uniqueImages = useMemo(() => {
     const imgs = new Set<string>();
@@ -76,6 +60,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const selectedVariant = product.variants?.find(v => v.name === selectedVariantName);
   const currentPrice = selectedVariant?.price || product.price;
   const currentStock = getStock(product.id, selectedVariantName);
+  
+  const hasVariants = product.variants && product.variants.length > 0;
+  const isVariantSelected = !!selectedVariantName;
   
   const isOutOfStock = currentStock <= 0 && currentStock !== 999;
   const isUnavailable = isOutOfStock || !!product.comingSoon;
@@ -92,13 +79,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleAddToCart = () => {
-      if (isUnavailable) return;
+      if (isUnavailable || (hasVariants && !isVariantSelected)) return;
       if (selectedVariant) onAddToCart(product, selectedVariant);
       else onAddToCart(product);
   };
 
   const handleShare = async () => {
-    // Usamos o URL canónico (bonito) que será reescrito pelo vercel.json para os bots.
     const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
     
     const shareData: ShareData = {
@@ -202,7 +188,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                {product.comingSoon && <span className="text-purple-600 font-bold mb-2 uppercase tracking-wide">Pré-Lançamento</span>}
            </div>
 
-           {product.variants && product.variants.length > 0 && (
+           {hasVariants && (
                <div className="mb-8">
                    <label className="block text-sm font-bold text-gray-700 mb-3">{product.variantLabel || 'Escolha uma opção:'}</label>
                    <div className="flex flex-wrap gap-3">
@@ -280,15 +266,19 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
            <div className="flex gap-4 mb-8">
                <button 
                 onClick={handleAddToCart} 
-                disabled={isUnavailable} 
+                disabled={isUnavailable || (hasVariants && !isVariantSelected)} 
                 className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 
-                    ${isUnavailable 
+                    ${isUnavailable || (hasVariants && !isVariantSelected)
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                         : 'bg-primary hover:bg-blue-600 text-white'
                     }`}
                >
                    <ShoppingCart size={24} /> 
-                   {isUnavailable ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') : 'Comprar Agora'}
+                   {isUnavailable 
+                       ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') 
+                       : (hasVariants && !isVariantSelected) 
+                           ? 'Selecione uma opção'
+                           : 'Comprar Agora'}
                </button>
            </div>
            
