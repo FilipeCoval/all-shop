@@ -59,11 +59,20 @@ service cloud.firestore {
       allow get: if isAdmin() || 
                    (isSignedIn() && resource.data.userId == request.auth.uid) ||
                    (isSignedIn() && resource.data.shippingInfo.email == request.auth.token.email && resource.data.userId == null);
+      
+      // REGRA CORRIGIDA
       allow update: if isAdmin() ||
+                     // Regra 1: Permite que um utilizador cancele a sua própria encomenda
                      (isSignedIn() && 
                       request.auth.uid == resource.data.userId &&
                       request.resource.data.status == 'Cancelado' &&
-                      resource.data.status in ['Processamento', 'Pago']);
+                      resource.data.status in ['Processamento', 'Pago']) ||
+                     // Regra 2: Permite que um utilizador "reclame" uma encomenda de convidado
+                     (isSignedIn() &&
+                      resource.data.userId == null && // Se a encomenda é de convidado
+                      resource.data.shippingInfo.email == request.auth.token.email && // E o email corresponde
+                      request.resource.data.userId == request.auth.uid); // E a única alteração é atribuir o ID do utilizador
+
       allow delete: if isAdmin();
     }
 
