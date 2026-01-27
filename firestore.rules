@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -10,6 +9,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
+      // ATENÇÃO: Confirme se o seu email está nesta lista!
       return isSignedIn() && request.auth.token.email in [
         "filipe_coval_90@hotmail.com", 
         "mcpoleca@gmail.com", 
@@ -17,77 +17,56 @@ service cloud.firestore {
       ];
     }
 
-    // --- REGRAS DAS COLEÇÕES (VERSÃO CORRIGIDA E SIMPLIFICADA) ---
+    // --- Regras das Coleções ---
 
-    // Regras de acesso público ou apenas para admin
-    match /products_inventory/{docId} { allow read, write: if isAdmin(); }
-    match /products_public/{docId} { allow read: if true; allow write: if isAdmin(); }
-    match /reviews/{docId} { allow get, list, create: if true; allow update, delete: if isAdmin(); }
-    match /newsletter_subscriptions/{docId} { allow create: if true; allow read, write, delete: if isAdmin(); }
-    match /stock_alerts/{alertId} { allow create: if true; allow read, delete: if isAdmin(); }
-    match /online_users/{sessionId} { allow write: if true; allow read: if isAdmin(); }
+    // Inventário Privado (Apenas Backoffice)
+    match /products_inventory/{docId} {
+      allow read, write: if isAdmin();
+    }
 
-    // Regras para Cupões
+    // Loja Pública (Onde o site lê os produtos)
+    // ESTA É A REGRA NOVA QUE FALTA
+    match /products_public/{docId} {
+      allow read: if true;        // Aberto para todos os visitantes
+      allow write: if isAdmin();  // Apenas admins podem importar/editar
+    }
+
+    match /reviews/{docId} {
+      allow get, list, create: if true;
+      allow update, delete: if isAdmin();
+    }
+    
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
 
-    // Regras para Utilizadores
-    match /users/{userId} {
-      allow create: if request.auth.uid == userId || isAdmin();
-      allow get, update, delete: if request.auth.uid == userId || isAdmin();
+    match /newsletter_subscriptions/{docId} {
+      allow create: if true;
+      allow read, write, delete: if isAdmin();
     }
 
-    // --- REGRAS DE ENCOMENDAS (CORREÇÃO DEFINITIVA) ---
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
+    }
+
     match /orders/{orderId} {
-      // Qualquer pessoa pode criar uma encomenda (checkout de convidado)
       allow create: if true;
-
-      // RELEITURA:
-      // - Admins podem ler tudo, incondicionalmente.
-      // - Um utilizador autenticado pode ler uma encomenda se:
-      //   a) O ID da encomenda já lhe pertence.
-      //   b) A encomenda ainda não tem dono (userId == null) E o email da encomenda corresponde ao seu.
-      //   (A verificação 'resource.data.keys().hasAll' evita erros em documentos antigos)
-      allow read: if isAdmin() || (
-        isSignedIn() && (
-          resource.data.userId == request.auth.uid ||
-          (
-            resource.data.userId == null &&
-            resource.data.keys().hasAll(['shippingInfo']) &&
-            resource.data.shippingInfo.keys().hasAll(['email']) &&
-            resource.data.shippingInfo.email == request.auth.token.email
-          )
-        )
-      );
-      
-      // ESCRITA:
-      // - Admins podem escrever em tudo.
-      // - Um utilizador autenticado pode:
-      //   a) Mudar o estado da sua própria encomenda para 'Cancelado'.
-      //   b) "Reclamar" uma encomenda de convidado (mudar apenas o userId).
-      allow update: if isAdmin() || (
-        isSignedIn() && (
-          ( // Regra para cancelar
-            resource.data.userId == request.auth.uid &&
-            request.resource.data.status == 'Cancelado' &&
-            resource.data.status in ['Processamento', 'Pago']
-          ) ||
-          ( // Regra para reclamar encomenda de convidado
-            resource.data.userId == null &&
-            resource.data.keys().hasAll(['shippingInfo']) &&
-            resource.data.shippingInfo.keys().hasAll(['email']) &&
-            resource.data.shippingInfo.email == request.auth.token.email &&
-            request.resource.data.userId == request.auth.uid &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId'])
-          )
-        )
-      );
-
-      // APAGAR: Apenas Admins podem apagar encomendas.
+      allow list: if isSignedIn() || isAdmin();
+      allow get: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid) || (isSignedIn() && resource.data.shippingInfo.email == request.auth.token.email && resource.data.userId == null);
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.userId && request.resource.data.status == 'Cancelado' && resource.data.status in ['Processamento', 'Pago']);
       allow delete: if isAdmin();
+    }
+
+    match /stock_alerts/{alertId} {
+      allow create: if true;
+      allow read, delete: if isAdmin();
+    }
+    
+    match /online_users/{sessionId} {
+      allow write: if true;
+      allow read: if isAdmin();
     }
   }
 }
