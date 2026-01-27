@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { User as UserType } from '../types';
@@ -41,8 +42,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     setError(null);
     setIsLoading(true);
 
+    const safeEmail = email.trim().toLowerCase();
+
     try {
-        const userCredential = await auth.signInWithEmailAndPassword(email.trim(), password);
+        const userCredential = await auth.signInWithEmailAndPassword(safeEmail, password);
         const firebaseUser = userCredential.user;
 
         if (!firebaseUser) throw new Error("Falha ao obter utilizador");
@@ -50,7 +53,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         let userData: UserType;
         
         try {
-            // Tentar buscar dados extra da base de dados
             const docRef = db.collection("users").doc(firebaseUser.uid);
             const docSnap = await docRef.get();
             
@@ -65,7 +67,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                 };
             }
         } catch (dbErr) {
-            // CORREÇÃO DO LOGIN ERROR: Se o Firestore bloquear, usamos os dados do Auth e prosseguimos
             console.warn("Database restricted. Using Auth profile only.");
             userData = {
                 uid: firebaseUser.uid,
@@ -80,7 +81,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
     } catch (err: any) {
         console.error("Auth error", err);
-        if (
+        if (err.message && err.message.includes('requests-from-referer')) {
+            setError('Acesso bloqueado pela Google. A sua Chave de API do FIREBASE tem restrições. Vá à Google Cloud > APIs & Serviços > Credenciais, encontre a chave "Browser key (auto created by Firebase)" e adicione "*.scf.usercontent.goog" aos "Referenciadores HTTP".');
+        } else if (
             err.code === 'auth/invalid-credential' || 
             err.code === 'auth/user-not-found' || 
             err.code === 'auth/wrong-password'
@@ -106,16 +109,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         setError('A palavra-passe deve ter pelo menos 6 caracteres.');
         return;
     }
-
     if (password !== confirmPassword) {
         setError('As palavras-passe não coincidem.');
         return;
     }
 
     setIsLoading(true);
+    const safeEmail = email.trim().toLowerCase();
 
     try {
-        const userCredential = await auth.createUserWithEmailAndPassword(email.trim(), password);
+        const userCredential = await auth.createUserWithEmailAndPassword(safeEmail, password);
         const firebaseUser = userCredential.user;
 
         if (!firebaseUser) throw new Error("Falha ao criar utilizador");
@@ -125,13 +128,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         const newUser: UserType = {
             uid: firebaseUser.uid,
             name,
-            email: email.trim(),
+            email: safeEmail,
             addresses: []
         };
 
         try {
             await db.collection("users").doc(firebaseUser.uid).set(newUser);
-        } catch(e) { console.debug("Database sync on register restricted."); }
+        } catch(dbErr) { console.debug("Database sync on register restricted."); }
 
         onLogin(newUser);
         onClose();
@@ -139,7 +142,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     } catch (err: any) {
         console.error("Register error", err);
         if (err.code === 'auth/email-already-in-use') {
-            setError('Este email já está registado.');
+            // SOLUÇÃO INTELIGENTE: Guia o utilizador para o login
+            setError('Este email já está registado. Por favor, faça login.');
+            setView('login');
         } else if (err.code === 'auth/operation-not-allowed') {
             setError('Erro de configuração: Registo por email/password não está ativo no Firebase.');
         } else {
@@ -155,9 +160,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
     setError(null);
     setIsLoading(true);
 
+    const safeEmail = email.trim().toLowerCase();
+
     try {
-        await auth.sendPasswordResetEmail(email.trim());
-        setSuccessMsg(`Email de recuperação enviado para ${email.trim()}.`);
+        await auth.sendPasswordResetEmail(safeEmail);
+        setSuccessMsg(`Email de recuperação enviado para ${safeEmail}.`);
         setTimeout(() => setView('login'), 5000);
     } catch (err: any) {
         setError('Erro ao enviar email de recuperação.');
