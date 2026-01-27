@@ -151,50 +151,28 @@ const App: React.FC = () => {
             try {
                 const userDocRef = db.collection("users").doc(firebaseUser.uid);
 
-                // --- INÍCIO DA LÓGICA DE SINCRONIZAÇÃO CORRIGIDA ---
-
-                // PASSO 1: Garantir que o perfil do utilizador existe
+                // --- INÍCIO DA LÓGICA DE SINCRONIZAÇÃO E LEALDADE (COMO ANTES) ---
                 const userDoc = await userDocRef.get();
                 if (!userDoc.exists) {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email, addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0, pointsHistory: [] };
                     await userDocRef.set(basicUser);
                 }
-
-                // PASSO 2: Obter TODAS as encomendas do cliente (por ID e por email de convidado)
                 const [userOrdersSnap, guestOrdersSnap] = await Promise.all([
                     db.collection("orders").where("userId", "==", firebaseUser.uid).get(),
                     db.collection('orders').where('shippingInfo.email', '==', firebaseUser.email.toLowerCase()).where('userId', '==', null).get()
                 ]);
-                
                 const allUserOrders: Order[] = [];
-                const orderIds = new Set<string>(); // Para evitar duplicados
-
-                userOrdersSnap.forEach(doc => {
-                    if (!orderIds.has(doc.id)) {
-                        allUserOrders.push({ id: doc.id, ...doc.data() } as Order);
-                        orderIds.add(doc.id);
-                    }
-                });
-                guestOrdersSnap.forEach(doc => {
-                     if (!orderIds.has(doc.id)) {
-                        allUserOrders.push({ id: doc.id, ...doc.data() } as Order);
-                        orderIds.add(doc.id);
-                    }
-                });
-
-                // PASSO 3: Calcular dados corretos a partir da lista completa
-                const freshUserDoc = await userDocRef.get(); // Re-fetch para ter os dados mais recentes
+                const orderIds = new Set<string>();
+                userOrdersSnap.forEach(doc => { if (!orderIds.has(doc.id)) { allUserOrders.push({ id: doc.id, ...doc.data() } as Order); orderIds.add(doc.id); }});
+                guestOrdersSnap.forEach(doc => { if (!orderIds.has(doc.id)) { allUserOrders.push({ id: doc.id, ...doc.data() } as Order); orderIds.add(doc.id); }});
+                const freshUserDoc = await userDocRef.get();
                 if (freshUserDoc.exists) {
                     const userData = freshUserDoc.data() as User;
-                    
                     const historicalTotalSpent = allUserOrders.filter(o => o.status !== 'Cancelado').reduce((sum, order) => sum + (order.total || 0), 0);
-                    
                     let correctTier: UserTier = 'Bronze';
                     if (historicalTotalSpent >= LOYALTY_TIERS.GOLD.threshold) correctTier = 'Ouro';
                     else if (historicalTotalSpent >= LOYALTY_TIERS.SILVER.threshold) correctTier = 'Prata';
-                    
                     const ordersToAwardPoints = allUserOrders.filter(o => o.status === 'Entregue' && !o.pointsAwarded);
-                    
                     let missingPoints = 0;
                     const newHistoryItems: PointHistory[] = [];
                     if (ordersToAwardPoints.length > 0) {
@@ -207,46 +185,27 @@ const App: React.FC = () => {
                             }
                         });
                     }
-
                     const ordersToMigrate = guestOrdersSnap.docs;
-                    
-                    // Verifica se há algo para atualizar
-                    const needsUpdate = (
-                        (userData.totalSpent || 0).toFixed(2) !== historicalTotalSpent.toFixed(2) ||
-                        (userData.tier || 'Bronze') !== correctTier ||
-                        missingPoints > 0 ||
-                        ordersToMigrate.length > 0
-                    );
-
-                    // PASSO 4: Executar uma única transação atómica para corrigir tudo
+                    const needsUpdate = ( (userData.totalSpent || 0).toFixed(2) !== historicalTotalSpent.toFixed(2) || (userData.tier || 'Bronze') !== correctTier || missingPoints > 0 || ordersToMigrate.length > 0 );
                     if (needsUpdate) {
                         const batch = db.batch();
                         const userUpdateData: any = {};
-                        
                         if ((userData.totalSpent || 0).toFixed(2) !== historicalTotalSpent.toFixed(2)) userUpdateData.totalSpent = historicalTotalSpent;
                         if ((userData.tier || 'Bronze') !== correctTier) userUpdateData.tier = correctTier;
-                        
                         if (missingPoints > 0) {
                             userUpdateData.loyaltyPoints = (userData.loyaltyPoints || 0) + missingPoints;
                             userUpdateData.pointsHistory = [...newHistoryItems, ...(userData.pointsHistory || [])];
                         }
-
                         if (Object.keys(userUpdateData).length > 0) batch.update(userDocRef, userUpdateData);
-                        
-                        // Migra as encomendas de convidado
                         ordersToMigrate.forEach(doc => batch.update(doc.ref, { userId: firebaseUser.uid }));
-                        
-                        // Marca os pontos como atribuídos
                         ordersToAwardPoints.forEach(order => batch.update(db.collection('orders').doc(order.id), { pointsAwarded: true }));
-                        
                         await batch.commit();
-                        console.log(`Sincronização completa para ${firebaseUser.uid}.`);
                     }
                 }
                 
-                // --- FIM DA LÓGICA DE SINCRONIZAÇÃO CORRIGIDA ---
+                // --- FIM DA LÓGICA DE SINCRONIZAÇÃO ---
 
-                // PASSO 5: Ativar listeners para atualizações em tempo real
+                // ATIVAR LISTENERS DE DADOS EM TEMPO REAL
                 userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
                     if (docSnap.exists) {
                         const userData = docSnap.data() as User;
@@ -257,9 +216,34 @@ const App: React.FC = () => {
                         }
                     }
                 });
-                ordersUnsubscribe = db.collection("orders").where("userId", "==", firebaseUser.uid).orderBy('date', 'desc').onSnapshot((snap) => {
-                    setOrders(snap.docs.map(doc => ({id: doc.id, ...doc.data() } as Order)));
+                
+                // --- INÍCIO DA NOVA LÓGICA DE ORDERS ---
+                let userOrders: Order[] = [];
+                let guestOrders: Order[] = [];
+
+                const updateCombinedOrders = () => {
+                    const combined = [...userOrders, ...guestOrders];
+                    const uniqueOrders = Array.from(new Map(combined.map(o => [o.id, o])).values());
+                    uniqueOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setOrders(uniqueOrders);
+                };
+
+                const unsub1 = db.collection("orders").where("userId", "==", firebaseUser.uid).orderBy('date', 'desc').onSnapshot((snap) => {
+                    userOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+                    updateCombinedOrders();
                 });
+
+                const unsub2 = db.collection('orders').where('shippingInfo.email', '==', firebaseUser.email.toLowerCase()).where('userId', '==', null).onSnapshot((snap) => {
+                    guestOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+                    updateCombinedOrders();
+                });
+
+                ordersUnsubscribe = () => {
+                    unsub1();
+                    unsub2();
+                };
+                // --- FIM DA NOVA LÓGICA DE ORDERS ---
+
             } catch (error) {
                 console.error("Erro crítico durante a autenticação/sincronização do utilizador:", error);
                 const fallbackUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email, addresses: [], wishlist: [] };
