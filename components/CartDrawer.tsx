@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem } from '../types';
-import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins, AlertCircle } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -36,6 +37,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     name: '', street: '', doorNumber: '', zip: '', city: '', phone: '', nif: '', paymentMethod: 'MB Way', email: ''
   });
 
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof UserCheckoutInfo, string>>>({});
+
   const SHIPPING_THRESHOLD = 50;
   const SHIPPING_COST = 4.99;
   const COD_FEE = 2.00; 
@@ -57,6 +60,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             setAppliedCoupon(null);
             setCouponCode('');
             setIsFinalizing(false);
+            setFormErrors({});
         }, 300);
     }
   }, [isOpen]);
@@ -110,14 +114,37 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   };
   
   const handleProceedToPlatform = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!userInfo.name || !userInfo.street || !userInfo.doorNumber || !userInfo.zip || !userInfo.city || !userInfo.phone) {
-          alert("Por favor, preencha todos os dados de envio.");
-          return;
-      }
-      const orderId = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
-      setCurrentOrderId(orderId);
-      setCheckoutStep('platform');
+    e.preventDefault();
+
+    const newErrors: Partial<Record<keyof UserCheckoutInfo, string>> = {};
+    if (!userInfo.name.trim()) newErrors.name = "O nome é obrigatório.";
+    if (!userInfo.street.trim()) newErrors.street = "A morada é obrigatória.";
+    if (!userInfo.doorNumber.trim()) newErrors.doorNumber = "O nº da porta é obrigatório.";
+    if (!userInfo.zip.trim()) {
+        newErrors.zip = "O código postal é obrigatório.";
+    } else if (!/^\d{4}-\d{3}$/.test(userInfo.zip)) {
+        newErrors.zip = "Formato inválido (ex: 1234-567).";
+    }
+    if (!userInfo.city.trim()) newErrors.city = "A localidade é obrigatória.";
+    if (!userInfo.phone.trim()) newErrors.phone = "O telemóvel é obrigatório.";
+    if (!user && !userInfo.email.trim()) {
+        newErrors.email = "O email é obrigatório para o seguimento.";
+    } else if (!user && userInfo.email.trim() && !/\S+@\S+\.\S+/.test(userInfo.email)) {
+        newErrors.email = "Formato de email inválido.";
+    }
+
+    setFormErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+        const firstErrorKey = Object.keys(newErrors)[0] as keyof UserCheckoutInfo;
+        const errorElement = document.querySelector(`[name=${firstErrorKey}]`);
+        errorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+    
+    const orderId = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
+    setCurrentOrderId(orderId);
+    setCheckoutStep('platform');
   };
 
   const createOrderObject = (): Order => {
@@ -214,6 +241,14 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       else setCheckoutStep('cart');
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      setUserInfo(prev => ({ ...prev, [name]: value }));
+      if (formErrors[name as keyof UserCheckoutInfo]) {
+          setFormErrors(prev => ({ ...prev, [name]: undefined }));
+      }
+  };
+
   return (
     <>
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
@@ -278,20 +313,43 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             )}
 
             {checkoutStep === 'info' && (
-                <form id="infoForm" onSubmit={handleProceedToPlatform} className="space-y-4 animate-fade-in">
+                <form id="infoForm" noValidate onSubmit={handleProceedToPlatform} className="space-y-4 animate-fade-in">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4">
-                        <input type="text" required placeholder="Nome Completo" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                        {!user && <input type="email" required placeholder="Email (para receber o estado)" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />}
-                        <input type="tel" required placeholder="Telemóvel" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                        <input type="text" placeholder="NIF (Opcional, para fatura)" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        <div>
+                            <input type="text" name="name" placeholder="Nome Completo" value={userInfo.name} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.name ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                            {formErrors.name && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.name}</p>}
+                        </div>
+                        {!user && <div>
+                            <input type="email" name="email" placeholder="Email (para receber o estado)" value={userInfo.email} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.email ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                            {formErrors.email && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.email}</p>}
+                        </div>}
+                        <div>
+                            <input type="tel" name="phone" placeholder="Telemóvel" value={userInfo.phone} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.phone ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                            {formErrors.phone && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.phone}</p>}
+                        </div>
+                        <div>
+                            <input type="text" name="nif" placeholder="NIF (Opcional, para fatura)" value={userInfo.nif} onChange={handleInputChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        </div>
                         
-                        <div className="pt-2 border-t border-gray-100">
-                            <input type="text" required placeholder="Rua / Avenida" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary mt-2" />
-                            <div className="flex gap-4 mt-4">
-                                <input type="text" required placeholder="Nº Porta" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} className="w-1/3 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
-                                <input type="text" required placeholder="Código Postal" pattern="\d{4}-\d{3}" title="Formato: 1234-567" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary" />
+                        <div className="pt-2 border-t border-gray-100 space-y-4">
+                           <div>
+                              <input type="text" name="street" placeholder="Rua / Avenida" value={userInfo.street} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary mt-2 transition-colors ${formErrors.street ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                              {formErrors.street && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.street}</p>}
+                           </div>
+                            <div className="flex gap-4">
+                                <div className="w-1/3">
+                                    <input type="text" name="doorNumber" placeholder="Nº Porta" value={userInfo.doorNumber} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.doorNumber ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                                    {formErrors.doorNumber && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.doorNumber}</p>}
+                                </div>
+                                <div className="flex-1">
+                                    <input type="text" name="zip" placeholder="Código Postal" pattern="\d{4}-\d{3}" title="Formato: 1234-567" value={userInfo.zip} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.zip ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                                    {formErrors.zip && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.zip}</p>}
+                                </div>
                             </div>
-                            <input type="text" required placeholder="Localidade / Cidade" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary mt-4" />
+                            <div>
+                                <input type="text" name="city" placeholder="Localidade / Cidade" value={userInfo.city} onChange={handleInputChange} className={`w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-primary transition-colors ${formErrors.city ? 'border-red-500 ring-red-500/20' : 'border-gray-200'}`} />
+                                {formErrors.city && <p className="text-red-600 text-xs mt-1 px-1">{formErrors.city}</p>}
+                            </div>
                         </div>
 
                         <div className="space-y-2 pt-2 border-t border-gray-100">
