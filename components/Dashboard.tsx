@@ -1,10 +1,11 @@
 
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem } from '../types';
@@ -12,6 +13,7 @@ import { getInventoryAnalysis, extractSerialNumberFromImage } from '../services/
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // --- TYPES HELPERS ---
 
@@ -91,7 +93,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             let formats;
 
             if (mode === 'serial') {
-                formats = [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.CODABAR, BarcodeFormat.DATA_MATRIX];
+                formats = [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.CODABAR, BarcodeFormat.DATA_MATRIX, BarcodeFormat.QR_CODE];
             } else {
                 formats = [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.QR_CODE];
             }
@@ -525,6 +527,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [clientsSearchTerm, setClientsSearchTerm] = useState('');
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [generateQty, setGenerateQty] = useState(1);
   
   // States para modal de detalhes do cliente
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
@@ -1042,7 +1046,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setFormData({ 
           name: product.name, description: product.description || '', category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice ? product.salePrice.toString() : '', targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, badges: product.badges || [], images: product.images || [], newImageUrl: '', features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false
       }); 
-      setModalUnits(product.units || []); setIsPublicIdEditable(false); setIsModalOpen(true); 
+      setModalUnits(product.units || []); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); 
   };
 
   const handleAddNew = () => { 
@@ -1050,7 +1054,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setFormData({ 
           name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', cashbackValue: '', cashbackStatus: 'NONE', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false
       }); 
-      setModalUnits([]); setIsPublicIdEditable(false); setIsModalOpen(true); 
+      setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); 
   };
 
   const handleCreateVariant = (parentProduct: InventoryProduct) => {
@@ -1058,7 +1062,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setFormData({ 
           name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', cashbackValue: '', cashbackStatus: 'NONE', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false
       }); 
-      setModalUnits([]); setIsPublicIdEditable(false); setIsModalOpen(true);
+      setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true);
   };
 
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { 
@@ -1333,6 +1337,77 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleOpenCashbackModal = () => { setDetailsModalData({ title: "Cashback Pendente", data: products.filter(p => p.cashbackStatus === 'PENDING').map(p => ({ id: p.id, name: p.name, val: p.cashbackValue })), total: stats.pendingCashback, columns: [{ header: "Produto", accessor: "name" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
   const handleImportProducts = async () => { if (!window.confirm("Importar produtos?")) return; setIsImporting(true); try { for (const p of INITIAL_PRODUCTS) await addProduct({ name: p.name, category: p.category, description: p.description, publicProductId: p.id, variant: null, purchaseDate: new Date().toISOString(), quantityBought: p.stock || 10, quantitySold: 0, purchasePrice: p.price * 0.6, salePrice: p.price, status: (p.stock || 0) > 0 ? 'IN_STOCK' : 'SOLD', images: p.images || (p.image ? [p.image] : []), features: p.features || [], comingSoon: p.comingSoon || false, cashbackStatus: 'NONE', cashbackValue: 0 }); alert("Importação concluída."); } catch (e) { alert("Erro."); } finally { setIsImporting(false); } };
 
+  const handleGenerateCodes = () => {
+    if (!formData.publicProductId) {
+      alert("Ligue primeiro a um 'Produto da Loja' para gerar códigos associados.");
+      return;
+    }
+    const newCodes: string[] = [];
+    for (let i = 0; i < generateQty; i++) {
+        // Formato: AS-[ID_PRODUTO_PUBLICO]-[TIMESTAMP_CURTO+RANDOM]
+        const code = `AS-${formData.publicProductId}-${(Date.now() + i).toString().slice(-6)}`;
+        newCodes.push(code);
+    }
+    setGeneratedCodes(prev => [...prev, ...newCodes]);
+  };
+
+  const PrintableLabels = ({ codes }: { codes: string[] }) => {
+    useEffect(() => {
+        window.print();
+        // A janela de impressão bloqueia a execução, 
+        // então o fecho pode não acontecer se o utilizador cancelar.
+        // O utilizador pode fechar manualmente a aba.
+    }, []);
+
+    return (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '20px',
+            padding: '20px'
+        }}>
+            {codes.map(code => (
+                <div key={code} style={{
+                    border: '1px solid #ccc',
+                    borderRadius: '8px',
+                    padding: '10px',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    breakInside: 'avoid'
+                }}>
+                    <QRCodeCanvas value={code} size={128} />
+                    <p style={{
+                        fontFamily: 'monospace',
+                        marginTop: '10px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    }}>{code}</p>
+                </div>
+            ))}
+        </div>
+    );
+  };
+
+  const handlePrintLabels = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("Pop-up bloqueado. Por favor, autorize pop-ups para este site.");
+        return;
+    }
+
+    const printDocument = printWindow.document;
+    printDocument.write('<html><head><title>Etiquetas QR</title><style>@media print { body { -webkit-print-color-adjust: exact; } @page { margin: 10mm; } }</style></head><body><div id="print-root"></div></body></html>');
+    
+    const printRoot = printDocument.getElementById('print-root');
+    if (printRoot) {
+      const root = ReactDOM.createRoot(printRoot);
+      root.render(<PrintableLabels codes={generatedCodes} />);
+    }
+  };
+
   const filteredClients = useMemo(() => {
     if (!clientsSearchTerm) return allUsers;
     return allUsers.filter(u => 
@@ -1590,7 +1665,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div>
       <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div>
       <div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div>
-      <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div>
+      <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div>
+      <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4">
+        <h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas (QR Code)</h4>
+        <p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Gere, imprima, cole no produto e depois escaneie acima.</p>
+        <div className="flex gap-2">
+            <input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" />
+            <button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar Códigos</button>
+        </div>
+        {generatedCodes.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos Gerados:</h5>
+                  <button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Lista</button>
+                </div>
+                <div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">
+                  {generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}
+                </div>
+                <button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button>
+            </div>
+        )}
+      </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100"><div><label className="block text-xs font-bold text-green-700 uppercase mb-1 bg-green-50 w-fit px-1 rounded">Preço Venda (Loja)</label><div className="relative"><span className="absolute left-3 top-3 text-green-600 font-bold">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border-2 border-green-400 rounded-lg font-bold text-green-800" value={formData.salePrice} onChange={e => setFormData({...formData, salePrice: e.target.value})} placeholder="Valor Final" /></div><p className="text-[10px] text-gray-500 mt-1">Este é o preço que aparecerá no site.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div><div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm">Cashback / Reembolso</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div></div></div>
       {editingId && <div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => <tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>)}</tbody></table></div> : <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>}</div>}
       <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>}
