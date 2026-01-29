@@ -222,13 +222,13 @@ const App: React.FC = () => {
                 });
                 
                 // Listener de encomendas (SIMPLIFICADO E CORRIGIDO)
-                // Após a sincronização acima, todas as encomendas (antigas e novas) terão o userId.
-                // Portanto, um único listener é suficiente e muito mais fiável.
                 ordersUnsubscribe = db.collection("orders")
                     .where("userId", "==", firebaseUser.uid)
-                    .orderBy('date', 'desc')
+                    //.orderBy('date', 'desc') // Removido para evitar a necessidade de um índice composto. A ordenação é feita no cliente.
                     .onSnapshot((snap) => {
                         const fetchedOrders = snap.docs.map(doc => ({id: doc.id, ...doc.data() } as Order));
+                        // Ordenar no cliente
+                        fetchedOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         setOrders(fetchedOrders);
                     }, (error) => {
                         console.error("Erro ao carregar encomendas:", error);
