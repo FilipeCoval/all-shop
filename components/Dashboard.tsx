@@ -13,7 +13,7 @@ import { getInventoryAnalysis, extractSerialNumberFromImage } from '../services/
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
-import { QRCodeCanvas } from 'qrcode.react';
+import Barcode from 'react-barcode';
 
 // --- TYPES HELPERS ---
 
@@ -1344,19 +1344,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     }
     const newCodes: string[] = [];
     for (let i = 0; i < generateQty; i++) {
-        // Formato: AS-[ID_PRODUTO_PUBLICO]-[TIMESTAMP_CURTO+RANDOM]
         const code = `AS-${formData.publicProductId}-${(Date.now() + i).toString().slice(-6)}`;
         newCodes.push(code);
     }
-    setGeneratedCodes(prev => [...prev, ...newCodes]);
+    
+    // Filtra códigos que já possam existir para evitar duplicados
+    const uniqueNewCodes = newCodes.filter(code => !modalUnits.some(unit => unit.id === code));
+
+    // Adiciona à lista para impressão
+    setGeneratedCodes(prev => [...prev, ...uniqueNewCodes]);
+
+    // **MELHORIA:** Adiciona diretamente às unidades do modal
+    const newUnits: ProductUnit[] = uniqueNewCodes.map(code => ({
+        id: code,
+        status: 'AVAILABLE' as const,
+        addedAt: new Date().toISOString()
+    }));
+    setModalUnits(prev => [...prev, ...newUnits]);
   };
 
   const PrintableLabels = ({ codes }: { codes: string[] }) => {
     useEffect(() => {
         window.print();
-        // A janela de impressão bloqueia a execução, 
-        // então o fecho pode não acontecer se o utilizador cancelar.
-        // O utilizador pode fechar manualmente a aba.
     }, []);
 
     return (
@@ -1378,13 +1387,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     justifyContent: 'center',
                     breakInside: 'avoid'
                 }}>
-                    <QRCodeCanvas value={code} size={128} />
-                    <p style={{
-                        fontFamily: 'monospace',
-                        marginTop: '10px',
-                        fontSize: '12px',
-                        fontWeight: 'bold'
-                    }}>{code}</p>
+                    <Barcode value={code} format="CODE128" width={2} height={50} fontSize={12} />
                 </div>
             ))}
         </div>
@@ -1399,7 +1402,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     }
 
     const printDocument = printWindow.document;
-    printDocument.write('<html><head><title>Etiquetas QR</title><style>@media print { body { -webkit-print-color-adjust: exact; } @page { margin: 10mm; } }</style></head><body><div id="print-root"></div></body></html>');
+    printDocument.write('<html><head><title>Etiquetas</title><style>@media print { body { -webkit-print-color-adjust: exact; } @page { margin: 10mm; } }</style></head><body><div id="print-root"></div></body></html>');
     
     const printRoot = printDocument.getElementById('print-root');
     if (printRoot) {
@@ -1667,17 +1670,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       <div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div>
       <div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div>
       <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4">
-        <h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas (QR Code)</h4>
-        <p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Gere, imprima, cole no produto e depois escaneie acima.</p>
+        <h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4>
+        <p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p>
         <div className="flex gap-2">
             <input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" />
-            <button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar Códigos</button>
+            <button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button>
         </div>
         {generatedCodes.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="flex justify-between items-center mb-2">
-                  <h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos Gerados:</h5>
-                  <button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Lista</button>
+                  <h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5>
+                  <button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button>
                 </div>
                 <div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">
                   {generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}
