@@ -18,7 +18,7 @@
     "@google/genai": "latest",
     "firebase": "^10.13.1",
     "@zxing/library": "^0.21.0",
-    "qrcode.react": "^3.1.0"
+    "react-barcode": "^1.5.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
@@ -28,6 +28,6 @@
     "typescript": "^5.5.3",
     "vite": "^5.4.1",
     "@vercel/node": "^3.2.0",
-    "@types/qrcode.react": "^1.0.5"
+    "@types/react-barcode": "^1.4.2"
   }
 }
