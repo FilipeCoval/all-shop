@@ -477,10 +477,23 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                   </div>
                 )}
                 
-                <div className={`absolute -bottom-2 -right-0 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm text-white text-xs font-bold
-                  ${currentTier === 'Ouro' ? 'bg-yellow-500' : currentTier === 'Prata' ? 'bg-gray-400' : 'bg-orange-600'}
-                `} title={`Nível ${currentTier}`}>
-                    {currentTier === 'Ouro' ? 'G' : currentTier === 'Prata' ? 'S' : 'B'}
+                <div className="absolute -bottom-2 -right-2" title={`Nível: ${currentTier}`}>
+                    <Award 
+                        size={36}
+                        stroke="white"
+                        strokeWidth={1.5}
+                        className={`drop-shadow-lg
+                            ${currentTier === 'Ouro' ? 'text-yellow-500' :
+                              currentTier === 'Prata' ? 'text-slate-400' :
+                              'text-orange-700'
+                            }
+                        `} 
+                        fill={
+                            currentTier === 'Ouro' ? '#facc15' : // yellow-400
+                            currentTier === 'Prata' ? '#94a3b8' : // slate-400
+                            '#c2410c' // orange-600
+                        }
+                    />
                 </div>
               </div>
               
