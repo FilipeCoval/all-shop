@@ -1490,7 +1490,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                           <td className="px-4 py-4 text-right"><div className="flex justify-end gap-1"><button onClick={() => handleEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Edit2 size={14} /> Editar Loja</button><button onClick={() => handleCreateVariant(mainItem)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><Layers size={16} /></button><button onClick={() => handleDeleteGroup(groupId, items)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={16} /></button></div></td>
                         </tr>
                         {isExpanded && (
-                            <tr className="bg-gray-50/50 border-b border-gray-200"><td colSpan={6} className="px-4 py-4"><div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10"><table className="w-full text-xs"><thead className="bg-gray-100 text-gray-500 uppercase"><tr><th className="px-4 py-2 text-left">Lote / Variante</th><th className="px-4 py-2 text-left">Origem</th><th className="px-4 py-2 text-center">Stock</th><th className="px-4 py-2 text-right">Compra</th><th className="px-4 py-2 text-right">Venda (Estimada)</th><th className="px-4 py-2 text-center">Cashback / Lucro</th><th className="px-4 py-2 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{items.map(p => { const batchStock = (p.quantityBought || 0) - (p.quantitySold || 0); return ( <tr key={p.id} className="hover:bg-blue-50 transition-colors"><td className="px-4 py-3"><div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>{p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}<div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div></td>
+                            <tr className="bg-gray-50/50 border-b border-gray-200"><td colSpan={6} className="px-4 py-4"><div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10"><table className="w-full text-xs"><thead className="bg-gray-100 text-gray-500 uppercase"><tr><th className="px-4 py-2 text-left">Lote / Variante</th><th className="px-4 py-2 text-left">Origem</th><th className="px-4 py-2 text-center">Stock</th><th className="px-4 py-2 text-right">Compra</th><th className="px-4 py-2 text-right">Venda (Estimada)</th><th className="px-4 py-2 text-center">Lucro Unitário</th><th className="px-4 py-2 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{items.map(p => { const batchStock = (p.quantityBought || 0) - (p.quantitySold || 0); const salePrice = p.salePrice || p.targetSalePrice || 0; const purchasePrice = p.purchasePrice || 0; const cashbackValue = p.cashbackValue || 0; const finalProfit = salePrice - purchasePrice + cashbackValue; const hasLossBeforeCashback = salePrice < purchasePrice; const profitColor = finalProfit > 0 ? 'text-green-600' : finalProfit < 0 ? 'text-red-600' : 'text-gray-500'; return ( <tr key={p.id} className="hover:bg-blue-50 transition-colors"><td className="px-4 py-3"><div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>{p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}<div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div></td>
 <td className="px-4 py-3">
     {p.supplierName ? (
         <div>
@@ -1538,7 +1538,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     </div>
 )}
 </td>
-<td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-3 text-right text-gray-500">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td><td className="px-4 py-3 text-center">{p.cashbackValue > 0 ? (<div className="flex flex-col items-center gap-1"><div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${p.cashbackStatus === 'RECEIVED' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>{formatCurrency(p.cashbackValue)} {p.cashbackStatus === 'PENDING' && <AlertCircle size={8} />}</div></div>) : (<span className="text-gray-300 text-[10px]">-</span>)}</td><td className="px-4 py-3 text-right flex justify-end gap-1">{batchStock > 0 && <button onClick={() => openSaleModal(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote"><DollarSign size={14}/></button>}<button onClick={() => handleEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote"><Edit2 size={14}/></button><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:bg-red-50 p-1.5 rounded bg-white border border-red-200 shadow-sm" title="Apagar lote"><Trash2 size={14}/></button></td></tr> ); })}</tbody></table></div></td></tr>
+<td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td><td className="px-4 py-3 text-right text-gray-500">{p.targetSalePrice ? formatCurrency(p.targetSalePrice) : '-'}</td>
+<td className="px-4 py-3 text-center">
+    {salePrice > 0 ? (
+        <div title={`Cálculo: Venda (${formatCurrency(salePrice)}) - Compra (${formatCurrency(purchasePrice)}) ${cashbackValue > 0 ? `+ Cashback (${formatCurrency(cashbackValue)})` : ''}`}>
+            <div className={`font-bold text-sm ${profitColor}`}>
+                {finalProfit >= 0 ? '+' : ''}{formatCurrency(finalProfit)}
+            </div>
+            {cashbackValue > 0 && (
+                <div className={`text-[10px] font-medium mt-0.5 ${p.cashbackStatus === 'PENDING' ? 'text-yellow-600' : 'text-green-700'}`}>
+                    Cashback {p.cashbackStatus === 'PENDING' ? 'Pendente' : 'Recebido'}
+                </div>
+            )}
+            {hasLossBeforeCashback && cashbackValue > 0 && finalProfit > 0 && (
+                <div className="text-[10px] font-bold text-orange-500 mt-0.5" title="O preço de venda é inferior ao de compra, mas o cashback compensa.">
+                    Lucro c/ Cashback
+                </div>
+            )}
+        </div>
+    ) : (
+        <span className="text-gray-400 text-xs">-</span>
+    )}
+</td>
+<td className="px-4 py-3 text-right flex justify-end gap-1">{batchStock > 0 && <button onClick={() => openSaleModal(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote"><DollarSign size={14}/></button>}<button onClick={() => handleEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote"><Edit2 size={14}/></button><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:bg-red-50 p-1.5 rounded bg-white border border-red-200 shadow-sm" title="Apagar lote"><Trash2 size={14}/></button></td></tr> ); })}</tbody></table></div></td></tr>
                         )}
                       </React.Fragment>
                     );
