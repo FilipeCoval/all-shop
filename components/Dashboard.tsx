@@ -14,6 +14,7 @@ import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 import Barcode from 'react-barcode';
+import ProfitCalculatorModal from './ProfitCalculatorModal';
 
 // --- TYPES HELPERS ---
 
@@ -529,6 +530,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [clientsSearchTerm, setClientsSearchTerm] = useState('');
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
   const [generateQty, setGenerateQty] = useState(1);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   
   // States para modal de detalhes do cliente
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
@@ -1466,6 +1468,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {products.filter(p => p.status !== 'SOLD').length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {products.filter(p => p.status === 'SOLD').length}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
             <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
+            <button onClick={() => setIsCalculatorOpen(true)} className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1" title="Calculadora de Lucro"><BrainCircuit size={18} /></button>
             <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar e Corrigir Produtos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
             <button onClick={handleRecalculateData} disabled={isRecalculating} className="bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1" title="Recalcular Stock e Vendas">{isRecalculating ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}</button>
             <button onClick={handleAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"><Plus size={18} /></button></div></div>
@@ -1611,6 +1614,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       </div>
       
       {/* --- MODALS --- */}
+      <ProfitCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
       {selectedUserDetails && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
