@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -48,7 +47,6 @@ const App: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
   
-  // Hooks
   const { getStockForProduct } = useStock();
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
 
@@ -58,12 +56,15 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  // --- REDIRECT LOGIC FOR SHARED LINKS ---
+  // CAPTURA DE LINKS CURTOS (/p/:id)
   useEffect(() => {
     const path = window.location.pathname;
-    if (path.startsWith('/product/')) {
-        const id = path.split('/')[2];
-        if (id) {
+    // Suporta tanto /p/id como /product/id
+    if (path.startsWith('/p/') || path.startsWith('/product/')) {
+        const parts = path.split('/');
+        const id = parts[parts.length - 1];
+        if (id && !isNaN(Number(id))) {
+            // Limpa o URL e redireciona internamente via Hash
             window.history.replaceState(null, '', '/');
             window.location.hash = `#product/${id}`;
             setRoute(`#product/${id}`);
@@ -150,8 +151,6 @@ const App: React.FC = () => {
             setAuthLoading(true);
             try {
                 const userDocRef = db.collection("users").doc(firebaseUser.uid);
-
-                // PASSO 1: Sincronização de dados de login (corrige contas de convidados, pontos, etc.)
                 const userDoc = await userDocRef.get();
                 if (!userDoc.exists) {
                     const basicUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email, addresses: [], wishlist: [], totalSpent: 0, tier: 'Bronze', loyaltyPoints: 0, pointsHistory: [] };
@@ -198,18 +197,10 @@ const App: React.FC = () => {
                         }
                         if (Object.keys(userUpdateData).length > 0) batch.update(userDocRef, userUpdateData);
                         ordersToMigrate.forEach(doc => batch.update(doc.ref, { userId: firebaseUser.uid }));
-                        
-                        // A LINHA ABAIXO FOI REMOVIDA
-                        // Esta lógica é agora da responsabilidade do admin no dashboard para evitar falhas de segurança/lógica.
-                        // ordersToAwardPoints.forEach(order => batch.update(db.collection('orders').doc(order.id), { pointsAwarded: true }));
-                        
                         await batch.commit();
                     }
                 }
                 
-                // PASSO 2: Ativar listeners para atualizações em tempo real
-
-                // Listener do perfil do utilizador
                 userUnsubscribe = userDocRef.onSnapshot((docSnap) => {
                     if (docSnap.exists) {
                         const userData = docSnap.data() as User;
@@ -221,18 +212,15 @@ const App: React.FC = () => {
                     }
                 });
                 
-                // Listener de encomendas (SIMPLIFICADO E CORRIGIDO)
                 ordersUnsubscribe = db.collection("orders")
                     .where("userId", "==", firebaseUser.uid)
-                    //.orderBy('date', 'desc') // Removido para evitar a necessidade de um índice composto. A ordenação é feita no cliente.
                     .onSnapshot((snap) => {
                         const fetchedOrders = snap.docs.map(doc => ({id: doc.id, ...doc.data() } as Order));
-                        // Ordenar no cliente
                         fetchedOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         setOrders(fetchedOrders);
                     }, (error) => {
                         console.error("Erro ao carregar encomendas:", error);
-                        setOrders([]); // Garante que a lista fica vazia em caso de erro de permissão
+                        setOrders([]);
                     });
 
             } catch (error) {
@@ -326,39 +314,33 @@ const App: React.FC = () => {
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
           await db.collection("orders").doc(newOrder.id).set(newOrder);
-          
           setOrders(prev => [newOrder, ...prev]);
           setCartItems([]);
-          
           notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
-          
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
               const userDoc = await transaction.get(userRef);
               if (!userDoc.exists) return;
-              
               const userData = userDoc.data() as User;
               const newTotalSpent = (userData.totalSpent || 0) + newOrder.total;
-              
               let newTier: UserTier = userData.tier || 'Bronze';
               if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
               else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
-              
               transaction.update(userRef, { totalSpent: newTotalSpent, tier: newTier });
             });
           }
           return true;
       } catch (e) {
           console.error("Erro CRÍTICO no checkout:", e);
-          alert("Ocorreu um erro ao guardar a sua encomenda. Por favor, tente novamente ou contacte o suporte se o erro persistir.");
+          alert("Ocorreu um erro ao guardar a sua encomenda.");
           return false;
       }
   };
 
   const handleAddReview = async (newReview: Review) => {
       setReviews(prev => [newReview, ...prev]);
-      try { await db.collection("reviews").doc(newReview.id).set(newReview); }
+      try { await db.collection('reviews').doc(newReview.id).set(newReview); }
       catch (e) { console.error("Erro review:", e); }
   };
 
@@ -380,16 +362,9 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (authLoading || (productsLoading && route !== '#dashboard')) {
-        return (
-            <div className="flex-grow flex items-center justify-center h-screen">
-                <Loader2 className="animate-spin text-primary" size={48} />
-            </div>
-        );
+        return <div className="flex-grow flex items-center justify-center h-screen"><Loader2 className="animate-spin text-primary" size={48} /></div>;
     }
-      
-    if (route === '#dashboard') {
-        return <Dashboard user={user} isAdmin={isAdmin} />;
-    }
+    if (route === '#dashboard') return <Dashboard user={user} isAdmin={isAdmin} />;
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
       return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={dbProducts} />;
@@ -437,31 +412,9 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center md:items-start"><div className="flex items-center gap-2 mb-4">{LOGO_URL ? <img src={LOGO_URL} alt={STORE_NAME} className="h-10 invert brightness-0" /> : <h3 className="text-xl font-bold text-white">{STORE_NAME}</h3>}</div><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
             <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
             <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
-            <div className="flex flex-col items-center md:items-start">
-                <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
-                <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
-                    </div>
-                </div>
-            </div>
+            <div className="flex flex-col items-center md:items-start"><h4 className="text-white font-bold mb-4">Pagamento Seguro</h4><div className="flex gap-2 items-center flex-wrap justify-center md:justify-start"><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" /></div></div></div>
         </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-[10px]">
-            <span>&copy; {new Date().getFullYear()} Allshop Store.</span>
-            {isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Painel Admin</a>}
-        </div>
+        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-[10px]"><span>&copy; {new Date().getFullYear()} Allshop Store.</span>{isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Painel Admin</a>}</div>
       </footer>
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
