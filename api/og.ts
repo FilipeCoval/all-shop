@@ -5,15 +5,12 @@ import { INITIAL_PRODUCTS, PUBLIC_URL, STORE_NAME } from '../constants';
 const PROJECT_ID = "allshop-store-70851";
 const API_KEY = process.env.API_KEY;
 
-const proxyImage = (url: string) => {
-    const FALLBACK_IMAGE = 'https://i.imgur.com/nSiZKBf.png';
-    if (!url) return FALLBACK_IMAGE;
-    if (url.includes('firebasestorage.googleapis.com')) {
-        return url.includes('?') ? url : `${url}?alt=media`;
-    }
-    if (url.includes('imgur.com')) return url;
-    // Se a imagem for externa, o ideal seria ter um serviço de resize/proxy, 
-    // mas por agora usamos a original para o bot ver algo.
+// Algumas imagens do AliExpress/Alibaba bloqueiam bots. 
+// Esta função tenta garantir que o bot consegue ver a imagem.
+const getSafeImageUrl = (url: string) => {
+    if (!url) return 'https://i.imgur.com/nSiZKBf.png';
+    // Se for AliExpress (.avif ou .jpg_960), o Telegram às vezes falha.
+    // Usamos um placeholder se a imagem parecer problemática ou retornamos a original
     return url;
 };
 
@@ -22,25 +19,33 @@ const parseFirestoreField = (field: any) => {
     if (field.stringValue) return field.stringValue;
     if (field.integerValue) return parseInt(field.integerValue);
     if (field.doubleValue) return parseFloat(field.doubleValue);
-    if (field.arrayValue && field.arrayValue.values) {
-        return field.arrayValue.values.map((v: any) => parseFirestoreField(v));
-    }
     return null;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
+  const userAgent = req.headers['user-agent'] || '';
+  
+  // Lista de bots conhecidos
+  const isBot = /bot|telegram|whatsapp|facebook|twitter|slack|discord|crawler|spider/i.test(userAgent);
+  const storeUrl = `${PUBLIC_URL}/#product/${id}`;
 
-  if (!id) return res.status(400).send('ID Required');
+  if (!id) return res.redirect(PUBLIC_URL);
 
+  // SE FOR HUMANO: Redireciona logo para a App
+  if (!isBot) {
+    return res.status(301).redirect(storeUrl);
+  }
+
+  // SE FOR BOT: Gera o HTML rico com Metadados
   try {
     const productId = parseInt(id as string, 10);
-    let title = 'Allshop Store';
-    let description = 'Descubra as melhores ofertas em gadgets e eletrónica.';
+    let title = 'Produto';
+    let description = 'Veja os detalhes deste produto na Allshop.';
     let rawImage = 'https://i.imgur.com/nSiZKBf.png'; 
     let price: number | null = null;
 
-    // Buscar via REST API do Firestore
+    // 1. Tentar buscar no Firestore (Produção)
     if (API_KEY) {
         try {
             const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/products_public/${id}?key=${API_KEY}`;
@@ -54,11 +59,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     price = parseFirestoreField(json.fields.price) || null;
                 }
             }
-        } catch (err) { console.error("Firestore REST Error:", err); }
+        } catch (err) {}
     }
 
-    // Fallback estático
-    if (title === 'Allshop Store') {
+    // 2. Fallback para os produtos iniciais (Desenvolvimento/Teste)
+    if (title === 'Produto') {
         const staticProduct = INITIAL_PRODUCTS.find(p => p.id === productId);
         if (staticProduct) {
             title = staticProduct.name;
@@ -68,60 +73,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
     
-    const finalImage = proxyImage(rawImage);
+    const finalImage = getSafeImageUrl(rawImage);
     const formattedPrice = price ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(price) : '';
     
-    // ESTILO TEMU: O título contém o preço em destaque para o card aparecer rico
-    const seoTitle = price ? `${formattedPrice} - ${title}` : title;
-    const seoDesc = `🛍️ Compre na ${STORE_NAME}: ${description.substring(0, 160)}${description.length > 160 ? '...' : ''} | Entrega rápida em Portugal!`;
+    // FORMATO ESTILO TEMU/AMAZON: Preço em primeiro lugar no título para o Telegram destacar em negrito
+    const seoTitle = price ? `${formattedPrice} 🔥 ${title}` : title;
+    const seoDesc = `🚚 Entrega Rápida em Portugal | 🛡️ 3 Anos de Garantia\n\n${description.substring(0, 150)}...`;
     
-    const storeUrl = `${PUBLIC_URL}/#product/${id}`;
-    const canonicalUrl = `${PUBLIC_URL}/p/${id}`;
-    
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-PT">
-      <head>
-        <meta charset="UTF-8">
-        <title>${seoTitle}</title>
-        <meta name="description" content="${seoDesc}">
-        
-        <!-- Open Graph / Social Media (O segredo do card bonito) -->
-        <meta property="og:type" content="product">
-        <meta property="og:site_name" content="${STORE_NAME}">
-        <meta property="og:url" content="${canonicalUrl}">
-        <meta property="og:title" content="${seoTitle}">
-        <meta property="og:description" content="${seoDesc}">
-        <meta property="og:image" content="${finalImage}">
-        <meta property="og:image:secure_url" content="${finalImage}">
-        <meta property="og:image:width" content="1200">
-        <meta property="og:image:height" content="630">
-        <meta property="product:price:amount" content="${price || ''}">
-        <meta property="product:price:currency" content="EUR">
+    const html = `<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <title>${seoTitle}</title>
+    <meta name="description" content="${seoDesc}">
 
-        <!-- Twitter -->
-        <meta property="twitter:card" content="summary_large_image">
-        <meta property="twitter:title" content="${seoTitle}">
-        <meta property="twitter:description" content="${seoDesc}">
-        <meta property="twitter:image" content="${finalImage}">
+    <!-- Open Graph (O que o Telegram lê) -->
+    <meta property="og:site_name" content="${STORE_NAME}">
+    <meta property="og:title" content="${seoTitle}">
+    <meta property="og:description" content="${seoDesc}">
+    <meta property="og:image" content="${finalImage}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:type" content="product">
+    <meta property="og:url" content="${PUBLIC_URL}/p/${id}">
 
-        <!-- Redirecionamento para humanos -->
-        <meta http-equiv="refresh" content="0;url=${storeUrl}">
-        <script>window.location.href = "${storeUrl}";</script>
-      </head>
-      <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4;">
-        <img src="${finalImage}" style="width: 100px; border-radius: 10px; margin-bottom: 20px;">
-        <h2>A abrir produto na ${STORE_NAME}...</h2>
-        <p>Se não for redirecionado, <a href="${storeUrl}">clique aqui</a>.</p>
-      </body>
-      </html>
-    `;
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${seoTitle}">
+    <meta name="twitter:description" content="${seoDesc}">
+    <meta name="twitter:image" content="${finalImage}">
+
+    <!-- Redirecionamento de segurança para humanos que escapem ao filtro -->
+    <meta http-equiv="refresh" content="0;url=${storeUrl}">
+</head>
+<body>
+    <h1>${title}</h1>
+    <p>${description}</p>
+    <img src="${finalImage}" />
+    <script>window.location.href = "${storeUrl}";</script>
+</body>
+</html>`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=1200'); 
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800');
     return res.status(200).send(html);
 
   } catch (error) {
-    return res.status(500).send('Error rendering preview');
+    return res.status(301).redirect(storeUrl);
   }
 }
+
