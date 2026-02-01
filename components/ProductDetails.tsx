@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { 
@@ -33,7 +34,6 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
 
   useEffect(() => {
-    // Não seleciona nenhuma variante por defeito, forçando o utilizador a escolher.
     setSelectedVariantName(undefined);
     setSelectedImage(product.image);
     
@@ -85,11 +85,13 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
+    // FORMATO ESTILO TEMU: link curto para ativar o servidor de metadados
+    const shareUrl = `${PUBLIC_URL}/p/${product.id}`;
+    const priceFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice);
     
     const shareData: ShareData = {
       title: product.name,
-      text: `Olha o que encontrei na ${STORE_NAME} por apenas ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}!`,
+      text: `🛍️ Olha o que encontrei na ${STORE_NAME} por apenas ${priceFormatted}!`,
       url: shareUrl, 
     };
 
@@ -128,7 +130,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
           setAlertStatus('success');
       } catch (error) {
           console.error("Erro ao subscrever alerta de stock:", error);
-          setAlertStatus('idle'); // Permite tentar de novo
+          setAlertStatus('idle');
       }
   };
 
@@ -348,3 +350,4 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 };
 
 export default ProductDetails;
+
