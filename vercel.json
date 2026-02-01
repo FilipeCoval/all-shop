@@ -16,28 +16,14 @@
   "rewrites": [
     {
       "source": "/p/:id",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": "(?i).*(facebookexternalhit|whatsapp|telegrambot|twitterbot|slackbot|discordbot|googlebot|bingbot|linkedinbot|skypeuripreview).*"
-        }
-      ],
       "destination": "/api/og?id=:id"
     },
     {
       "source": "/product/:id",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": "(?i).*(facebookexternalhit|whatsapp|telegrambot|twitterbot|slackbot|discordbot|googlebot|bingbot|linkedinbot|skypeuripreview).*"
-        }
-      ],
       "destination": "/api/og?id=:id"
     },
-    { "source": "/p/:id", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
+
 
