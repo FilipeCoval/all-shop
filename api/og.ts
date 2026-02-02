@@ -57,7 +57,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const productId = parseInt(id as string, 10);
     
-    // Lógica simplificada: Apenas procura na lista interna.
     const product = PRODUCTS.find(p => p.id === productId);
 
     let title: string;
@@ -71,14 +70,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       finalImage = product.image;
       price = product.price;
     } else {
-      // Se não encontrar, mostra a informação genérica da loja
       title = `${STORE_NAME} | Produto não encontrado`;
       description = `Visite a ${STORE_NAME} para ver as nossas ofertas em eletrónica e gadgets.`;
-      finalImage = 'https://i.imgur.com/nSiZKBf.png'; // Logotipo como fallback
+      finalImage = 'https://i.imgur.com/nSiZKBf.png';
       price = null;
     }
     
-    // Formatação "Estilo Temu"
     const formattedPrice = price ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(price) : '';
     const seoTitle = price ? `${formattedPrice} 🔥 ${title}` : title;
     const seoDesc = price ? `⭐️⭐️⭐️⭐️⭐️ (4.9/5) | ${description.substring(0, 150)}...\n\n✅ Entrega Rápida em Portugal\n✅ Garantia de 3 Anos` : description;
@@ -115,9 +112,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 </body>
 </html>`;
 
-    // Devolve o HTML com status 200 (OK)
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    // Força a não utilização de cache para garantir que os bots recebem sempre a versão mais recente
+    res.setHeader('Cache-Control', 'no-cache, no-store, max-age=0, must-revalidate');
     return res.status(200).send(html);
 
   } catch (error) {
@@ -125,3 +122,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.redirect(301, storeUrl);
   }
 }
+
