@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem } from '../types';
+import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem, StatusHistory } from '../types';
 import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins, AlertCircle } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
@@ -153,6 +153,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         date: new Date().toISOString(),
         total: finalTotal,
         status: 'Processamento',
+        statusHistory: [{ status: 'Processamento' as const, date: new Date().toISOString() }],
         items: cartItems.map(item => ({
           productId: item.id,
           name: item.name,
