@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Review, User, ProductVariant } from '../types';
 import { 
@@ -7,7 +8,7 @@ import {
     Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
-import { STORE_NAME, PUBLIC_URL } from '../constants';
+import { STORE_NAME, SHARE_URL } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
@@ -86,7 +87,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
   const handleShare = async () => {
     // FORMATO ESTILO TEMU: link curto para ativar o servidor de metadados
-    const shareUrl = `${PUBLIC_URL}/p/${product.id}`;
+    const shareUrl = `${SHARE_URL}/p/${product.id}`;
     const priceFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice);
     
     const shareData: ShareData = {
