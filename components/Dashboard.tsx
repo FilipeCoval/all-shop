@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronUp, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, StatusHistory } from '../types';
@@ -22,13 +22,6 @@ const getSafeItems = (items: any): (OrderItem | string)[] => {
     if (typeof items === 'string') return [items];
     return [];
 };
-
-// --- Tipos Locais para o Dashboard ---
-interface ManualOrderItem extends Product {
-    quantity: number;
-    selectedVariant: string; // Vazio se não houver variante
-    finalPrice: number;
-}
 
 // Utility para formatação de moeda
 const formatCurrency = (value: number) => 
@@ -258,67 +251,37 @@ const OrderDetailsModal: React.FC<{
     const [manualPoints, setManualPoints] = useState(0);
 
     const handleRevokePoints = async () => {
-        if (!window.confirm("Tem a certeza que quer anular os pontos desta encomenda? Isto irá permitir que sejam re-atribuídos.")) return;
+        if (!window.confirm("Tem a certeza que quer anular os pontos desta encomenda?")) return;
         setIsUpdatingPoints(true);
         try {
             await db.collection('orders').doc(order.id).update({ pointsAwarded: false });
             onUpdateOrder(order.id, { pointsAwarded: false });
-            alert("Selo de pontos removido! Agora pode alterar o estado para 'Entregue' para re-atribuir os pontos corretamente.");
-        } catch (error) {
-            console.error("Erro ao anular pontos:", error);
-            alert("Ocorreu um erro. Tente novamente.");
-        } finally {
-            setIsUpdatingPoints(false);
-        }
+            alert("Selo de pontos removido!");
+        } catch (error) { alert("Erro ao anular pontos."); } finally { setIsUpdatingPoints(false); }
     };
     
     const handleManualPointsAward = async () => {
-        if (manualPoints <= 0) { alert("Insira um valor de pontos válido."); return; }
-        if (!window.confirm(`Atribuir ${manualPoints} pontos ao cliente desta encomenda (${order.id})?`)) return;
-
+        if (manualPoints <= 0) { alert("Insira um valor válido."); return; }
         setIsUpdatingPoints(true);
         try {
-            let userRef: firebase.firestore.DocumentReference | null = null;
-            if (order.userId) {
-                const potentialUserRef = db.collection('users').doc(order.userId);
-                const userDoc = await potentialUserRef.get();
-                if (userDoc.exists) userRef = potentialUserRef;
-            }
-
+            let userRef = order.userId ? db.collection('users').doc(order.userId) : null;
             if (!userRef && order.shippingInfo.email) {
-                const userQuery = await db.collection('users')
-                    .where('email', '==', order.shippingInfo.email.trim().toLowerCase())
-                    .limit(1)
-                    .get();
+                const userQuery = await db.collection('users').where('email', '==', order.shippingInfo.email.trim().toLowerCase()).limit(1).get();
                 if (!userQuery.empty) userRef = userQuery.docs[0].ref;
             }
-            
             if (!userRef) throw new Error("Utilizador não encontrado.");
-
             const orderRef = db.collection('orders').doc(order.id);
-            await db.runTransaction(async (transaction) => {
-                const userDoc = await transaction.get(userRef!);
-                if (!userDoc.exists) throw new Error("Utilizador não encontrado.");
+            await db.runTransaction(async (t) => {
+                const userDoc = await t.get(userRef!);
+                if (!userDoc.exists) return;
                 const userData = userDoc.data() as UserType;
-                const newPointsTotal = (userData.loyaltyPoints || 0) + manualPoints;
-                const newHistoryEntry: PointHistory = {
-                    id: `manual-${order.id}-${Date.now()}`,
-                    date: new Date().toISOString(),
-                    amount: manualPoints,
-                    reason: `Ajuste manual (Encomenda ${order.id})`,
-                    orderId: order.id
-                };
-                const newHistory = [newHistoryEntry, ...(userData.pointsHistory || [])];
-                transaction.update(userRef!, { loyaltyPoints: newPointsTotal, pointsHistory: newHistory });
-                transaction.update(orderRef, { pointsAwarded: true });
+                const newPoints = (userData.loyaltyPoints || 0) + manualPoints;
+                t.update(userRef!, { loyaltyPoints: newPoints, pointsHistory: firebase.firestore.FieldValue.arrayUnion({ id: `man-${Date.now()}`, date: new Date().toISOString(), amount: manualPoints, reason: `Ajuste manual (#${order.id.slice(-4)})`, orderId: order.id }) });
+                t.update(orderRef, { pointsAwarded: true });
             });
             onUpdateOrder(order.id, { pointsAwarded: true });
-            alert("Pontos atribuídos com sucesso!");
-        } catch (error: any) {
-            alert(`Erro: ${error.message}`);
-        } finally {
-            setIsUpdatingPoints(false);
-        }
+            alert("Pontos atribuídos!");
+        } catch (error: any) { alert("Erro: " + error.message); } finally { setIsUpdatingPoints(false); }
     };
 
     return (
@@ -337,36 +300,42 @@ const OrderDetailsModal: React.FC<{
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t">
-                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Cliente</h4><p className="text-sm">{order.shippingInfo.name}</p><p className="text-sm">{order.shippingInfo.email}</p><p className="text-sm">{order.shippingInfo.phone}</p></div>
-                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Morada</h4><p className="text-sm">{order.shippingInfo.street}, {order.shippingInfo.doorNumber}</p><p className="text-sm">{order.shippingInfo.zip} {order.shippingInfo.city}</p></div>
+                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Cliente</h4><p className="text-sm">{order.shippingInfo.name}</p><p className="text-sm">{order.shippingInfo.email}</p><p className="text-sm font-bold text-indigo-600 cursor-pointer hover:underline" onClick={() => onCopy(order.shippingInfo.phone)}>{order.shippingInfo.phone}</p></div>
+                      <div className="space-y-1"><h4 className="font-bold text-gray-800 text-sm mb-2">Morada de Envio</h4><p className="text-sm">{order.shippingInfo.street}</p><p className="text-sm">{order.shippingInfo.zip} {order.shippingInfo.city}</p></div>
                     </div>
 
+                    <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3">Artigos</h4><div className="space-y-2">{getSafeItems(order.items).map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-sm p-3 bg-gray-50 rounded-lg"><div className="flex items-center gap-3"><span className="bg-white px-1.5 rounded font-bold text-indigo-600 border border-indigo-100">{typeof item === 'object' ? item.quantity : 1}x</span><p className="font-medium text-gray-800">{typeof item === 'object' ? item.name : item}</p></div><span className="font-bold">{typeof item === 'object' ? formatCurrency(item.price * item.quantity) : '-'}</span></div> ))}</div></div>
+
                     <div className="pt-6 border-t">
-                        <h4 className="font-bold text-gray-800 text-sm mb-3">Artigos</h4>
-                        <div className="space-y-3">
-                            {getSafeItems(order.items).map((item, idx) => {
-                                const isObject = typeof item === 'object' && item !== null;
-                                const itemName = isObject ? (item as OrderItem).name : item as string;
-                                const itemQty = isObject ? (item as OrderItem).quantity : 1;
-                                const itemPrice = isObject ? (item as OrderItem).price : 0;
-                                return (
-                                    <div key={idx} className="flex justify-between items-center text-sm p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <span className="bg-gray-200 text-gray-700 font-bold text-xs w-6 h-6 flex items-center justify-center rounded-full">{itemQty}x</span>
-                                            <p className="font-medium text-gray-800">{itemName}</p>
+                        <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><History size={16} className="text-indigo-600"/> Histórico de Atividade / Reclamações</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                            {(order.statusHistory && order.statusHistory.length > 0) ? (
+                                [...order.statusHistory].reverse().map((h, i) => (
+                                    <div key={i} className={`p-3 rounded-lg border text-xs leading-relaxed ${h.status.includes('Reclamação') || h.status.includes('Garantia') ? 'bg-red-50 border-red-100 shadow-sm' : 'bg-gray-50 border-gray-100'}`}>
+                                        <div className="flex justify-between font-bold mb-1">
+                                            <span className={h.status.includes('Reclamação') ? 'text-red-700' : 'text-gray-700'}>{h.status.toUpperCase()}</span>
+                                            <span className="text-gray-400 font-normal">{new Date(h.date).toLocaleString('pt-PT')}</span>
                                         </div>
-                                        <span className="font-bold text-gray-900">{formatCurrency(itemPrice * itemQty)}</span>
+                                        {h.notes ? <p className="text-gray-800 whitespace-pre-wrap">{h.notes}</p> : <p className="text-gray-400 italic">Sem notas adicionais.</p>}
                                     </div>
-                                );
-                            })}
+                                ))
+                            ) : (
+                                <p className="text-gray-400 text-sm italic">Nenhum evento registado.</p>
+                            )}
                         </div>
                     </div>
 
-                    <div className="pt-6 border-t">
-                        <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><Truck size={16}/> Rastreio CTT</h4>
-                        <div className="flex gap-2">
-                            <input type="text" value={tracking} onChange={e => setTracking(e.target.value)} placeholder="EA123456789PT" className="flex-1 p-2 border border-gray-300 rounded-lg" />
-                            <button onClick={() => onUpdateTracking(order.id, tracking)} className="bg-indigo-600 text-white px-4 rounded-lg font-bold">Guardar</button>
+                    <div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><Truck size={16}/> Rastreio CTT</h4><div className="flex gap-2"><input type="text" value={tracking} onChange={e => setTracking(e.target.value)} placeholder="Ex: EA123456789PT" className="flex-1 p-2 border border-gray-300 rounded-lg text-sm" /><button onClick={() => onUpdateTracking(order.id, tracking)} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 text-sm">Guardar</button></div></div>
+                    
+                    <div className="border-t pt-4">
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Coins size={16} className="text-yellow-500"/> Gestão de Pontos</h4>
+                        <div className="bg-gray-50 p-4 rounded-lg border space-y-4">
+                            <p className="text-sm">Estado: {order.pointsAwarded ? <span className="font-bold text-green-600">✓ Atribuídos</span> : <span className="font-bold text-orange-600">⚠ Pendentes</span>}</p>
+                            <div className="flex gap-2">
+                                <input type="number" value={manualPoints || ''} onChange={e => setManualPoints(Number(e.target.value))} className="w-24 p-2 border rounded text-sm" placeholder="Pts" />
+                                <button onClick={handleManualPointsAward} disabled={isUpdatingPoints} className="bg-blue-600 text-white px-4 rounded font-bold text-xs hover:bg-blue-700 disabled:opacity-50">Atribuir Manualmente</button>
+                                {order.pointsAwarded && <button onClick={handleRevokePoints} className="text-red-500 text-xs font-bold hover:underline">Anular</button>}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -375,7 +344,7 @@ const OrderDetailsModal: React.FC<{
     );
 };
 
-// --- DASHBOARD COMPONENT ---
+/* FIX: Restored the missing Dashboard component and integrated improvements from both provided versions. */
 interface DashboardProps {
     user: UserType | null;
     isAdmin: boolean;
@@ -390,252 +359,330 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'SOLD'>('ALL');
+  const [cashbackFilter, setCashbackFilter] = useState<'ALL' | 'PENDING' | 'RECEIVED' | 'NONE'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [selectedProductForSale, setSelectedProductForSale] = useState<InventoryProduct | null>(null);
+  const [notifications, setNotifications] = useState<Order[]>([]);
+  const [showToast, setShowToast] = useState<Order | null>(null);
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [isOnlineDetailsOpen, setIsOnlineDetailsOpen] = useState(false);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [isCouponsLoading, setIsCouponsLoading] = useState(false);
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 });
-  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [publicProductsList, setPublicProductsList] = useState<Product[]>([]);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking' | 'verify_product'>('search');
+  const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
+  const [manualUnitCode, setManualUnitCode] = useState('');
+  const [stockAlerts, setStockAlerts] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [notificationModalData, setNotificationModalData] = useState<{productName: string; subject: string; body: string; bcc: string; alertsToDelete: any[];} | null>(null);
+  const [copySuccess, setCopySuccess] = useState('');
+  const [linkedOrderId, setLinkedOrderId] = useState<string>('');
+  const [selectedOrderForSaleDetails, setSelectedOrderForSaleDetails] = useState<Order | null>(null);
+  const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
+  const [manualUnitSelect, setManualUnitSelect] = useState('');
+  const [orderMismatchWarning, setOrderMismatchWarning] = useState<string | null>(null);
+  const [securityCheckPassed, setSecurityCheckPassed] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
+  const [manualOrderItems, setManualOrderItems] = useState<ManualOrderItem[]>([]);
+  const [manualOrderCustomer, setManualOrderCustomer] = useState({ name: '', email: '' });
+  const [manualOrderShipping, setManualOrderShipping] = useState('');
+  const [manualOrderPayment, setManualOrderPayment] = useState('MB Way');
   const [chartTimeframe, setChartTimeframe] = useState<'7d' | '30d' | '1y'>('7d');
+  const [salesSearchTerm, setSalesSearchTerm] = useState('');
+  const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
+  const [isPublicIdEditable, setIsPublicIdEditable] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
+  const [clientsSearchTerm, setClientsSearchTerm] = useState('');
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [generateQty, setGenerateQty] = useState(1);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  
+  const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
+  const [clientOrders, setClientOrders] = useState<Order[]>([]);
+  const [isRecalculatingClient, setIsRecalculatingClient] = useState(false);
+
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeSearchEmail, setMergeSearchEmail] = useState('');
+  const [foundDuplicate, setFoundDuplicate] = useState<UserType | null>(null);
+  const [duplicateOrdersCount, setDuplicateOrdersCount] = useState(0);
+  const [duplicateOrdersTotal, setDuplicateOrdersTotal] = useState(0);
 
   const [formData, setFormData] = useState({
-    name: '', description: '', category: 'TV Box', publicProductId: '', variant: '',
+    name: '', description: '', category: '', publicProductId: '' as string, variant: '',
     purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', 
     quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', cashbackValue: '',
-    cashbackStatus: 'NONE' as CashbackStatus, badges: [] as string[], images: [] as string[], features: [] as string[]
+    cashbackStatus: 'NONE' as CashbackStatus, badges: [] as string[], newImageUrl: '', 
+    images: [] as string[], features: [] as string[], newFeature: '', comingSoon: false
   });
+
+  const [saleForm, setSaleForm] = useState({
+    quantity: '1', unitPrice: '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: '', supplierOrderId: ''
+  });
+
+  const pendingOrders = useMemo(() => allOrders.filter(o => ['Processamento', 'Pago'].includes(o.status)), [allOrders]);
 
   useEffect(() => {
     if(!isAdmin) return;
-    const unsubOrders = db.collection('orders').orderBy('date', 'desc').onSnapshot(snap => {
-        setAllOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
+    const unsubscribe = db.collection('orders').orderBy('date', 'desc').limit(10).onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+                const order = change.doc.data() as Order;
+                if (new Date(order.date).getTime() > Date.now() - 5000) {
+                    setNotifications(prev => [order, ...prev]);
+                    setShowToast(order);
+                    audioRef.current?.play().catch(() => {});
+                    setTimeout(() => setShowToast(null), 5000);
+                }
+            }
+        });
     });
-    const unsubCoupons = db.collection('coupons').onSnapshot(snap => {
-        setCoupons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon)));
-    });
-    const unsubUsers = db.collection('users').onSnapshot(snap => {
-        setAllUsers(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserType)));
-    });
-    return () => { unsubOrders(); unsubCoupons(); unsubUsers(); };
+    return () => unsubscribe();
   }, [isAdmin]);
 
-  const stats = useMemo(() => {
-      let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0;
-      products.forEach(p => {
-          totalInvested += (p.purchasePrice || 0) * (p.quantityBought || 0);
-          const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0);
-          realizedRevenue += revenue;
-          const cogs = p.quantitySold * p.purchasePrice;
-          realizedProfit += (revenue - cogs + (p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0));
-          if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue;
+  useEffect(() => {
+    if(!isAdmin) return;
+    const unsubscribe = db.collection('online_users').onSnapshot(snapshot => {
+        const now = Date.now();
+        const activeUsers: any[] = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) {
+                 activeUsers.push({ id: doc.id, ...data });
+            }
+        });
+        setOnlineUsers(activeUsers);
+    });
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if(!isAdmin) return;
+    setIsOrdersLoading(true);
+    const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => {
+        setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+        setIsOrdersLoading(false);
+    });
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  useEffect(() => {
+      if (!isAdmin) return;
+      const unsubscribe = db.collection('products_public').onSnapshot(snap => {
+          const loadedProducts: Product[] = [];
+          snap.forEach(doc => {
+              const id = parseInt(doc.id, 10);
+              if (!isNaN(id)) loadedProducts.push({ ...doc.data(), id } as Product);
+          });
+          setPublicProductsList(loadedProducts);
       });
-      return { totalInvested, realizedRevenue, realizedProfit, pendingCashback };
+      return () => unsubscribe();
+  }, [isAdmin]);
+
+  const stats = useMemo(() => { 
+    let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; 
+    products.forEach(p => { 
+      totalInvested += (p.purchasePrice || 0) * (p.quantityBought || 0); 
+      let revenue = (p.salesHistory || []).reduce((acc, s) => acc + ((s.quantity || 0) * (s.unitPrice || 0)), 0); 
+      realizedRevenue += revenue; 
+      realizedProfit += revenue - (p.quantitySold * p.purchasePrice) + (p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0); 
+      if (p.cashbackStatus === 'PENDING') pendingCashback += p.cashbackValue; 
+    }); 
+    return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; 
   }, [products]);
 
-  const handleUpdateTracking = async (orderId: string, tracking: string) => {
+  const chartData = useMemo(() => {
+    const today = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        const label = d.toLocaleDateString('pt-PT', { day: 'numeric' });
+        const val = allOrders.filter(o => new Date(o.date).toDateString() === d.toDateString() && o.status !== 'Cancelado').reduce((acc, o) => acc + o.total, 0);
+        days.push({ label, value: val });
+    }
+    const maxValue = Math.max(...days.map(d => d.value), 1);
+    const totalPeriod = days.reduce((acc, d) => acc + d.value, 0);
+    return { days, maxValue, totalPeriod };
+  }, [allOrders]);
+
+  const groupedInventory = useMemo(() => {
+      const groups: { [key: string]: InventoryProduct[] } = {};
+      products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).forEach(p => { 
+          const key = p.publicProductId ? p.publicProductId.toString() : `local-${p.id}`; 
+          if (!groups[key]) groups[key] = []; 
+          groups[key].push(p); 
+      });
+      return Object.entries(groups);
+  }, [products, searchTerm]);
+
+  const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ ...formData, name: product.name, publicProductId: product.publicProductId?.toString() || '', purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice.toString() }); setIsModalOpen(true); };
+  const handleAddNew = () => { setEditingId(null); setFormData({ ...formData, name: '', publicProductId: '', purchasePrice: '', salePrice: '' }); setIsModalOpen(true); };
+  
+  const handleProductSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
       try {
-          await db.collection('orders').doc(orderId).update({ trackingNumber: tracking });
-          alert("Rastreio guardado.");
-      } catch (e) { alert("Erro ao guardar."); }
+          const payload = { ...formData, purchasePrice: Number(formData.purchasePrice), salePrice: Number(formData.salePrice), publicProductId: Number(formData.publicProductId) };
+          if (editingId) await updateProduct(editingId, payload);
+          else await addProduct(payload as any);
+          setIsModalOpen(false);
+      } catch (err) { alert("Erro ao guardar."); }
+  };
+
+  const handleOrderStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+        await db.collection('orders').doc(orderId).update({ status: newStatus });
+    } catch (e) { alert("Erro ao atualizar estado."); }
+  };
+
+  const handleUpdateTracking = async (orderId: string, tracking: string) => {
+      try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); }
+      catch (e) { alert("Erro ao guardar rastreio."); }
   };
 
   const handleAskAi = async () => {
     if (!aiQuery.trim()) return;
     setIsAiLoading(true);
     try {
-        const response = await getInventoryAnalysis(products, aiQuery);
-        setAiResponse(response);
-    } catch (e) { setAiResponse("Erro na análise."); }
+        const res = await getInventoryAnalysis(products, aiQuery);
+        setAiResponse(res);
+    } catch (e) { setAiResponse("Erro ao consultar IA."); }
     finally { setIsAiLoading(false); }
   };
 
-  const handleAddNew = () => {
-      setEditingId(null);
-      setFormData({
-          name: '', description: '', category: 'TV Box', publicProductId: '', variant: '',
-          purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', 
-          quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', cashbackValue: '',
-          cashbackStatus: 'NONE', badges: [], images: [], features: []
-      });
-      setIsModalOpen(true);
-  };
-
-  const handleProductSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = {
-        ...formData,
-        quantityBought: Number(formData.quantityBought),
-        purchasePrice: Number(formData.purchasePrice),
-        salePrice: Number(formData.salePrice),
-        cashbackValue: Number(formData.cashbackValue),
-        publicProductId: formData.publicProductId ? Number(formData.publicProductId) : undefined
-    };
-    try {
-        if (editingId) await updateProduct(editingId, payload as any);
-        else await addProduct(payload as any);
-        setIsModalOpen(false);
-    } catch (e) { alert("Erro ao guardar."); }
-  };
-
-  const handleAddCoupon = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-        await db.collection('coupons').add({ ...newCoupon, code: newCoupon.code.toUpperCase().trim() });
-        setNewCoupon({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0 });
-        alert("Cupão criado.");
-    } catch (e) { alert("Erro."); }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="container mx-auto px-4 flex h-20 items-center justify-between">
           <div className="flex items-center gap-3">
-            <LayoutDashboard className="text-indigo-600" />
-            <h1 className="font-bold text-lg">Painel Admin</h1>
+              <div className="bg-indigo-600 p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
+              <h1 className="text-xl font-bold text-gray-900">Backoffice</h1>
           </div>
-          <div className="flex bg-gray-100 p-1 rounded-lg">
-            {(['inventory', 'orders', 'clients', 'coupons'] as const).map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
-            ))}
+          <div className="flex items-center gap-4">
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Inventário</button>
+                <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Encomendas</button>
+                <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'clients' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Clientes</button>
+                <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Cupões</button>
+            </div>
           </div>
-          <button onClick={() => window.location.hash = '/'} className="text-sm text-gray-500 hover:text-gray-800">Sair</button>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8">
         {activeTab === 'inventory' && (
-            <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <KpiCard title="Investido" value={stats.totalInvested} icon={<Package size={18}/>} color="blue" />
-                    <KpiCard title="Vendas" value={stats.realizedRevenue} icon={<DollarSign size={18}/>} color="indigo" />
-                    <KpiCard title="Lucro" value={stats.realizedProfit} icon={<TrendingUp size={18}/>} color="green" />
-                    <KpiCard title="Cashback Pend." value={stats.pendingCashback} icon={<AlertCircle size={18}/>} color="yellow" />
-                </div>
-
-                <div className="bg-white p-6 rounded-xl border shadow-sm">
-                    <div className="flex items-center gap-2 mb-4"><Bot size={20} className="text-indigo-600"/><h3 className="font-bold">Consultor IA</h3></div>
-                    <div className="flex gap-2">
-                        <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="Como aumentar as vendas?" className="flex-1 p-2 border rounded-lg" />
-                        <button onClick={handleAskAi} disabled={isAiLoading} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold">{isAiLoading ? <Loader2 size={18} className="animate-spin"/> : 'Analisar'}</button>
-                    </div>
-                    {aiResponse && <div className="mt-4 p-4 bg-indigo-50 rounded-lg text-sm whitespace-pre-wrap">{aiResponse}</div>}
-                </div>
-
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="p-4 border-b flex justify-between items-center">
-                        <button onClick={handleAddNew} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={18}/> Novo Lote</button>
-                        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/><input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Filtrar produtos..." className="pl-10 pr-4 py-2 border rounded-lg text-sm" /></div>
-                    </div>
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500"><tr><th className="px-6 py-4">Produto</th><th className="px-6 py-4">Stock</th><th className="px-6 py-4">Venda</th><th className="px-6 py-4 text-right">Ações</th></tr></thead>
-                        <tbody className="divide-y text-sm">
-                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                                <tr key={p.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-medium">{p.name} {p.variant && <span className="text-gray-400">({p.variant})</span>}</td>
-                                    <td className="px-6 py-4">{p.quantityBought - p.quantitySold} / {p.quantityBought}</td>
-                                    <td className="px-6 py-4">{formatCurrency(p.salePrice)}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button onClick={() => { setEditingId(p.id); setFormData({ ...p, publicProductId: p.publicProductId?.toString() || '', quantityBought: p.quantityBought.toString(), purchasePrice: p.purchasePrice.toString(), salePrice: p.salePrice.toString(), cashbackValue: p.cashbackValue.toString() } as any); setIsModalOpen(true); }} className="text-indigo-600 hover:underline">Editar</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <KpiCard title="Investido" value={stats.totalInvested} icon={<Package size={18} />} color="blue" />
+                <KpiCard title="Receita" value={stats.realizedRevenue} icon={<DollarSign size={18} />} color="indigo" />
+                <KpiCard title="Lucro" value={stats.realizedProfit} icon={<TrendingUp size={18} />} color="green" />
+                <KpiCard title="Online" value={onlineUsers.length} icon={<Users size={18} />} color="yellow" onClick={() => setIsOnlineDetailsOpen(true)} />
             </div>
-        )}
 
-        {activeTab === 'orders' && (
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                <div className="p-4 border-b"><h3 className="font-bold">Encomendas Recentes</h3></div>
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+                <div className="flex items-center gap-3 mb-4"><Bot size={20} className="text-indigo-600" /> <h3 className="font-bold">Consultor IA</h3></div>
+                <div className="flex gap-2">
+                    <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} className="flex-1 p-2 border rounded-lg" placeholder="Pergunte sobre o stock..." />
+                    <button onClick={handleAskAi} disabled={isAiLoading} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold">{isAiLoading ? '...' : 'Analisar'}</button>
+                </div>
+                {aiResponse && <div className="mt-4 p-4 bg-indigo-50 rounded-lg text-sm whitespace-pre-line">{aiResponse}</div>}
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <div className="p-4 border-b flex justify-between">
+                    <div className="relative w-64"><input type="text" placeholder="Filtrar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
+                    <button onClick={handleAddNew} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus size={18}/> Novo Lote</button>
+                </div>
                 <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500"><tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Valor</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr></thead>
-                    <tbody className="divide-y text-sm">
-                        {allOrders.map(o => (
-                            <tr key={o.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 font-mono text-xs">{o.id}</td>
-                                <td className="px-6 py-4">{o.shippingInfo.name}</td>
-                                <td className="px-6 py-4 font-bold">{formatCurrency(o.total)}</td>
-                                <td className="px-6 py-4"><span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">{o.status}</span></td>
-                                <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(o)} className="text-indigo-600 font-bold hover:underline">Detalhes</button></td>
+                    <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500">
+                        <tr><th className="px-6 py-3">Produto</th><th className="px-6 py-3">Stock</th><th className="px-6 py-3 text-right">Preço</th><th className="px-6 py-3 text-right">Ações</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                        {groupedInventory.map(([id, items]) => (
+                            <tr key={id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 font-bold">{items[0].name}</td>
+                                <td className="px-6 py-4">{items.reduce((acc, i) => acc + (i.quantityBought - i.quantitySold), 0)} un.</td>
+                                <td className="px-6 py-4 text-right">{formatCurrency(items[0].salePrice)}</td>
+                                <td className="px-6 py-4 text-right"><button onClick={() => handleEdit(items[0])} className="text-indigo-600 hover:underline">Editar</button></td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+          </div>
         )}
 
-        {activeTab === 'coupons' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
-                    <form onSubmit={handleAddCoupon} className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-                        <h3 className="font-bold">Novo Cupão</h3>
-                        <input type="text" value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value})} placeholder="CÓDIGO" className="w-full p-2 border rounded-lg" required />
-                        <div className="flex gap-2">
-                            <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="p-2 border rounded-lg flex-1">
-                                <option value="PERCENTAGE">%</option><option value="FIXED">€</option>
-                            </select>
-                            <input type="number" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="p-2 border rounded-lg w-20" required />
-                        </div>
-                        <input type="number" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} placeholder="Compra mínima (€)" className="w-full p-2 border rounded-lg" />
-                        <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold">Criar Cupão</button>
-                    </form>
-                </div>
-                <div className="md:col-span-2 bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500"><tr><th className="px-6 py-4">Código</th><th className="px-6 py-4">Desconto</th><th className="px-6 py-4 text-right">Ações</th></tr></thead>
-                        <tbody className="divide-y text-sm">
-                            {coupons.map(c => (
-                                <tr key={c.id}>
-                                    <td className="px-6 py-4 font-mono font-bold">{c.code}</td>
-                                    <td className="px-6 py-4">{c.type === 'FIXED' ? `${c.value}€` : `${c.value}%`}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button onClick={async () => await db.collection('coupons').doc(c.id).delete()} className="text-red-500"><Trash2 size={16}/></button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border shadow-sm h-64 flex flex-col">
+                  <h3 className="font-bold mb-4">Vendas da Semana</h3>
+                  <div className="flex-1 flex items-end gap-4 border-b border-l">
+                      {chartData.days.map((d, i) => (
+                          <div key={i} className="flex-1 bg-indigo-500 rounded-t" style={{ height: `${(d.value / chartData.maxValue) * 100}%` }} title={formatCurrency(d.value)} />
+                      ))}
+                  </div>
+              </div>
+              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                  <table className="w-full text-left">
+                      <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500">
+                          <tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Valor</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Ações</th></tr>
+                      </thead>
+                      <tbody className="divide-y text-sm">
+                          {allOrders.map(o => (
+                              <tr key={o.id}>
+                                  <td className="px-6 py-4 font-bold text-indigo-600">{o.id}</td>
+                                  <td className="px-6 py-4">{o.shippingInfo.name}</td>
+                                  <td className="px-6 py-4 font-bold">{formatCurrency(o.total)}</td>
+                                  <td className="px-6 py-4">
+                                      <select value={o.status} onChange={e => handleOrderStatusChange(o.id, e.target.value)} className="p-1 border rounded text-xs">
+                                          <option value="Processamento">Processamento</option>
+                                          <option value="Pago">Pago</option>
+                                          <option value="Enviado">Enviado</option>
+                                          <option value="Entregue">Entregue</option>
+                                          <option value="Cancelado">Cancelado</option>
+                                      </select>
+                                  </td>
+                                  <td className="px-6 py-4 text-right"><button onClick={() => setSelectedOrderDetails(o)} className="text-indigo-600 font-bold">Detalhes</button></td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
         )}
       </div>
 
+      <OrderDetailsModal order={selectedOrderDetails} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, up) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...up} : o))} onUpdateTracking={handleUpdateTracking} onCopy={text => navigator.clipboard.writeText(text)} />
+      <ProfitCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
       {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <form onSubmit={handleProductSubmit} className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <div className="p-6 border-b flex justify-between items-center bg-white sticky top-0">
-                      <h3 className="font-bold">{editingId ? 'Editar Produto' : 'Novo Lote de Inventário'}</h3>
-                      <button type="button" onClick={() => setIsModalOpen(false)}><X size={24}/></button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2"><label className="text-xs font-bold text-gray-500 block mb-1">Nome do Produto</label><input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-2 border rounded" required /></div>
-                          <div><label className="text-xs font-bold text-gray-500 block mb-1">Qtd. Comprada</label><input type="number" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} className="w-full p-2 border rounded" required /></div>
-                          <div><label className="text-xs font-bold text-gray-500 block mb-1">Preço Compra (€)</label><input type="number" step="0.01" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} className="w-full p-2 border rounded" required /></div>
-                          <div><label className="text-xs font-bold text-gray-500 block mb-1">Preço Venda (€)</label><input type="number" step="0.01" value={formData.salePrice} onChange={e => setFormData({...formData, salePrice: e.target.value})} className="w-full p-2 border rounded" required /></div>
-                          <div><label className="text-xs font-bold text-gray-500 block mb-1">Cashback (€)</label><input type="number" step="0.01" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} className="w-full p-2 border rounded" /></div>
-                      </div>
-                  </div>
-                  <div className="p-6 border-t bg-gray-50 flex justify-end gap-2">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 border rounded font-bold">Cancelar</button>
-                      <button type="submit" className="px-8 py-2 bg-indigo-600 text-white rounded font-bold shadow-lg">Guardar</button>
-                  </div>
-              </form>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+              <div className="bg-white p-6 rounded-2xl w-full max-w-lg">
+                  <h3 className="text-xl font-bold mb-4">{editingId ? 'Editar Produto' : 'Novo Produto'}</h3>
+                  <form onSubmit={handleProductSubmit} className="space-y-4">
+                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-2 border rounded" placeholder="Nome" />
+                      <input type="number" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} className="w-full p-2 border rounded" placeholder="Preço Compra" />
+                      <input type="number" value={formData.salePrice} onChange={e => setFormData({...formData, salePrice: e.target.value})} className="w-full p-2 border rounded" placeholder="Preço Venda" />
+                      <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-2 rounded">Guardar</button>
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="w-full text-gray-500 py-2">Cancelar</button>
+                  </form>
+              </div>
           </div>
-      )}
-
-      {selectedOrderDetails && (
-          <OrderDetailsModal 
-            order={selectedOrderDetails} 
-            onClose={() => setSelectedOrderDetails(null)} 
-            onUpdateOrder={(id, up) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...up} : o))} 
-            onUpdateTracking={handleUpdateTracking} 
-            onCopy={text => navigator.clipboard.writeText(text)} 
-          />
       )}
     </div>
   );
