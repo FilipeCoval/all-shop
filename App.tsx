@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -17,7 +18,7 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
-import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
+import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, StatusHistory } from './types';
 import { auth, db } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
@@ -171,11 +172,20 @@ const App: React.FC = () => {
                     let correctTier: UserTier = 'Bronze';
                     if (historicalTotalSpent >= LOYALTY_TIERS.GOLD.threshold) correctTier = 'Ouro';
                     else if (historicalTotalSpent >= LOYALTY_TIERS.SILVER.threshold) correctTier = 'Prata';
+                    
                     const ordersToAwardPoints = allUserOrders.filter(o => o.status === 'Entregue' && !o.pointsAwarded);
                     let missingPoints = 0;
                     const newHistoryItems: PointHistory[] = [];
+
                     if (ordersToAwardPoints.length > 0) {
-                        const multiplier = LOYALTY_TIERS[correctTier.toUpperCase() as keyof typeof LOYALTY_TIERS].multiplier;
+                        const tierMap: Record<UserTier, keyof typeof LOYALTY_TIERS> = {
+                            'Bronze': 'BRONZE',
+                            'Prata': 'SILVER',
+                            'Ouro': 'GOLD'
+                        };
+                        const tierKey = tierMap[correctTier];
+                        const multiplier = LOYALTY_TIERS[tierKey].multiplier;
+                        
                         ordersToAwardPoints.forEach(o => {
                             const pointsForThisOrder = Math.floor((o.total || 0) * multiplier);
                             if (pointsForThisOrder > 0) {
@@ -313,17 +323,21 @@ const App: React.FC = () => {
 
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
-          await db.collection("orders").doc(newOrder.id).set(newOrder);
-          setOrders(prev => [newOrder, ...prev]);
+          const orderPayload = {
+              ...newOrder,
+              statusHistory: newOrder.statusHistory || [{ status: 'Processamento' as const, date: new Date().toISOString() }]
+          };
+          await db.collection("orders").doc(orderPayload.id).set(orderPayload);
+          setOrders(prev => [orderPayload, ...prev]);
           setCartItems([]);
-          notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
+          notifyNewOrder(orderPayload, user ? user.name : orderPayload.shippingInfo.name);
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
               const userDoc = await transaction.get(userRef);
               if (!userDoc.exists) return;
               const userData = userDoc.data() as User;
-              const newTotalSpent = (userData.totalSpent || 0) + newOrder.total;
+              const newTotalSpent = (userData.totalSpent || 0) + orderPayload.total;
               let newTier: UserTier = userData.tier || 'Bronze';
               if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
               else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
