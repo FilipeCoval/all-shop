@@ -23,18 +23,31 @@ export interface Address {
   zip: string;
 }
 
+export interface StatusHistory {
+  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Devolvido' | 'Reclamação';
+  date: string;
+  notes?: string; // Para números de rastreio, motivos de cancelamento, etc.
+}
+
 export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado';
+  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Devolvido' | 'Reclamação';
   items: (OrderItem | string)[]; // ACEITA DADOS ANTIGOS (string) E NOVOS (OrderItem)
   userId?: string | null; // Permite null para encomendas de convidados
   shippingInfo: UserCheckoutInfo;
-  trackingNumber?: string;
+  trackingNumber?: string; // Mantido por compatibilidade
   pointsAwarded?: boolean;
-  cancellationReason?: string;
+  cancellationReason?: string; // Mantido por compatibilidade
+  statusHistory?: StatusHistory[]; // Histórico detalhado de estados
+  returnRequest?: { // Para pedidos de devolução
+    date: string;
+    reason: string;
+    status: 'Pendente' | 'Aprovado' | 'Recusado';
+  };
 }
+
 
 export interface OrderItem {
   productId: number;
