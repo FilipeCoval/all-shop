@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -48,16 +47,28 @@ const App: React.FC = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
   
-  const { getStockForProduct } = useStock();
-  const { products: dbProducts, loading: productsLoading } = usePublicProducts();
-
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
     const userEmail = user.email.trim().toLowerCase();
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  // Identificador único da sessão para reservas temporárias
+  const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
+  const { products: dbProducts, loading: productsLoading } = usePublicProducts();
+
+  const getStockForProduct = (productId: number, variantName?: string): number => {
+    if (isAdmin) {
+      return getAdminStock(productId, variantName);
+    }
+    
+    const product = dbProducts.find(p => p.id === productId);
+    if (!product) return 0;
+    
+    // For variants, we currently rely on the total product stock from the public collection.
+    // This is a safe fallback that prevents overselling.
+    return product.stock || 0;
+  };
+
   const sessionId = useMemo(() => {
       let id = sessionStorage.getItem('as_session_id');
       if (!id) {
@@ -67,7 +78,6 @@ const App: React.FC = () => {
       return id;
   }, []);
 
-  // CAPTURA DE LINKS CURTOS (/p/:id)
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/p/') || path.startsWith('/product/')) {
@@ -275,7 +285,6 @@ const App: React.FC = () => {
         return;
     }
 
-    // RESERVA DE SEGURANÇA: Se stock baixo, cria reserva no Firebase para "travar" visualmente para outros
     if (currentAvailable <= 2) {
         try {
             await db.collection('stock_reservations').add({
@@ -283,7 +292,7 @@ const App: React.FC = () => {
                 variantName: variant?.name || null,
                 quantity: 1,
                 sessionId,
-                expiresAt: Date.now() + (15 * 60 * 1000) // Reserva de 15 min
+                expiresAt: Date.now() + (15 * 60 * 1000)
             });
         } catch (e) { console.debug("Erro reserva temporária."); }
     }
@@ -309,7 +318,6 @@ const App: React.FC = () => {
     const item = cartItems.find(i => i.cartItemId === cartItemId);
     setCartItems(prev => prev.filter(i => i.cartItemId !== cartItemId));
     
-    // Limpar reserva no Firebase se existir
     if (item && item.reservedUntil) {
         try {
             const snap = await db.collection('stock_reservations')
@@ -324,158 +332,187 @@ const App: React.FC = () => {
   };
 
   const updateQuantity = (cartItemId: string, delta: number) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.cartItemId === cartItemId) {
-        const newQty = item.quantity + delta;
-        if (delta > 0) {
-            const currentStock = getStockForProduct(item.id, item.selectedVariant);
-            if (newQty > currentStock) { 
-                alert(`Stock máximo: ${currentStock}`); 
-                return item; 
-            }
-        }
-        return { ...item, quantity: Math.max(1, newQty) };
-      }
-      return item;
-    }));
-  };
+    setCartItems(prev => 
+      prev.map(item => {
+        if (item.cartItemId === cartItemId) {
+          const newQuantity = item.quantity + delta;
+          if (newQuantity < 1) return item;
 
-  const handleUpdateUser = async (updatedUser: User) => {
-    setUser(updatedUser);
-    if (updatedUser.uid) {
-        try { await db.collection("users").doc(updatedUser.uid).set(updatedUser); }
-        catch (err) { console.error("Save error", err); }
-    }
-  };
-
-  const handleLogout = async () => {
-    try { await auth.signOut(); setUser(null); window.location.hash = '/'; }
-    catch (error) { console.error("Logout error", error); }
-  };
-
-  const handleCheckout = async (newOrder: Order): Promise<boolean> => {
-      try {
-          const orderPayload = {
-              ...newOrder,
-              statusHistory: newOrder.statusHistory || [{ status: 'Processamento' as const, date: new Date().toISOString() }]
-          };
-          
-          // Grava a encomenda (Isto bloqueia visualmente o stock para outros devido ao useStock)
-          await db.collection("orders").doc(orderPayload.id).set(orderPayload);
-
-          // Limpa as reservas temporárias de carrinho desta sessão
-          const resSnap = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
-          const batch = db.batch();
-          resSnap.forEach(doc => batch.delete(doc.ref));
-          await batch.commit();
-
-          setOrders(prev => [orderPayload, ...prev]);
-          setCartItems([]);
-          notifyNewOrder(orderPayload, user ? user.name : orderPayload.shippingInfo.name);
-          
-          if (user?.uid) {
-            const userRef = db.collection("users").doc(user.uid);
-            await db.runTransaction(async (transaction) => {
-              const userDoc = await transaction.get(userRef);
-              if (!userDoc.exists) return;
-              const userData = userDoc.data() as User;
-              const newTotalSpent = (userData.totalSpent || 0) + orderPayload.total;
-              let newTier: UserTier = userData.tier || 'Bronze';
-              if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
-              else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
-              transaction.update(userRef, { totalSpent: newTotalSpent, tier: newTier });
-            });
+          const stock = getStockForProduct(item.id, item.selectedVariant);
+          if (newQuantity > stock) {
+            alert(`Apenas ${stock} unidades disponíveis.`);
+            return item;
           }
-          return true;
-      } catch (e) {
-          console.error("Erro no checkout:", e);
-          alert("Ocorreu um erro ao registar a sua encomenda.");
-          return false;
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      })
+    );
+  };
+  
+  const handleCheckout = async (order: Order): Promise<boolean> => {
+    try {
+      await db.collection('orders').doc(order.id).set(order);
+
+      const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
+      if (!reservationQuery.empty) {
+        const batch = db.batch();
+        reservationQuery.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
       }
+      
+      setCartItems([]);
+      await notifyNewOrder(order, order.shippingInfo.name);
+      return true;
+    } catch (error) {
+      console.error("Erro no checkout:", error);
+      if (error instanceof Error && error.message) {
+        alert("Ocorreu um erro ao registar a sua encomenda:\n" + error.message);
+      } else {
+        alert("Ocorreu um erro ao registar a sua encomenda. Por favor, tente novamente.");
+      }
+      return false;
+    }
   };
 
-  const handleAddReview = async (newReview: Review) => {
-      setReviews(prev => [newReview, ...prev]);
-      try { await db.collection('reviews').doc(newReview.id).set(newReview); }
-      catch (e) { console.error("Erro review:", e); }
+  const handleUpdateUser = (updatedData: Partial<User>) => {
+    if (user?.uid) {
+        db.collection('users').doc(user.uid).update(updatedData)
+            .catch(err => console.error("Update failed:", err));
+    }
+  };
+  
+  const handleLoginSuccess = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    setIsLoginOpen(false);
+  };
+  
+  const handleLogout = () => {
+    auth.signOut();
+    setUser(null);
+    setOrders([]);
+    window.location.hash = '#/';
+  };
+  
+  const handleAddReview = async (review: Review) => {
+    try {
+        await db.collection('reviews').doc(review.id).set(review);
+        setReviews(prev => [review, ...prev]);
+    } catch(err) {
+        alert("Não foi possível adicionar a sua avaliação.");
+    }
   };
 
-  const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0), [cartItems]);
-  const cartCount = useMemo(() => cartItems.reduce((acc, item) => acc + item.quantity, 0), [cartItems]);
-
-  const handleSearchChange = (term: string) => {
-      setSearchTerm(term);
-      if (term && route !== '#/') window.location.hash = '/';
-      if (term) setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100);
-  };
-
-  const handleResetHome = () => {
-    setSearchTerm('');
-    setSelectedCategory('Todas');
-    window.location.hash = '/';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
+  const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0), [cartItems]);
+  
   const renderContent = () => {
-    if (authLoading || (productsLoading && route !== '#dashboard')) {
-        return <div className="flex-grow flex items-center justify-center h-screen"><Loader2 className="animate-spin text-primary" size={48} /></div>;
-    }
-    if (route === '#dashboard') return <Dashboard user={user} isAdmin={isAdmin} />;
-    if (route === '#account') {
-      if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={dbProducts} />;
-    }
     if (route.startsWith('#product/')) {
-        const id = parseInt(route.split('/')[1]);
-        const product = dbProducts.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+      const productId = parseInt(route.split('/')[1]);
+      const product = dbProducts.find(p => p.id === productId);
+      if (product) {
+        return <ProductDetails 
+          product={product} 
+          allProducts={dbProducts}
+          onAddToCart={addToCart}
+          reviews={reviews}
+          onAddReview={handleAddReview}
+          currentUser={user}
+          getStock={getStockForProduct}
+          wishlist={wishlist}
+          onToggleWishlist={toggleWishlist}
+        />;
+      }
     }
+    
     switch (route) {
-        case '#about': return <About />;
-        case '#contact': return <Contact />;
-        case '#terms': return <Terms />;
-        case '#privacy': return <Privacy />;
-        case '#faq': return <FAQ />;
-        case '#returns': return <Returns />;
-        default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+      case '#about': return <About />;
+      case '#contact': return <Contact />;
+      case '#terms': return <Terms />;
+      case '#privacy': return <Privacy />;
+      case '#faq': return <FAQ />;
+      case '#returns': return <Returns />;
+      case '#account':
+        if (authLoading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin" size={48} /></div>;
+        if (user) return <ClientArea 
+            user={user} 
+            orders={orders} 
+            onLogout={handleLogout} 
+            onUpdateUser={handleUpdateUser}
+            wishlist={wishlist}
+            onToggleWishlist={toggleWishlist}
+            onAddToCart={addToCart}
+            publicProducts={dbProducts}
+        />;
+        return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+      case '#dashboard':
+        if (authLoading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin" size={48} /></div>;
+        if (isAdmin) return <Dashboard user={user} isAdmin={isAdmin} />;
+        return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+      default:
+        return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
     }
   };
+
+  if (authLoading || productsLoading) {
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center gap-4">
+        <img src={LOGO_URL} alt={STORE_NAME} className="w-48 h-auto animate-pulse" />
+        <Loader2 className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
-      <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} user={user} onOpenLogin={() => setIsLoginOpen(true)} onLogout={handleLogout} searchTerm={searchTerm} onSearchChange={handleSearchChange} onResetHome={handleResetHome} />
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
-          <div className="relative">
-             <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          </div>
-          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Início</a>
-          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Sobre</a>
-          <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Contato</a>
-          <div className="pt-4 border-t border-gray-100">
-            {user ? (
-                <button onClick={() => { window.location.hash = 'account'; setIsMobileMenuOpen(false); }} className="w-full text-left py-2 text-primary font-bold">A Minha Conta</button>
-            ) : (
-                <button onClick={() => { setIsLoginOpen(true); setIsMobileMenuOpen(false); }} className="w-full bg-secondary text-white py-3 rounded-lg font-bold">Entrar / Registar</button>
-            )}
-          </div>
-        </div>
-      )}
-      <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
-      <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
-        <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
-            <div className="flex flex-col items-center md:items-start"><div className="flex items-center gap-2 mb-4">{LOGO_URL ? <img src={LOGO_URL} alt={STORE_NAME} className="h-10 invert brightness-0" /> : <h3 className="text-xl font-bold text-white">{STORE_NAME}</h3>}</div><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
-            <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
-            <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
-            <div className="flex flex-col items-center md:items-start"><h4 className="text-white font-bold mb-4">Pagamento Seguro</h4><div className="flex gap-2 items-center flex-wrap justify-center md:justify-start"><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" /></div><div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" /></div></div></div>
-        </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-[10px]"><span>&copy; {new Date().getFullYear()} Allshop Store.</span>{isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Painel Admin</a>}</div>
-      </footer>
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => setIsLoginOpen(true)} />
-      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
-      {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
+    <div className="flex flex-col min-h-screen">
+      <Header 
+        cartCount={cartItems.length}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+        user={user}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        onLogout={handleLogout}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        onResetHome={() => {
+            setSearchTerm('');
+            setSelectedCategory('Todas');
+            window.location.hash = '/';
+        }}
+      />
+      <main className="flex-grow">
+        {renderContent()}
+      </main>
+      
+      <CartDrawer 
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={cartItems}
+        onRemoveItem={removeFromCart}
+        onUpdateQuantity={updateQuantity}
+        total={cartTotal}
+        onCheckout={handleCheckout}
+        user={user}
+        onOpenLogin={() => {
+            setIsCartOpen(false);
+            setIsLoginOpen(true);
+        }}
+      />
+
       <AIChat products={dbProducts} />
+
+      {isLoginOpen && <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={handleLoginSuccess} />}
+      {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
+      
+      <footer className="bg-gray-800 text-white mt-auto">
+        <div className="container mx-auto px-4 py-8 text-center text-sm">
+            <p>&copy; {new Date().getFullYear()} {STORE_NAME}. Todos os direitos reservados.</p>
+            <div className="flex justify-center gap-4 mt-4">
+                <a href="#terms" className="hover:underline">Termos</a>
+                <a href="#privacy" className="hover:underline">Privacidade</a>
+                <a href="#faq" className="hover:underline">FAQ</a>
+            </div>
+        </div>
+      </footer>
     </div>
   );
 };
