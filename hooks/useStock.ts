@@ -37,8 +37,7 @@ export const useStock = () => {
         setReservations(resList);
       });
 
-    // 3. Escutar Encomendas Pendentes (que ainda não deram baixa no inventário físico)
-    // Consideramos apenas encomendas que VOCÊ ainda não deu como "Enviado" ou "Vendido"
+    // 3. Escutar Encomendas que ainda não foram abatidas manualmente no inventário
     const unsubOrders = db.collection('orders')
       .where('status', 'in', ['Processamento', 'Pago'])
       .onSnapshot((snapshot) => {
@@ -60,46 +59,59 @@ export const useStock = () => {
   const getStockForProduct = (publicId: number, variantName?: string): number => {
     if (hasPermissionError || loading) return 999;
 
-    // A. Stock Físico Real (O que está nas prateleiras segundo o Inventário)
     const allBatchesForProduct = inventory.filter(p => p.publicProductId === publicId);
     if (allBatchesForProduct.length === 0) return 0;
+    
+    // EDGE CASE FIX: Detecta se existe apenas um lote de stock e se esse lote não tem variante definida.
+    // Isto acontece quando o stock é adicionado para um produto com variantes, mas sem especificar qual.
+    const hasOnlyGenericStockBatch = allBatchesForProduct.length === 1 && (!allBatchesForProduct[0].variant || allBatchesForProduct[0].variant.trim() === '');
 
-    const relevantBatches = variantName
-        ? allBatchesForProduct.filter(p => (p.variant || '').trim().toLowerCase() === variantName.trim().toLowerCase())
-        : allBatchesForProduct;
+    // A. Stock Físico
+    const physicalStock = allBatchesForProduct
+      .filter(p => {
+          if (!variantName) return true; // Para stock total, incluir todos os lotes
+          const itemVariant = (p.variant || '').trim().toLowerCase();
+          const requestedVariant = variantName.trim().toLowerCase();
+          // Corresponde se a variante for igual, OU se houver apenas um lote genérico
+          return itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '');
+      })
+      .reduce((acc, batch) => acc + Math.max(0, (batch.quantityBought || 0) - (batch.quantitySold || 0)), 0);
 
-    const physicalStock = relevantBatches.reduce((acc, batch) => {
-      const remaining = (batch.quantityBought || 0) - (batch.quantitySold || 0);
-      return acc + Math.max(0, remaining);
-    }, 0);
+    // B. Subtrair Reservas Temporárias (Carrinhos)
+    const totalReservedInCarts = reservations
+        .filter(r => r.productId === publicId)
+        .filter(r => {
+            if (!variantName) return true; // Para stock total, subtrair todas as reservas
+            const itemVariant = (r.variantName || '').trim().toLowerCase();
+            const requestedVariant = variantName.trim().toLowerCase();
+            // Subtrai se a variante for igual, OU se a reserva for genérica e o stock também for
+            return itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '');
+        })
+        .reduce((acc, r) => acc + (r.quantity || 0), 0);
 
-    // B. Subtrair Reservas Temporárias de utilizadores com itens no carrinho
-    const activeRes = reservations.filter(r => 
-        r.productId === publicId && 
-        (variantName ? (r.variantName || '').trim().toLowerCase() === variantName.trim().toLowerCase() : true)
-    );
-    const totalReservedInCarts = activeRes.reduce((acc, r) => acc + (r.quantity || 0), 0);
-
-    // C. Subtrair Itens de Encomendas efetuadas mas ainda não processadas manualmente
+    // C. Subtrair Itens de Encomendas efetuadas mas pendentes de envio
     let totalPendingInOrders = 0;
     pendingOrders.forEach(order => {
         const items = Array.isArray(order.items) ? order.items : [];
         items.forEach(item => {
             if (typeof item === 'object' && item !== null) {
                 const orderItem = item as OrderItem;
-                const idMatch = orderItem.productId === publicId;
-                const variantMatch = variantName 
-                    ? (orderItem.selectedVariant || '').trim().toLowerCase() === variantName.trim().toLowerCase()
-                    : !orderItem.selectedVariant;
-                
-                if (idMatch && variantMatch) {
-                    totalPendingInOrders += (orderItem.quantity || 1);
+                if (orderItem.productId === publicId) {
+                    if (!variantName) { // Para stock total, subtrair todas as variantes
+                        totalPendingInOrders += (orderItem.quantity || 1);
+                    } else { // Para stock específico
+                        const itemVariant = (orderItem.selectedVariant || '').trim().toLowerCase();
+                        const requestedVariant = variantName.trim().toLowerCase();
+                         // Subtrai se a variante for igual, OU se o item da encomenda for genérico e o stock também for
+                        if (itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '')) {
+                            totalPendingInOrders += (orderItem.quantity || 1);
+                        }
+                    }
                 }
             }
         });
     });
 
-    // Stock Disponível = Físico - Carrinhos - Encomendas Pendentes
     return Math.max(0, physicalStock - totalReservedInCarts - totalPendingInOrders);
   };
 
