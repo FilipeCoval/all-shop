@@ -1,3 +1,4 @@
+
 // Tipos principais da aplicação
 
 export interface User {
@@ -23,31 +24,19 @@ export interface Address {
   zip: string;
 }
 
-export interface StatusHistory {
-  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Devolvido' | 'Reclamação';
-  date: string;
-  notes?: string; // Para números de rastreio, motivos de cancelamento, etc.
-}
-
 export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Devolvido' | 'Reclamação';
-  items: (OrderItem | string)[]; // ACEITA DADOS ANTIGOS (string) E NOVOS (OrderItem)
-  userId?: string | null; // Permite null para encomendas de convidados
+  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Reclamação' | 'Devolvido';
+  items: (OrderItem | string)[];
+  userId?: string | null;
   shippingInfo: UserCheckoutInfo;
-  trackingNumber?: string; // Mantido por compatibilidade
+  trackingNumber?: string;
   pointsAwarded?: boolean;
-  cancellationReason?: string; // Mantido por compatibilidade
-  statusHistory?: StatusHistory[]; // Histórico detalhado de estados
-  returnRequest?: { // Para pedidos de devolução
-    date: string;
-    reason: string;
-    status: 'Pendente' | 'Aprovado' | 'Recusado';
-  };
+  cancellationReason?: string;
+  statusHistory?: StatusHistory[];
 }
-
 
 export interface OrderItem {
   productId: number;
@@ -57,15 +46,15 @@ export interface OrderItem {
   description?: string;
   quantity: number;
   selectedVariant?: string;
-  serialNumbers?: string[]; // Array de S/N atribuídos (ex: ["SN123", "SN456"])
-  unitIds?: string[]; // IDs internos das unidades de inventário
+  serialNumbers?: string[];
+  unitIds?: string[];
   cartItemId?: string;
   addedAt: string;
 }
 
 export interface UserCheckoutInfo {
   name: string;
-  email: string; // Adicionado para guardar o email do convidado
+  email: string;
   street: string;
   doorNumber: string;
   zip: string;
@@ -84,6 +73,7 @@ export interface CartItem {
   description?: string;
   quantity: number;
   selectedVariant?: string;
+  reservedUntil?: string; // ISO String para expiração da reserva
 }
 
 export interface Product {
@@ -97,7 +87,7 @@ export interface Product {
   variants?: ProductVariant[];
   features: string[];
   comingSoon?: boolean;
-  badges?: string[]; // Etiquetas de marketing (Novidade, Promoção, etc.)
+  badges?: string[];
   images?: string[];
   variantLabel?: string;
 }
@@ -129,15 +119,32 @@ export interface InventoryProduct {
   status: ProductStatus;
   description?: string;
   features?: string[];
-  badges?: string[]; // Etiquetas de marketing no inventário
+  badges?: string[];
   images?: string[];
   comingSoon?: boolean;
 }
 
 export interface ProductUnit {
-  id: string; // O próprio S/N ou código de barras
+  id: string;
   status: 'AVAILABLE' | 'SOLD' | 'RESERVED';
   addedAt: string;
+  reservedBy?: string; // sessionId ou userId
+  reservedUntil?: string;
+}
+
+export interface StockReservation {
+    id: string;
+    productId: number;
+    variantName?: string;
+    quantity: number;
+    sessionId: string;
+    expiresAt: number; // Timestamp
+}
+
+export interface StatusHistory {
+    status: Order['status'];
+    date: string;
+    notes?: string;
 }
 
 export type ProductStatus = 'IN_STOCK' | 'PARTIAL' | 'SOLD';
