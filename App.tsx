@@ -18,8 +18,8 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
-import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, StatusHistory } from './types';
-import { auth, db } from './services/firebaseConfig';
+import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, InventoryProduct, ProductStatus } from './types';
+import { auth, db, firebase } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { notifyNewOrder } from './services/telegramNotifier';
@@ -57,15 +57,23 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
+  // Identificador único da sessão para reservas temporárias
+  const sessionId = useMemo(() => {
+      let id = sessionStorage.getItem('as_session_id');
+      if (!id) {
+          id = 'sess_' + Math.random().toString(36).substring(2, 15);
+          sessionStorage.setItem('as_session_id', id);
+      }
+      return id;
+  }, []);
+
   // CAPTURA DE LINKS CURTOS (/p/:id)
   useEffect(() => {
     const path = window.location.pathname;
-    // Suporta tanto /p/id como /product/id
     if (path.startsWith('/p/') || path.startsWith('/product/')) {
         const parts = path.split('/');
         const id = parts[parts.length - 1];
         if (id && !isNaN(Number(id))) {
-            // Limpa o URL e redireciona internamente via Hash
             window.history.replaceState(null, '', '/');
             window.location.hash = `#product/${id}`;
             setRoute(`#product/${id}`);
@@ -98,11 +106,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (route.includes('dashboard')) return;
-    let sessionId = sessionStorage.getItem('session_id');
-    if (!sessionId) {
-        sessionId = Math.random().toString(36).substring(2, 15);
-        sessionStorage.setItem('session_id', sessionId);
-    }
     const updatePresence = () => {
         if (!sessionId) return;
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -119,7 +122,7 @@ const App: React.FC = () => {
     updatePresence();
     const interval = setInterval(updatePresence, 20000);
     return () => clearInterval(interval);
-  }, [route, user]);
+  }, [route, user, sessionId]);
 
   useEffect(() => {
     const loadReviews = async () => {
@@ -234,7 +237,7 @@ const App: React.FC = () => {
                     });
 
             } catch (error) {
-                console.error("Erro crítico durante a autenticação/sincronização do utilizador:", error);
+                console.error("Erro crítico na autenticação:", error);
                 const fallbackUser: User = { uid: firebaseUser.uid, name: firebaseUser.displayName || 'Cliente', email: firebaseUser.email, addresses: [], wishlist: [] };
                 setUser(fallbackUser);
             } finally {
@@ -253,7 +256,7 @@ const App: React.FC = () => {
         ordersUnsubscribe();
         window.removeEventListener('hashchange', handleHashChange);
     };
-  }, []);
+  }, [sessionId]);
 
   const toggleWishlist = async (productId: number) => {
     let newWishlist = wishlist.includes(productId) ? wishlist.filter(id => id !== productId) : [...wishlist, productId];
@@ -265,30 +268,59 @@ const App: React.FC = () => {
     }
   };
 
-  const addToCart = (product: Product, variant?: ProductVariant) => {
-    const currentStock = getStockForProduct(product.id, variant?.name);
-    if (currentStock <= 0) {
-        alert("Desculpe, este produto acabou de esgotar!");
+  const addToCart = async (product: Product, variant?: ProductVariant) => {
+    const currentAvailable = getStockForProduct(product.id, variant?.name);
+    if (currentAvailable <= 0) {
+        alert("Desculpe, este produto acabou de esgotar ou foi reservado!");
         return;
     }
+
+    // RESERVA DE SEGURANÇA: Se stock baixo, cria reserva no Firebase para "travar" visualmente para outros
+    if (currentAvailable <= 2) {
+        try {
+            await db.collection('stock_reservations').add({
+                productId: product.id,
+                variantName: variant?.name || null,
+                quantity: 1,
+                sessionId,
+                expiresAt: Date.now() + (15 * 60 * 1000) // Reserva de 15 min
+            });
+        } catch (e) { console.debug("Erro reserva temporária."); }
+    }
+
     const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
+    const reservedUntil = currentAvailable <= 2 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === cartItemId);
       if (existing) {
-        if (existing.quantity + 1 > currentStock) {
-            alert(`Apenas ${currentStock} unidades disponíveis.`);
+        if (existing.quantity + 1 > currentAvailable) {
+            alert(`Apenas ${currentAvailable} unidades disponíveis.`);
             return prev;
         }
         return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1 }];
+      return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
     });
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (cartItemId: string) => {
-    setCartItems(prev => prev.filter(item => item.cartItemId !== cartItemId));
+  const removeFromCart = async (cartItemId: string) => {
+    const item = cartItems.find(i => i.cartItemId === cartItemId);
+    setCartItems(prev => prev.filter(i => i.cartItemId !== cartItemId));
+    
+    // Limpar reserva no Firebase se existir
+    if (item && item.reservedUntil) {
+        try {
+            const snap = await db.collection('stock_reservations')
+                .where('sessionId', '==', sessionId)
+                .where('productId', '==', item.id)
+                .get();
+            const batch = db.batch();
+            snap.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+        } catch (e) {}
+    }
   };
 
   const updateQuantity = (cartItemId: string, delta: number) => {
@@ -298,7 +330,7 @@ const App: React.FC = () => {
         if (delta > 0) {
             const currentStock = getStockForProduct(item.id, item.selectedVariant);
             if (newQty > currentStock) { 
-                alert(`Máximo: ${currentStock}`); 
+                alert(`Stock máximo: ${currentStock}`); 
                 return item; 
             }
         }
@@ -327,10 +359,20 @@ const App: React.FC = () => {
               ...newOrder,
               statusHistory: newOrder.statusHistory || [{ status: 'Processamento' as const, date: new Date().toISOString() }]
           };
+          
+          // Grava a encomenda (Isto bloqueia visualmente o stock para outros devido ao useStock)
           await db.collection("orders").doc(orderPayload.id).set(orderPayload);
+
+          // Limpa as reservas temporárias de carrinho desta sessão
+          const resSnap = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
+          const batch = db.batch();
+          resSnap.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+
           setOrders(prev => [orderPayload, ...prev]);
           setCartItems([]);
           notifyNewOrder(orderPayload, user ? user.name : orderPayload.shippingInfo.name);
+          
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
@@ -346,8 +388,8 @@ const App: React.FC = () => {
           }
           return true;
       } catch (e) {
-          console.error("Erro CRÍTICO no checkout:", e);
-          alert("Ocorreu um erro ao guardar a sua encomenda.");
+          console.error("Erro no checkout:", e);
+          alert("Ocorreu um erro ao registar a sua encomenda.");
           return false;
       }
   };
