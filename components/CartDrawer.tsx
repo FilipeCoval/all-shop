@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem, StatusHistory } from '../types';
-import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins, AlertCircle } from 'lucide-react';
+import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins, AlertCircle, Clock } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -32,6 +31,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
   
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
     name: '', street: '', doorNumber: '', zip: '', city: '', phone: '', nif: '', paymentMethod: 'MB Way', email: ''
@@ -42,6 +42,29 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const SHIPPING_THRESHOLD = 50;
   const SHIPPING_COST = 4.99;
   const COD_FEE = 2.00; 
+
+  // Efeito para o cronómetro de reserva (Apenas se houver itens com reserva ativa)
+  useEffect(() => {
+    const reservedItem = cartItems.find(i => i.reservedUntil);
+    if (!reservedItem || !reservedItem.reservedUntil) {
+        setTimeRemaining('');
+        return;
+    }
+
+    const interval = setInterval(() => {
+      const remaining = new Date(reservedItem.reservedUntil!).getTime() - Date.now();
+      if (remaining <= 0) {
+          setTimeRemaining('Expirada');
+          clearInterval(interval);
+      } else {
+          const mins = Math.floor(remaining / 60000);
+          const secs = Math.floor((remaining % 60000) / 1000);
+          setTimeRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cartItems]);
 
   // Efeito para avançar automaticamente após o login
   useEffect(() => {
@@ -162,7 +185,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           description: item.description || '',
           quantity: item.quantity,
           selectedVariant: item.selectedVariant || '',
-          serialNumbers: [], // Inicializa vazio
+          serialNumbers: [], 
           unitIds: [],
           cartItemId: item.cartItemId,
           addedAt: new Date().toISOString()
@@ -186,7 +209,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           if (platform === 'whatsapp') {
               window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(orderMessage)}`, '_blank');
           }
-          // Em vez de fechar, vamos para o passo de sucesso
           setCheckoutStep('success');
       }
       setIsFinalizing(false);
@@ -272,6 +294,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
             {checkoutStep === 'cart' && (
                 <div className="space-y-4">
+                    {/* AVISO DE RESERVA ATIVA */}
+                    {cartItems.some(i => i.reservedUntil) && (
+                        <div className="bg-orange-50 border border-orange-200 p-3 rounded-xl flex items-center gap-3 animate-pulse">
+                            <Clock className="text-orange-600" size={18} />
+                            <div>
+                                <p className="text-xs text-orange-800 font-bold">RESERVA ATIVA: {timeRemaining} min</p>
+                                <p className="text-[10px] text-orange-700">Stock garantido para si. Finalize antes que o tempo acabe!</p>
+                            </div>
+                        </div>
+                    )}
+
                     {cartItems.map((item) => (
                         <div key={item.cartItemId} className="bg-white p-3 rounded-xl border border-gray-100 flex gap-3 shadow-sm animate-slide-in">
                             <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden shrink-0"><img src={item.image} alt={item.name} className="w-full h-full object-cover" /></div>
@@ -286,7 +319,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                         <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
                                         <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm">+</button>
                                     </div>
-                                    <span className="font-bold">{(item.price * item.quantity).toFixed(2)}€</span>
+                                    <div className="text-right">
+                                        <span className="font-bold">{(item.price * item.quantity).toFixed(2)}€</span>
+                                        {item.reservedUntil && <span className="block text-[9px] text-orange-500 font-bold uppercase mt-1">Reservado</span>}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -402,7 +438,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
             )}
 
-            {/* NEW: SUCCESS STEP */}
             {checkoutStep === 'success' && (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 animate-fade-in-up">
                     <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-inner">
