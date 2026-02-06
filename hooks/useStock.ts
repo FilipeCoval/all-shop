@@ -3,15 +3,22 @@ import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct, StockReservation, Order, OrderItem } from '../types';
 
-export const useStock = () => {
+export const useStock = (isAdmin: boolean) => {
   const [inventory, setInventory] = useState<InventoryProduct[]>([]);
   const [reservations, setReservations] = useState<StockReservation[]>([]);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasPermissionError, setHasPermissionError] = useState(false);
 
   useEffect(() => {
-    // 1. Escutar Inventário Físico
+    // Se o utilizador não for admin, não tenta aceder a dados privados.
+    if (!isAdmin) {
+      setLoading(false);
+      return () => {}; // Retorna uma função de limpeza vazia
+    }
+
+    setLoading(true);
+
+    // 1. Escutar Inventário Físico (Apenas Admin)
     const unsubInv = db.collection('products_inventory').onSnapshot(
       (snapshot) => {
         const items: InventoryProduct[] = [];
@@ -19,14 +26,13 @@ export const useStock = () => {
           items.push({ id: doc.id, ...doc.data() } as InventoryProduct);
         });
         setInventory(items);
-        setHasPermissionError(false);
       },
       (error) => {
-        if (error.code === 'permission-denied') setHasPermissionError(true);
+        console.error("Erro no listener de inventário (Admin):", error);
       }
     );
 
-    // 2. Escutar Reservas Temporárias em Carrinhos
+    // 2. Escutar Reservas Temporárias em Carrinhos (Apenas Admin)
     const unsubRes = db.collection('stock_reservations')
       .where('expiresAt', '>', Date.now())
       .onSnapshot((snapshot) => {
@@ -37,7 +43,7 @@ export const useStock = () => {
         setReservations(resList);
       });
 
-    // 3. Escutar Encomendas que ainda não foram abatidas manualmente no inventário
+    // 3. Escutar Encomendas Pendentes (Apenas Admin)
     const unsubOrders = db.collection('orders')
       .where('status', 'in', ['Processamento', 'Pago'])
       .onSnapshot((snapshot) => {
@@ -54,25 +60,26 @@ export const useStock = () => {
         unsubRes();
         unsubOrders();
     };
-  }, []);
+  }, [isAdmin]); // O efeito depende do estado de admin
 
   const getStockForProduct = (publicId: number, variantName?: string): number => {
-    if (hasPermissionError || loading) return 999;
+    // Se não for admin, não faz cálculo. A lógica principal está no App.tsx.
+    if (!isAdmin) return 0; 
+    
+    // Para admin, continua a usar a lógica de tempo real
+    if (loading) return 999; // Retorna 999 durante o carregamento para evitar bloquear vendas no admin
 
     const allBatchesForProduct = inventory.filter(p => p.publicProductId === publicId);
     if (allBatchesForProduct.length === 0) return 0;
     
-    // EDGE CASE FIX: Detecta se existe apenas um lote de stock e se esse lote não tem variante definida.
-    // Isto acontece quando o stock é adicionado para um produto com variantes, mas sem especificar qual.
     const hasOnlyGenericStockBatch = allBatchesForProduct.length === 1 && (!allBatchesForProduct[0].variant || allBatchesForProduct[0].variant.trim() === '');
 
     // A. Stock Físico
     const physicalStock = allBatchesForProduct
       .filter(p => {
-          if (!variantName) return true; // Para stock total, incluir todos os lotes
+          if (!variantName) return true;
           const itemVariant = (p.variant || '').trim().toLowerCase();
           const requestedVariant = variantName.trim().toLowerCase();
-          // Corresponde se a variante for igual, OU se houver apenas um lote genérico
           return itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '');
       })
       .reduce((acc, batch) => acc + Math.max(0, (batch.quantityBought || 0) - (batch.quantitySold || 0)), 0);
@@ -81,10 +88,9 @@ export const useStock = () => {
     const totalReservedInCarts = reservations
         .filter(r => r.productId === publicId)
         .filter(r => {
-            if (!variantName) return true; // Para stock total, subtrair todas as reservas
+            if (!variantName) return true;
             const itemVariant = (r.variantName || '').trim().toLowerCase();
             const requestedVariant = variantName.trim().toLowerCase();
-            // Subtrai se a variante for igual, OU se a reserva for genérica e o stock também for
             return itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '');
         })
         .reduce((acc, r) => acc + (r.quantity || 0), 0);
@@ -97,12 +103,11 @@ export const useStock = () => {
             if (typeof item === 'object' && item !== null) {
                 const orderItem = item as OrderItem;
                 if (orderItem.productId === publicId) {
-                    if (!variantName) { // Para stock total, subtrair todas as variantes
+                    if (!variantName) {
                         totalPendingInOrders += (orderItem.quantity || 1);
-                    } else { // Para stock específico
+                    } else {
                         const itemVariant = (orderItem.selectedVariant || '').trim().toLowerCase();
                         const requestedVariant = variantName.trim().toLowerCase();
-                         // Subtrai se a variante for igual, OU se o item da encomenda for genérico e o stock também for
                         if (itemVariant === requestedVariant || (hasOnlyGenericStockBatch && itemVariant === '')) {
                             totalPendingInOrders += (orderItem.quantity || 1);
                         }
