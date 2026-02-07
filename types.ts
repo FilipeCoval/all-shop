@@ -150,6 +150,7 @@ export interface StatusHistory {
     status: Order['status'];
     date: string;
     notes?: string;
+    aiSummary?: string;
 }
 
 export type ProductStatus = 'IN_STOCK' | 'PARTIAL' | 'SOLD';
