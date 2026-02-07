@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -291,7 +290,9 @@ const App: React.FC = () => {
         return;
     }
 
-    if (currentAvailable <= 2 && !isAdmin) {
+    // ALTERAÇÃO PARA DEBUG: Aumentado limite para 1000 para forçar a criação da reserva e testar o timer
+    if (currentAvailable <= 1000 && !isAdmin) {
+        console.log("Tentando criar reserva para:", product.name);
         try {
             await db.collection('stock_reservations').add({
                 productId: product.id,
@@ -300,11 +301,18 @@ const App: React.FC = () => {
                 sessionId,
                 expiresAt: Date.now() + (15 * 60 * 1000)
             });
-        } catch (e) { console.debug("Erro reserva temporária:", e); }
+            console.log("Reserva criada com sucesso na coleção 'stock_reservations'");
+        } catch (e) { 
+            console.error("Erro CRÍTICO ao criar reserva:", e); 
+        }
+    } else {
+        if(isAdmin) console.log("Reserva ignorada: É Admin.");
+        else console.log("Reserva ignorada: Stock > 1000 (" + currentAvailable + ")");
     }
 
     const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
-    const reservedUntil = (currentAvailable <= 2 && !isAdmin) ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
+    // Atualiza o estado local para refletir a reserva (Timer)
+    const reservedUntil = (currentAvailable <= 1000 && !isAdmin) ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === cartItemId);
@@ -318,8 +326,6 @@ const App: React.FC = () => {
                 return { 
                     ...item, 
                     quantity: item.quantity + 1,
-                    // CORREÇÃO: Garante que o temporizador é adicionado a um item existente
-                    // que entra em estado de stock baixo.
                     reservedUntil: item.reservedUntil || reservedUntil 
                 };
             }
@@ -385,7 +391,8 @@ const App: React.FC = () => {
       }
       
       let reservedUntil = itemToUpdate.reservedUntil; // Preserva a reserva existente por defeito
-      const shouldStartReservation = currentStock <= 2 && !isAdmin && !itemToUpdate.reservedUntil && delta > 0;
+      // Também atualizado para 1000 para consistência
+      const shouldStartReservation = currentStock <= 1000 && !isAdmin && !itemToUpdate.reservedUntil && delta > 0;
 
       if (shouldStartReservation) {
           reservedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
