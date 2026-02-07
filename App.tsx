@@ -21,7 +21,7 @@ import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, Point
 import { auth, db, firebase } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
-import { useStockReservations } from './hooks/useStockReservations'; // NOVO
+import { useStockReservations } from './hooks/useStockReservations';
 import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
@@ -57,7 +57,7 @@ const App: React.FC = () => {
   // --- LÓGICA DE STOCK CORRIGIDA ---
   const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
-  const { reservations } = useStockReservations(); // NOVO: Obtém reservas ativas
+  const { reservations } = useStockReservations(); // Obtém reservas ativas
 
   const getStockForProduct = (productId: number, variantName?: string): number => {
     // Admin tem visão total e em tempo real, incluindo encomendas pendentes
@@ -313,7 +313,18 @@ const App: React.FC = () => {
             alert(`Apenas ${currentAvailable} unidades disponíveis.`);
             return prev;
         }
-        return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map(item => {
+            if (item.cartItemId === cartItemId) {
+                return { 
+                    ...item, 
+                    quantity: item.quantity + 1,
+                    // CORREÇÃO: Garante que o temporizador é adicionado a um item existente
+                    // que entra em estado de stock baixo.
+                    reservedUntil: item.reservedUntil || reservedUntil 
+                };
+            }
+            return item;
+        });
       }
       return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
     });
@@ -342,20 +353,59 @@ const App: React.FC = () => {
   };
 
   const updateQuantity = (cartItemId: string, delta: number) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.cartItemId === cartItemId) {
-        const newQty = item.quantity + delta;
-        if (newQty < 1) return item;
+    setCartItems(prev => {
+      const itemToUpdate = prev.find(i => i.cartItemId === cartItemId);
+      if (!itemToUpdate) return prev;
 
-        const currentStock = getStockForProduct(item.id, item.selectedVariant);
-        if (newQty > currentStock) { 
-            alert(`Máximo em stock: ${currentStock}`); 
-            return item; 
+      const newQty = itemToUpdate.quantity + delta;
+
+      // Se a quantidade baixar para zero, remove o item
+      if (newQty < 1) {
+        // Se o item tinha uma reserva, limpa da BD
+        if (itemToUpdate.reservedUntil) {
+          db.collection('stock_reservations')
+            .where('sessionId', '==', sessionId)
+            .where('productId', '==', itemToUpdate.id)
+            .get()
+            .then(snap => {
+              if (!snap.empty) {
+                const batch = db.batch();
+                snap.forEach(doc => batch.delete(doc.ref));
+                batch.commit();
+              }
+            }).catch(e => console.debug("Error clearing reservation on quantity update", e));
         }
-        return { ...item, quantity: newQty };
+        return prev.filter(i => i.cartItemId !== cartItemId);
       }
-      return item;
-    }));
+
+      const currentStock = getStockForProduct(itemToUpdate.id, itemToUpdate.selectedVariant);
+      if (newQty > currentStock) {
+        alert(`Máximo em stock: ${currentStock}`);
+        return prev;
+      }
+      
+      let reservedUntil = itemToUpdate.reservedUntil; // Preserva a reserva existente por defeito
+      const shouldStartReservation = currentStock <= 2 && !isAdmin && !itemToUpdate.reservedUntil && delta > 0;
+
+      if (shouldStartReservation) {
+          reservedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          try {
+              db.collection('stock_reservations').add({
+                  productId: itemToUpdate.id,
+                  variantName: itemToUpdate.selectedVariant || null,
+                  quantity: 1,
+                  sessionId,
+                  expiresAt: Date.now() + (15 * 60 * 1000)
+              });
+          } catch(e) { console.debug("Erro reserva temporária em updateQty:", e); }
+      }
+
+      return prev.map(item =>
+        item.cartItemId === cartItemId
+          ? { ...item, quantity: newQty, reservedUntil }
+          : item
+      );
+    });
   };
 
   const handleUpdateUser = (updatedData: Partial<User>) => {
