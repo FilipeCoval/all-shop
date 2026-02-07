@@ -9,14 +9,14 @@ let chatSession: Chat | null = null;
 // --- DEFINIÇÃO DA FERRAMENTA (TOOL) ---
 const createTicketTool: FunctionDeclaration = {
     name: "createSupportTicket",
-    description: "Cria um ticket de suporte oficial quando o cliente quer acionar a garantia, fazer uma devolução ou reportar um problema técnico grave.",
+    description: "Cria um ticket de suporte oficial quando o cliente quer acionar a garantia, fazer uma devolução ou reportar um problema técnico grave que não conseguiu resolver.",
     parameters: {
         type: Type.OBJECT,
         properties: {
             customerEmail: { type: Type.STRING, description: "O email do cliente (perguntar se não souber)." },
             customerName: { type: Type.STRING, description: "O nome do cliente." },
             subject: { type: Type.STRING, description: "Um título curto para o problema (ex: 'TV Box não liga')." },
-            description: { type: Type.STRING, description: "Um resumo detalhado e técnico do problema relatado pelo cliente." },
+            description: { type: Type.STRING, description: "Um resumo detalhado e técnico do problema relatado pelo cliente. Inclua passos já tentados." },
             category: { type: Type.STRING, description: "Categoria do problema.", enum: ["Garantia", "Devolução", "Dúvida Técnica", "Outros"] },
             orderId: { type: Type.STRING, description: "O número da encomenda (opcional, mas tentar obter)." },
             priority: { type: Type.STRING, description: "Prioridade baseada na urgência ou gravidade.", enum: ["Baixa", "Média", "Alta"] },
@@ -36,17 +36,16 @@ const getSystemInstruction = (products: Product[]): string => {
 Atue como o **Especialista de Tecnologia e Suporte** da loja **${STORE_NAME}**.
 Sua missão é dupla:
 1. VENDER: Converter curiosos em clientes, explicando as diferenças técnicas.
-2. SUPORTE: Ajudar clientes com problemas técnicos.
+2. SUPORTE: Ajudar clientes com problemas técnicos (Pós-venda).
 
-**REGRAS DE SUPORTE (Garantias/Devoluções):**
-- Se o cliente reportar um defeito ou quiser devolver, **NÃO mande enviar email**.
-- Faça uma triagem técnica primeiro (ex: "Já tentou reiniciar?", "A luz acende?").
-- Se o problema persistir, diga que vai abrir um processo de suporte técnico interno.
-- Peça os detalhes necessários (Nome, Email, ID da Encomenda se tiverem, descrição do erro).
-- **USE A FERRAMENTA 'createSupportTicket'** para registar o pedido no sistema.
-- Após criar o ticket, informe o cliente que a equipa técnica vai analisar e entrar em contacto brevemente.
+**REGRAS DE SUPORTE (Garantias/Devoluções/Avarias):**
+1. **Triagem Primeiro:** Se o cliente disser "não funciona", NÃO crie ticket logo. Pergunte: "O que acontece exatamente?", "Acende alguma luz?", "Já reiniciou?". Tente resolver.
+2. **Criação de Ticket:** Se o problema persistir após as suas dicas, diga: "Vou abrir um processo de suporte técnico para a nossa equipa analisar.".
+3. **Dados:** Peça o Email e Nome (se ainda não tiver). O ID da encomenda é útil mas opcional.
+4. **Ação:** Use a ferramenta **'createSupportTicket'** para registar o problema.
+5. **Confirmação:** Após a ferramenta confirmar "Ticket criado", diga ao cliente o ID do ticket e que será contactado brevemente.
 
-Responda sempre em Português de Portugal. Use emojis para ser amigável.
+Responda sempre em Português de Portugal. Seja empático e profissional.
 
 **📦 CATÁLOGO ATUALIZADO (Use apenas estes dados):**
 ${productsList}
@@ -71,10 +70,10 @@ async function executeCreateTicket(args: any): Promise<string> {
         };
 
         await db.collection('support_tickets').doc(newTicket.id).set(newTicket);
-        return `Ticket criado com sucesso! ID: ${newTicket.id}. Informe o cliente.`;
+        return `Ticket criado com sucesso! ID: ${newTicket.id}. Informe o cliente que a equipa vai analisar.`;
     } catch (error) {
         console.error("Erro ao criar ticket via Tool:", error);
-        return "Erro interno ao criar ticket. Peça ao cliente para tentar mais tarde.";
+        return "Erro interno ao criar ticket. Peça ao cliente para tentar mais tarde ou enviar email.";
     }
 }
 
@@ -85,7 +84,7 @@ export const initializeChat = async (products: Product[]): Promise<Chat> => {
     model: 'gemini-2.5-flash', // Modelo mais rápido e capaz de tool use
     config: {
       systemInstruction: getSystemInstruction(products),
-      temperature: 0.3,
+      temperature: 0.3, // Temperatura baixa para ser mais focado no suporte
       tools: tools
     },
   });
@@ -106,28 +105,35 @@ export const sendMessageToGemini = async (message: string, currentProducts: Prod
     // LOOP para lidar com chamadas de função (Tools)
     // O modelo pode chamar a função, nós executamos, e devolvemos o resultado
     // para ele gerar a resposta final ao utilizador.
+    // Pode haver múltiplas chamadas em sequência, por isso usamos while.
     while (response.functionCalls && response.functionCalls.length > 0) {
-        const call = response.functionCalls[0];
+        const call = response.functionCalls[0]; // Gemini geralmente faz uma call de cada vez neste contexto
+        
         if (call.name === 'createSupportTicket') {
+            // Executa a lógica real (gravar na DB)
             const toolResult = await executeCreateTicket(call.args);
             
-            // Enviar o resultado da função de volta para o modelo
-            response = await chatSession.sendToolResponse({
-                functionResponses: [
-                    {
+            // Enviar o resultado da função de volta para o modelo para ele formular a resposta final
+            // Usamos sendMessage com o functionResponse porque sendToolResponse não existe em Chat
+            response = await chatSession.sendMessage({
+                message: [{
+                    functionResponse: {
                         id: call.id,
                         name: call.name,
                         response: { result: toolResult }
                     }
-                ]
+                }]
             });
+        } else {
+            // Se for outra ferramenta desconhecida, paramos para evitar loop infinito
+            break;
         }
     }
 
     return response.text || "Pode repetir?";
   } catch (error) {
     console.error(error);
-    // Tenta recuperar sessão
+    // Tenta recuperar sessão se houver erro
     chatSession = null;
     return "Tive um pequeno lapso. Pode repetir a pergunta?";
   }
@@ -183,7 +189,6 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
     
     try {
         // Usar gemini-3-flash-preview que é multimodal (vê imagens e texto)
-        // O anterior 'flash-image' pode estar restrito a geração de imagem.
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
             contents: {
@@ -208,7 +213,6 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
         return text.replace(/[^a-zA-Z0-9\-\/]/g, '');
     } catch (error) {
         console.error("Gemini OCR Error:", error);
-        // Lança o erro para que o Dashboard o possa mostrar no alert
         throw error;
     }
 };
