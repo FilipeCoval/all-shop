@@ -15,7 +15,7 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
-import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL } from './constants';
+import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db, firebase } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
@@ -307,12 +307,22 @@ const App: React.FC = () => {
 
       try {
           // 1. FRESH FETCH: Obter dados reais do produto AGORA (ignora cache local)
-          // CORREÇÃO: Usar 'where' para encontrar o produto pelo campo ID numérico,
-          // pois o ID do documento pode não ser igual ao productId (importação vs criação manual)
           const productQuery = await db.collection('products_public').where('id', '==', productId).limit(1).get();
           
           if (productQuery.empty) {
+              // FALLBACK DE SEGURANÇA:
+              // Se o produto não estiver na DB, verificamos se é um dos produtos iniciais (demonstração).
+              // Se for, permitimos a adição para testes. Caso contrário, bloqueamos.
+              const isDemoProduct = INITIAL_PRODUCTS.some(p => p.id === productId);
+              
+              if (isDemoProduct) {
+                  console.warn("Produto de demonstração (não sincronizado) adicionado ao carrinho.");
+                  // Para produtos demo, simulamos sucesso sem gravar reserva na DB (para não gerar erro de permissão ou documento órfão)
+                  return true;
+              }
+
               console.error("Produto não encontrado na base de dados pública:", productId);
+              alert("Erro: Este produto parece não estar sincronizado com o sistema. Por favor, tente recarregar a página ou contacte o suporte.");
               return false;
           }
 
@@ -332,19 +342,12 @@ const App: React.FC = () => {
 
           activeReservationsSnap.forEach(doc => {
               const data = doc.data();
-              // IMPORTANTE: Se o stock é partilhado (uma única contagem total), 
-              // NÃO podemos filtrar por variante. Todas as variantes consomem do mesmo stock total.
-              // Apenas diferenciamos se encontrarmos a "minha" reserva.
-
               // CRÍTICO: Identificar se a reserva é "MINHA" (Sessão Atual OU Mesmo User ID)
               const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
 
-              // Se a reserva é minha E é para a variante/item exato que estou a atualizar, guardo a ref.
-              // Se for minha mas de outra variante, conta como "ocupado por mim" (ainda consome stock).
               if (isMine && data.variantName === (variantName || null)) {
                   myCurrentResDoc = doc; 
               } else {
-                  // Qualquer outra reserva (de outros users ou minhas noutras variantes) consome stock global
                   reservedByOthers += data.quantity; 
               }
           });
@@ -352,10 +355,8 @@ const App: React.FC = () => {
           // 4. VERIFICAÇÃO CRÍTICA
           const availableForMe = totalStock - reservedByOthers;
           
-          // Se eu quero 2, mas só há 1 livre (excluindo o que já é meu), falha.
           if (newQuantity > availableForMe) {
               console.warn(`Overselling preventido. Stock Total: ${totalStock}, Ocupado Outros: ${reservedByOthers}, Pedido: ${newQuantity}, Disp: ${availableForMe}`);
-              // Mensagem mais amigável para o utilizador
               if (availableForMe <= 0) {
                   alert("Lamentamos, mas este artigo acabou de esgotar ou está reservado por outro cliente.");
               } else {
@@ -377,7 +378,6 @@ const App: React.FC = () => {
                   sessionId,
                   expiresAt: Date.now() + (15 * 60 * 1000)
               };
-              // Adiciona UserID para recuperar a sessão em outros dispositivos
               if (user?.uid) resData.userId = user.uid;
 
               if (myCurrentResDoc) {
@@ -394,6 +394,7 @@ const App: React.FC = () => {
       } catch (e) {
           console.error("Erro crítico na transação de reserva:", e);
           // Em caso de erro de rede, assumimos falha para não vender sem stock
+          alert("Ocorreu um erro de comunicação com o servidor. Verifique a sua internet.");
           return false;
       }
   };
