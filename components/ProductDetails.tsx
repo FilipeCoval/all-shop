@@ -19,10 +19,11 @@ interface ProductDetailsProps {
   getStock: (productId: number, variant?: string) => number;
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
+  isProcessing?: boolean;
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
-  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist
+  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist, isProcessing = false
 }) => {
   const [selectedImage, setSelectedImage] = useState<string>(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
@@ -79,7 +80,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleAddToCart = () => {
-      if (isUnavailable || (hasVariants && !isVariantSelected)) return;
+      if (isUnavailable || (hasVariants && !isVariantSelected) || isProcessing) return;
       if (selectedVariant) onAddToCart(product, selectedVariant);
       else onAddToCart(product);
   };
@@ -266,19 +267,28 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
            <div className="flex gap-4 mb-8">
                <button 
                 onClick={handleAddToCart} 
-                disabled={isUnavailable || (hasVariants && !isVariantSelected)} 
+                disabled={isUnavailable || (hasVariants && !isVariantSelected) || isProcessing} 
                 className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 
-                    ${isUnavailable || (hasVariants && !isVariantSelected)
+                    ${isUnavailable || (hasVariants && !isVariantSelected) || isProcessing
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                         : 'bg-primary hover:bg-blue-600 text-white'
                     }`}
                >
-                   <ShoppingCart size={24} /> 
-                   {isUnavailable 
-                       ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') 
-                       : (hasVariants && !isVariantSelected) 
-                           ? 'Selecione uma opção'
-                           : 'Comprar Agora'}
+                   {isProcessing ? (
+                       <>
+                           <Loader2 size={24} className="animate-spin" />
+                           A processar...
+                       </>
+                   ) : (
+                       <>
+                           <ShoppingCart size={24} /> 
+                           {isUnavailable 
+                               ? (product.comingSoon ? 'Brevemente Disponível' : 'Indisponível') 
+                               : (hasVariants && !isVariantSelected) 
+                                   ? 'Selecione uma opção'
+                                   : 'Comprar Agora'}
+                       </>
+                   )}
                </button>
            </div>
            
