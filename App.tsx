@@ -320,16 +320,20 @@ const App: React.FC = () => {
 
           activeReservationsSnap.forEach(doc => {
               const data = doc.data();
-              // Se for variante, filtrar apenas as reservas da mesma variante
-              if (variantName && data.variantName !== variantName) return;
+              // IMPORTANTE: Se o stock é partilhado (uma única contagem total), 
+              // NÃO podemos filtrar por variante. Todas as variantes consomem do mesmo stock total.
+              // Apenas diferenciamos se encontrarmos a "minha" reserva.
 
               // CRÍTICO: Identificar se a reserva é "MINHA" (Sessão Atual OU Mesmo User ID)
               const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
 
-              if (isMine) {
-                  myCurrentResDoc = doc; // Encontrei a minha reserva atual (ou sessão fantasma)
+              // Se a reserva é minha E é para a variante/item exato que estou a atualizar, guardo a ref.
+              // Se for minha mas de outra variante, conta como "ocupado por mim" (ainda consome stock).
+              if (isMine && data.variantName === (variantName || null)) {
+                  myCurrentResDoc = doc; 
               } else {
-                  reservedByOthers += data.quantity; // Reserva de outra pessoa real
+                  // Qualquer outra reserva (de outros users ou minhas noutras variantes) consome stock global
+                  reservedByOthers += data.quantity; 
               }
           });
 
@@ -338,7 +342,8 @@ const App: React.FC = () => {
           
           // Se eu quero 2, mas só há 1 livre (excluindo o que já é meu), falha.
           if (newQuantity > availableForMe) {
-              console.warn(`Overselling preventido. Stock: ${totalStock}, Outros: ${reservedByOthers}, Pedido: ${newQuantity}`);
+              console.warn(`Overselling preventido. Stock Total: ${totalStock}, Ocupado Outros: ${reservedByOthers}, Pedido: ${newQuantity}, Disp: ${availableForMe}`);
+              alert(`Stock insuficiente! Restam apenas ${availableForMe} unidades disponíveis.`);
               return false;
           }
 
@@ -393,7 +398,7 @@ const App: React.FC = () => {
     setProcessingProductIds(prev => prev.filter(id => id !== product.id));
 
     if (!success) {
-        alert("Não foi possível adicionar. O stock pode ter acabado ou já estar reservado.");
+        // O alert já é mostrado dentro do updateReservationInFirebase com detalhes
         return;
     }
 
@@ -447,7 +452,7 @@ const App: React.FC = () => {
     const success = await updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
 
     if (!success) {
-        alert("Stock insuficiente para adicionar mais unidades.");
+        // O alert é mostrado no updateReservationInFirebase
         return;
     }
 
