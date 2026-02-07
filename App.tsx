@@ -46,7 +46,7 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
-  const [isProcessingCart, setIsProcessingCart] = useState(false); // Novo estado para bloquear UI durante verificação
+  const [processingProductIds, setProcessingProductIds] = useState<number[]>([]); // Loading local por produto
   
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
@@ -86,8 +86,13 @@ const App: React.FC = () => {
   };
 
   const getMyReservedQuantity = (productId: number, variantName?: string): number => {
+      // Verifica reservas da sessão OU do utilizador logado
       return reservations
-        .filter(r => r.sessionId === sessionId && r.productId === productId && (!variantName || r.variantName === variantName))
+        .filter(r => 
+            (r.sessionId === sessionId || (user?.uid && r['userId'] === user.uid)) && 
+            r.productId === productId && 
+            (!variantName || r.variantName === variantName)
+        )
         .reduce((sum, r) => sum + r.quantity, 0);
   };
 
@@ -291,9 +296,11 @@ const App: React.FC = () => {
   const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number): Promise<boolean> => {
       if (isAdmin) return true; // Admin não reserva, passa sempre.
 
+      // DELAY INTENCIONAL (200ms) para estabilização de leitura/escrita e evitar condições de corrida em cliques rápidos
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       try {
           // 1. FRESH FETCH: Obter dados reais do produto AGORA (ignora cache local)
-          // Isso garante que sabemos o stock total verdadeiro.
           const productRef = db.collection('products_public').doc(String(productId));
           const productDoc = await productRef.get();
           
@@ -315,13 +322,14 @@ const App: React.FC = () => {
               const data = doc.data();
               // Se for variante, filtrar apenas as reservas da mesma variante
               if (variantName && data.variantName !== variantName) return;
-              // Se não for variante, ignorar reservas que tenham variante (se o produto principal partilha stock)
-              // Assumimos aqui que stock é global ao ID do produto.
 
-              if (data.sessionId === sessionId) {
-                  myCurrentResDoc = doc; // Encontrei a minha reserva atual
+              // CRÍTICO: Identificar se a reserva é "MINHA" (Sessão Atual OU Mesmo User ID)
+              const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
+
+              if (isMine) {
+                  myCurrentResDoc = doc; // Encontrei a minha reserva atual (ou sessão fantasma)
               } else {
-                  reservedByOthers += data.quantity; // Reserva de outra pessoa
+                  reservedByOthers += data.quantity; // Reserva de outra pessoa real
               }
           });
 
@@ -330,7 +338,7 @@ const App: React.FC = () => {
           
           // Se eu quero 2, mas só há 1 livre (excluindo o que já é meu), falha.
           if (newQuantity > availableForMe) {
-              console.warn(`Tentativa de overselling bloqueada. Stock Total: ${totalStock}, Reservado Outros: ${reservedByOthers}, Pedido: ${newQuantity}`);
+              console.warn(`Overselling preventido. Stock: ${totalStock}, Outros: ${reservedByOthers}, Pedido: ${newQuantity}`);
               return false;
           }
 
@@ -340,20 +348,21 @@ const App: React.FC = () => {
           if (newQuantity <= 0) {
               if (myCurrentResDoc) batch.delete(myCurrentResDoc.ref);
           } else {
+              const resData: any = {
+                  productId,
+                  variantName: variantName || null,
+                  quantity: newQuantity,
+                  sessionId,
+                  expiresAt: Date.now() + (15 * 60 * 1000)
+              };
+              // Adiciona UserID para recuperar a sessão em outros dispositivos
+              if (user?.uid) resData.userId = user.uid;
+
               if (myCurrentResDoc) {
-                  batch.update(myCurrentResDoc.ref, { 
-                      quantity: newQuantity,
-                      expiresAt: Date.now() + (15 * 60 * 1000)
-                  });
+                  batch.update(myCurrentResDoc.ref, resData);
               } else {
                   const newRef = db.collection('stock_reservations').doc();
-                  batch.set(newRef, {
-                      productId,
-                      variantName: variantName || null,
-                      quantity: newQuantity,
-                      sessionId,
-                      expiresAt: Date.now() + (15 * 60 * 1000)
-                  });
+                  batch.set(newRef, resData);
               }
           }
 
@@ -362,12 +371,16 @@ const App: React.FC = () => {
 
       } catch (e) {
           console.error("Erro crítico na transação de reserva:", e);
+          // Em caso de erro de rede, assumimos falha para não vender sem stock
           return false;
       }
   };
 
   const addToCart = async (product: Product, variant?: ProductVariant) => {
-    setIsProcessingCart(true); // Bloqueia UI ou mostra spinner
+    // Evita cliques múltiplos no mesmo produto
+    if (processingProductIds.includes(product.id)) return;
+
+    setProcessingProductIds(prev => [...prev, product.id]);
     
     // Calcula nova quantidade desejada
     const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
@@ -377,11 +390,10 @@ const App: React.FC = () => {
     // Tenta reservar no servidor PRIMEIRO
     const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
 
-    setIsProcessingCart(false);
+    setProcessingProductIds(prev => prev.filter(id => id !== product.id));
 
     if (!success) {
-        alert("Desculpe, este artigo acabou de ser reservado por outro cliente ou esgotou.");
-        // Opcional: Forçar refresh dos produtos
+        alert("Não foi possível adicionar. O stock pode ter acabado ou já estar reservado.");
         return;
     }
 
@@ -431,12 +443,11 @@ const App: React.FC = () => {
     }
 
     // Se for para AUMENTAR, precisamos de verificar stock rigorosamente
-    setIsProcessingCart(true);
+    // Aqui usamos um loading global simples ou apenas esperamos
     const success = await updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
-    setIsProcessingCart(false);
 
     if (!success) {
-        alert("Stock insuficiente para adicionar mais unidades deste produto.");
+        alert("Stock insuficiente para adicionar mais unidades.");
         return;
     }
 
@@ -535,7 +546,8 @@ const App: React.FC = () => {
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = dbProducts.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} />;
+        // FIX: Passando processingProductIds para ProductDetails
+        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} />;
     }
     switch (route) {
         case '#about': return <About />;
@@ -544,7 +556,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
-        default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />;
+        default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} processingProductIds={processingProductIds} />;
     }
   };
 
@@ -558,15 +570,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50 ${isProcessingCart ? 'cursor-wait' : ''}`}>
-      {isProcessingCart && (
-          <div className="fixed inset-0 z-[60] bg-black/10 flex items-center justify-center backdrop-blur-[1px]">
-              <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3">
-                  <Loader2 className="animate-spin text-primary" />
-                  <span className="font-bold text-sm">A verificar stock...</span>
-              </div>
-          </div>
-      )}
+    <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
       <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} user={user} onOpenLogin={() => setIsLoginOpen(true)} onLogout={handleLogout} searchTerm={searchTerm} onSearchChange={handleSearchChange} onResetHome={handleResetHome} />
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
