@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { 
@@ -542,6 +541,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [foundDuplicate, setFoundDuplicate] = useState<UserType | null>(null);
   const [duplicateOrdersCount, setDuplicateOrdersCount] = useState(0);
   const [duplicateOrdersTotal, setDuplicateOrdersTotal] = useState(0);
+  const [isSyncingStock, setIsSyncingStock] = useState(false); // NOVO STATE
 
   const [formData, setFormData] = useState({
     name: '', description: '', category: '', publicProductId: '' as string, variant: '',
@@ -636,7 +636,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           const loadedProducts: Product[] = [];
           snap.forEach(doc => {
               const id = parseInt(doc.id, 10);
-              if (!isNaN(id)) loadedProducts.push({ ...doc.data(), id } as Product);
+              const data = doc.data();
+              if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product);
           });
           setPublicProductsList(loadedProducts);
       });
@@ -1144,6 +1145,46 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
 
+  // --- NOVA FUNÇÃO DE SINCRONIZAÇÃO ---
+  const handleSyncPublicStock = async () => {
+      if(!window.confirm("Isto irá recalcular o stock de todos os produtos públicos com base no inventário. Continuar?")) return;
+      setIsSyncingStock(true);
+      try {
+          const updates = new Map<number, number>();
+          // Inicializa todos os produtos públicos com 0
+          publicProductsList.forEach(p => updates.set(p.id, 0));
+
+          // Calcula stock real
+          products.forEach(p => {
+              if(p.publicProductId) {
+                  const current = updates.get(p.publicProductId) || 0;
+                  const stock = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
+                  updates.set(p.publicProductId, current + stock);
+              }
+          });
+
+          const batch = db.batch();
+          let count = 0;
+          
+          for (const [pubId, stock] of updates.entries()) {
+              const q = await db.collection('products_public').where('id', '==', Number(pubId)).get();
+              if(!q.empty) {
+                  q.forEach(doc => {
+                      batch.update(doc.ref, { stock });
+                      count++;
+                  });
+              }
+          }
+          await batch.commit();
+          alert(`Sincronização concluída! ${count} produtos atualizados.`);
+      } catch(e) {
+          console.error(e);
+          alert("Erro ao sincronizar stock.");
+      } finally {
+          setIsSyncingStock(false);
+      }
+  };
+
   const handleProductSubmit = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante.");
@@ -1227,6 +1268,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     
     batch.update(invProductRef, invUpdatePayload);
     
+    // Atualiza stock público também
+    if (selectedProductForSale.publicProductId) {
+        const pubQuery = await db.collection('products_public').where('id', '==', selectedProductForSale.publicProductId).get();
+        if (!pubQuery.empty) pubQuery.forEach(doc => batch.update(doc.ref, { stock: firebase.firestore.FieldValue.increment(-qty) }));
+    }
+
     const orderRef = db.collection('orders').doc(linkedOrderId);
     const updatedItems = getSafeItems(linkedOrder.items).map(item => {
         if (typeof item === 'object' && item.productId === selectedProductForSale.publicProductId && (!item.selectedVariant || item.selectedVariant === selectedProductForSale.variant)) {
@@ -1236,7 +1283,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     });
     batch.update(orderRef, { items: updatedItems, status: 'Enviado' });
     
-    try { await batch.commit(); setIsSaleModalOpen(false); alert("Baixa registada!"); } catch (err) { alert("Erro ao registar."); }
+    try { await batch.commit(); setIsSaleModalOpen(false); alert("Baixa registada e Stock Público atualizado!"); } catch (err) { alert("Erro ao registar."); }
   };
 
   const handleDeleteSale = async (saleId: string) => { if (!editingId) return; const product = products.find(p => p.id === editingId); if (!product || !product.salesHistory) return; const saleToDelete = product.salesHistory.find(s => s.id === saleId); if (!saleToDelete) return; if (!window.confirm(`Anular venda?`)) return; const newHistory = product.salesHistory.filter(s => s.id !== saleId); const newQuantitySold = product.quantitySold - saleToDelete.quantity; const totalRevenue = newHistory.reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const totalUnitsSold = newHistory.reduce((acc, s) => acc + s.quantity, 0); const newAverageSalePrice = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0; let newStatus: ProductStatus = 'IN_STOCK'; if (newQuantitySold >= product.quantityBought && product.quantityBought > 0) newStatus = 'SOLD'; else if (newQuantitySold > 0) newStatus = 'PARTIAL'; try { await updateProduct(product.id, { salesHistory: newHistory, quantitySold: Math.max(0, newQuantitySold), salePrice: newAverageSalePrice, status: newStatus }); alert("Venda anulada!"); } catch (err) { alert("Erro ao anular."); } };
@@ -1466,6 +1513,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in"><div className="flex items-center gap-3 mb-4"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div><div><h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3><p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p></div></div><div className="flex flex-col sm:flex-row gap-2"><input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles." className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onKeyDown={(e) => e.key === 'Enter' && handleAskAi()} /><button onClick={handleAskAi} disabled={isAiLoading || !aiQuery.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50">{isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}</button></div>{aiResponse && <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">{aiResponse}</div>}</div>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex gap-4 text-xs font-medium text-gray-500"><span>Total: {products.length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-green-600">Stock: {products.filter(p => p.status !== 'SOLD').length}</span><span className="w-px h-4 bg-gray-300"></span><span className="text-red-600">Esgotados: {products.filter(p => p.status === 'SOLD').length}</span></div><div className="p-4 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-center gap-4"><div className="flex gap-2 w-full lg:w-auto"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Estados</option><option value="IN_STOCK">Em Stock</option><option value="SOLD">Esgotado</option></select><select value={cashbackFilter} onChange={(e) => setCashbackFilter(e.target.value as any)} className="py-2 px-3 border border-gray-300 rounded-lg text-sm bg-white"><option value="ALL">Todos os Cashbacks</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div className="flex gap-2 w-full lg:w-auto"><div className="relative flex-1"><input type="text" placeholder="Pesquisar ou escanear..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
+            
+            <button onClick={handleSyncPublicStock} disabled={isSyncingStock} className="bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1" title="Sincronizar Stock da Loja">{isSyncingStock ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}</button>
             <button onClick={() => { setScannerMode('search'); setIsScannerOpen(true); }} className="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-900 transition-colors" title="Escanear Código de Barras"><Camera size={18} /></button>
             <button onClick={() => setIsCalculatorOpen(true)} className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1" title="Calculadora de Lucro"><BrainCircuit size={18} /></button>
             <button onClick={handleImportProducts} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar e Corrigir Produtos">{isImporting ? '...' : <UploadCloud size={18} />}</button>
