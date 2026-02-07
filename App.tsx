@@ -46,6 +46,7 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [route, setRoute] = useState(window.location.hash || '#/');
+  const [isProcessingCart, setIsProcessingCart] = useState(false); // Novo estado para bloquear UI durante verificação
   
   const isAdmin = useMemo(() => {
     if (!user || !user.email) return false;
@@ -283,81 +284,112 @@ const App: React.FC = () => {
     }
   };
 
-  const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number) => {
-      if (isAdmin) return; // Admin não reserva
-      try {
-          const snapshot = await db.collection('stock_reservations')
-              .where('sessionId', '==', sessionId)
-              .where('productId', '==', productId)
-              .get();
-          
-          let docFound = false;
-          const batch = db.batch();
+  /**
+   * VERIFICAÇÃO ATÓMICA E ROBUSTA DE STOCK
+   * Retorna TRUE se conseguiu reservar, FALSE se falhou.
+   */
+  const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number): Promise<boolean> => {
+      if (isAdmin) return true; // Admin não reserva, passa sempre.
 
-          snapshot.docs.forEach(doc => {
+      try {
+          // 1. FRESH FETCH: Obter dados reais do produto AGORA (ignora cache local)
+          // Isso garante que sabemos o stock total verdadeiro.
+          const productRef = db.collection('products_public').doc(String(productId));
+          const productDoc = await productRef.get();
+          
+          if (!productDoc.exists) return false;
+          const productData = productDoc.data() as Product;
+          const totalStock = productData.stock || 0;
+
+          // 2. FRESH FETCH: Obter TODAS as reservas ativas AGORA
+          const activeReservationsSnap = await db.collection('stock_reservations')
+              .where('productId', '==', productId)
+              .where('expiresAt', '>', Date.now())
+              .get();
+
+          // 3. CALCULAR disponibilidade real
+          let reservedByOthers = 0;
+          let myCurrentResDoc: any = null;
+
+          activeReservationsSnap.forEach(doc => {
               const data = doc.data();
-              if (data.variantName === (variantName || null)) {
-                  docFound = true;
-                  if (newQuantity <= 0) {
-                      batch.delete(doc.ref);
-                  } else {
-                      batch.update(doc.ref, { 
-                          quantity: newQuantity,
-                          expiresAt: Date.now() + (15 * 60 * 1000) // Renova tempo
-                      });
-                  }
+              // Se for variante, filtrar apenas as reservas da mesma variante
+              if (variantName && data.variantName !== variantName) return;
+              // Se não for variante, ignorar reservas que tenham variante (se o produto principal partilha stock)
+              // Assumimos aqui que stock é global ao ID do produto.
+
+              if (data.sessionId === sessionId) {
+                  myCurrentResDoc = doc; // Encontrei a minha reserva atual
+              } else {
+                  reservedByOthers += data.quantity; // Reserva de outra pessoa
               }
           });
 
-          if (!docFound && newQuantity > 0) {
-              const newRef = db.collection('stock_reservations').doc();
-              batch.set(newRef, {
-                  productId,
-                  variantName: variantName || null,
-                  quantity: newQuantity,
-                  sessionId,
-                  expiresAt: Date.now() + (15 * 60 * 1000)
-              });
+          // 4. VERIFICAÇÃO CRÍTICA
+          const availableForMe = totalStock - reservedByOthers;
+          
+          // Se eu quero 2, mas só há 1 livre (excluindo o que já é meu), falha.
+          if (newQuantity > availableForMe) {
+              console.warn(`Tentativa de overselling bloqueada. Stock Total: ${totalStock}, Reservado Outros: ${reservedByOthers}, Pedido: ${newQuantity}`);
+              return false;
+          }
+
+          // 5. ATUALIZAR (Só se passou na verificação)
+          const batch = db.batch();
+          
+          if (newQuantity <= 0) {
+              if (myCurrentResDoc) batch.delete(myCurrentResDoc.ref);
+          } else {
+              if (myCurrentResDoc) {
+                  batch.update(myCurrentResDoc.ref, { 
+                      quantity: newQuantity,
+                      expiresAt: Date.now() + (15 * 60 * 1000)
+                  });
+              } else {
+                  const newRef = db.collection('stock_reservations').doc();
+                  batch.set(newRef, {
+                      productId,
+                      variantName: variantName || null,
+                      quantity: newQuantity,
+                      sessionId,
+                      expiresAt: Date.now() + (15 * 60 * 1000)
+                  });
+              }
           }
 
           await batch.commit();
+          return true;
+
       } catch (e) {
-          console.error("Erro ao atualizar reserva:", e);
+          console.error("Erro crítico na transação de reserva:", e);
+          return false;
       }
   };
 
   const addToCart = async (product: Product, variant?: ProductVariant) => {
-    const currentAvailable = getStockForProduct(product.id, variant?.name);
-    if (currentAvailable <= 0) {
-        alert("Desculpe, este produto acabou de esgotar ou foi reservado!");
+    setIsProcessingCart(true); // Bloqueia UI ou mostra spinner
+    
+    // Calcula nova quantidade desejada
+    const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
+    const existingItem = cartItems.find(item => item.cartItemId === cartItemId);
+    const newQty = existingItem ? existingItem.quantity + 1 : 1;
+
+    // Tenta reservar no servidor PRIMEIRO
+    const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
+
+    setIsProcessingCart(false);
+
+    if (!success) {
+        alert("Desculpe, este artigo acabou de ser reservado por outro cliente ou esgotou.");
+        // Opcional: Forçar refresh dos produtos
         return;
     }
 
-    const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
+    // Se sucesso, atualiza UI
     const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === cartItemId);
-      const newQty = existing ? existing.quantity + 1 : 1;
-
-      // Se já existe, verificamos se podemos aumentar
-      if (existing) {
-          // Aqui usamos a lógica: Stock Restante + O que eu já tenho reservado (se houver)
-          // Mas como currentAvailable já desconta MINHA reserva, a conta deve ser simples.
-          // NÃO! currentAvailable = Total - Todas Reservas.
-          // Se eu tenho 1 reservado, e Stock Total = 1. currentAvailable = 0.
-          // Se eu quero adicionar mais 1 (Total 2).
-          // 0 > 0 ? Não.
-          // Mas eu quero saber se há MAIS stock para mim.
-          if (currentAvailable <= 0) {
-              alert(`Apenas ${existing.quantity} unidades disponíveis.`);
-              return prev;
-          }
-      }
-
-      // Atualiza reserva no Firebase
-      updateReservationInFirebase(product.id, variant?.name, newQty);
-
       if (existing) {
         return prev.map(item => {
             if (item.cartItemId === cartItemId) {
@@ -373,51 +405,49 @@ const App: React.FC = () => {
 
   const removeFromCart = async (cartItemId: string) => {
     const item = cartItems.find(i => i.cartItemId === cartItemId);
+    // Atualização otimista para remover é segura
     setCartItems(prev => prev.filter(i => i.cartItemId !== cartItemId));
     
     if (item) {
+        // Liberta stock sem bloquear UI
         updateReservationInFirebase(item.id, item.selectedVariant, 0);
     }
   };
 
-  const updateQuantity = (cartItemId: string, delta: number) => {
-    setCartItems(prev => {
-      const itemToUpdate = prev.find(i => i.cartItemId === cartItemId);
-      if (!itemToUpdate) return prev;
+  const updateQuantity = async (cartItemId: string, delta: number) => {
+    // Encontra item e calcula nova quantidade
+    const itemToUpdate = cartItems.find(i => i.cartItemId === cartItemId);
+    if (!itemToUpdate) return;
+    const newQty = itemToUpdate.quantity + delta;
 
-      const newQty = itemToUpdate.quantity + delta;
+    // Se for para remover ou diminuir, é seguro fazer logo
+    if (newQty < itemToUpdate.quantity) {
+        setCartItems(prev => {
+            if (newQty < 1) return prev.filter(i => i.cartItemId !== cartItemId);
+            return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: newQty } : item);
+        });
+        updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
+        return;
+    }
 
-      if (newQty < 1) {
-        updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, 0);
-        return prev.filter(i => i.cartItemId !== cartItemId);
-      }
+    // Se for para AUMENTAR, precisamos de verificar stock rigorosamente
+    setIsProcessingCart(true);
+    const success = await updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
+    setIsProcessingCart(false);
 
-      // LÓGICA ROBUSTA DE STOCK:
-      // Stock Disponível para MIM = (Stock Restante Global) + (Minha Reserva Atual que está a ser contada como "ocupada")
-      const remainingGlobal = getStockForProduct(itemToUpdate.id, itemToUpdate.selectedVariant);
-      
-      // Como o getStockForProduct já subtraiu a minha reserva, eu "adiciono-a de volta" ao pool disponível para saber o meu teto máximo.
-      // O limite real é o que está livre + o que eu já segurei.
-      // Nota: Devido a delays de rede do Firebase, 'remainingGlobal' pode estar desatualizado por segundos.
-      // Por isso, usamos getMyReservedQuantity para saber quanto o sistema acha que eu tenho.
-      const myReservedLaggy = getMyReservedQuantity(itemToUpdate.id, itemToUpdate.selectedVariant);
-      const maxAllowedForMe = remainingGlobal + myReservedLaggy;
+    if (!success) {
+        alert("Stock insuficiente para adicionar mais unidades deste produto.");
+        return;
+    }
 
-      // Se o utilizador tenta meter 2, e maxAllowed é 1 -> Bloqueia.
-      if (newQty > maxAllowedForMe) {
-        alert(`Stock insuficiente. Máximo disponível para si: ${maxAllowedForMe}`);
-        return prev;
-      }
-      
-      // Se passou, atualiza no Firebase
-      updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
-
-      return prev.map(item =>
-        item.cartItemId === cartItemId
-          ? { ...item, quantity: newQty }
-          : item
-      );
-    });
+    // Sucesso, atualiza UI
+    setCartItems(prev =>
+        prev.map(item =>
+          item.cartItemId === cartItemId
+            ? { ...item, quantity: newQty }
+            : item
+        )
+    );
   };
 
   const handleUpdateUser = (updatedData: Partial<User>) => {
@@ -528,7 +558,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
+    <div className={`flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50 ${isProcessingCart ? 'cursor-wait' : ''}`}>
+      {isProcessingCart && (
+          <div className="fixed inset-0 z-[60] bg-black/10 flex items-center justify-center backdrop-blur-[1px]">
+              <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3">
+                  <Loader2 className="animate-spin text-primary" />
+                  <span className="font-bold text-sm">A verificar stock...</span>
+              </div>
+          </div>
+      )}
       <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} user={user} onOpenLogin={() => setIsLoginOpen(true)} onLogout={handleLogout} searchTerm={searchTerm} onSearchChange={handleSearchChange} onResetHome={handleResetHome} />
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
