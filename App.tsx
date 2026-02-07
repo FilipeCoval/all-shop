@@ -69,13 +69,19 @@ const App: React.FC = () => {
   }, []);
 
   const getStockForProduct = (productId: number, variantName?: string): number => {
+    // 1. Se for Admin, usa a lógica complexa de inventário real (hooks/useStock)
     if (isAdmin) return getAdminStock(productId, variantName);
     
+    // 2. Se for Visitante/Cliente, usa a coleção pública 'products_public'
+    // Esta coleção é atualizada pelo botão "Sincronizar Stock" no Dashboard.
     const product = dbProducts.find(p => p.id === productId);
-    if (!product) return 0;
+    
+    // Se o produto não existir ou o campo 'stock' for undefined/null, assume 0 para evitar overselling
+    // O operador (?? 0) garante que se stock for 0, mantém-se 0, mas se for null/undefined, vira 0.
+    let availableStock = product?.stock ?? 0;
 
-    let availableStock = product.stock || 0;
-
+    // 3. Subtrai as reservas ativas (pessoas com o item no carrinho agora)
+    // As reservas são globais, então afetam o stock disponível para todos
     const reservedQuantity = reservations
         .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
         .reduce((sum, r) => sum + r.quantity, 0);
@@ -301,10 +307,16 @@ const App: React.FC = () => {
 
       try {
           // 1. FRESH FETCH: Obter dados reais do produto AGORA (ignora cache local)
-          const productRef = db.collection('products_public').doc(String(productId));
-          const productDoc = await productRef.get();
+          // CORREÇÃO: Usar 'where' para encontrar o produto pelo campo ID numérico,
+          // pois o ID do documento pode não ser igual ao productId (importação vs criação manual)
+          const productQuery = await db.collection('products_public').where('id', '==', productId).limit(1).get();
           
-          if (!productDoc.exists) return false;
+          if (productQuery.empty) {
+              console.error("Produto não encontrado na base de dados pública:", productId);
+              return false;
+          }
+
+          const productDoc = productQuery.docs[0];
           const productData = productDoc.data() as Product;
           const totalStock = productData.stock || 0;
 
@@ -343,7 +355,12 @@ const App: React.FC = () => {
           // Se eu quero 2, mas só há 1 livre (excluindo o que já é meu), falha.
           if (newQuantity > availableForMe) {
               console.warn(`Overselling preventido. Stock Total: ${totalStock}, Ocupado Outros: ${reservedByOthers}, Pedido: ${newQuantity}, Disp: ${availableForMe}`);
-              alert(`Stock insuficiente! Restam apenas ${availableForMe} unidades disponíveis.`);
+              // Mensagem mais amigável para o utilizador
+              if (availableForMe <= 0) {
+                  alert("Lamentamos, mas este artigo acabou de esgotar ou está reservado por outro cliente.");
+              } else {
+                  alert(`Stock insuficiente! Restam apenas ${availableForMe} unidades disponíveis.`);
+              }
               return false;
           }
 
@@ -387,37 +404,42 @@ const App: React.FC = () => {
 
     setProcessingProductIds(prev => [...prev, product.id]);
     
-    // Calcula nova quantidade desejada
-    const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
-    const existingItem = cartItems.find(item => item.cartItemId === cartItemId);
-    const newQty = existingItem ? existingItem.quantity + 1 : 1;
+    try {
+        // Calcula nova quantidade desejada
+        const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
+        const existingItem = cartItems.find(item => item.cartItemId === cartItemId);
+        const newQty = existingItem ? existingItem.quantity + 1 : 1;
 
-    // Tenta reservar no servidor PRIMEIRO
-    const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
+        // Tenta reservar no servidor PRIMEIRO
+        const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
 
-    setProcessingProductIds(prev => prev.filter(id => id !== product.id));
+        if (!success) {
+            // O alert já é mostrado dentro do updateReservationInFirebase com detalhes
+            return;
+        }
 
-    if (!success) {
-        // O alert já é mostrado dentro do updateReservationInFirebase com detalhes
-        return;
-    }
+        // Se sucesso, atualiza UI
+        const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
-    // Se sucesso, atualiza UI
-    const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
-
-    setCartItems(prev => {
-      const existing = prev.find(item => item.cartItemId === cartItemId);
-      if (existing) {
-        return prev.map(item => {
-            if (item.cartItemId === cartItemId) {
-                return { ...item, quantity: newQty, reservedUntil: item.reservedUntil || reservedUntil };
-            }
-            return item;
+        setCartItems(prev => {
+          const existing = prev.find(item => item.cartItemId === cartItemId);
+          if (existing) {
+            return prev.map(item => {
+                if (item.cartItemId === cartItemId) {
+                    return { ...item, quantity: newQty, reservedUntil: item.reservedUntil || reservedUntil };
+                }
+                return item;
+            });
+          }
+          return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
         });
-      }
-      return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
-    });
-    setIsCartOpen(true);
+        setIsCartOpen(true);
+    } catch (err) {
+        console.error("Erro inesperado no carrinho:", err);
+    } finally {
+        // GARANTIR QUE O LOADING PÁRA SEMPRE
+        setProcessingProductIds(prev => prev.filter(id => id !== product.id));
+    }
   };
 
   const removeFromCart = async (cartItemId: string) => {
