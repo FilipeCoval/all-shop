@@ -36,6 +36,11 @@ export interface Order {
   pointsAwarded?: boolean;
   cancellationReason?: string;
   statusHistory?: StatusHistory[];
+  returnRequest?: {
+      date: string;
+      reason: string;
+      status: 'Pendente' | 'Aprovado' | 'Rejeitado';
+  };
 }
 
 export interface OrderItem {
@@ -194,4 +199,19 @@ export interface ChatMessage {
     timestamp: Date;
 }
 
+export interface SupportTicket {
+    id: string;
+    customerEmail?: string;
+    customerName?: string;
+    subject: string;
+    description: string; // Resumo feito pela IA
+    category: 'Garantia' | 'Devolução' | 'Dúvida Técnica' | 'Outros';
+    status: 'Aberto' | 'Em Análise' | 'Resolvido';
+    priority: 'Baixa' | 'Média' | 'Alta';
+    createdAt: string;
+    orderId?: string;
+    aiSummary?: string; // Resumo extra
+}
+
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
