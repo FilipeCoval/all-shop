@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2 } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -11,6 +11,7 @@ interface ProductListProps {
   searchTerm: string;
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
+  processingProductIds?: number[];
 }
 
 const ProductList: React.FC<ProductListProps> = ({ 
@@ -21,7 +22,8 @@ const ProductList: React.FC<ProductListProps> = ({
     onToggleWishlist, 
     searchTerm = '',
     selectedCategory,
-    onCategoryChange
+    onCategoryChange,
+    processingProductIds = []
 }) => {
   const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -160,6 +162,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 const badge = getProductBadge(product);
                 const { price: displayPrice, prefix: pricePrefix } = getDisplayPrice(product);
                 const hasVariants = product.variants && product.variants.length > 0;
+                const isProcessing = processingProductIds.includes(product.id);
 
                 if (viewMode === 'list') {
                     return (
@@ -192,7 +195,9 @@ const ProductList: React.FC<ProductListProps> = ({
                                     ) : product.comingSoon ? (
                                         <button onClick={handleProductClick(product.id)} className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-bold transition-colors">Ver Detalhes</button>
                                     ) : (
-                                        <button onClick={() => onAddToCart(product)} disabled={isOutOfStock} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>{isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}</button>
+                                        <button onClick={() => onAddToCart(product)} disabled={isOutOfStock || isProcessing} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${isOutOfStock ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-secondary hover:bg-primary text-white'}`}>
+                                            {isProcessing ? <Loader2 size={16} className="animate-spin"/> : isOutOfStock ? 'Esgotado' : <><Plus size={16} /> Comprar</>}
+                                        </button>
                                     )}
                                 </div>
                             </div>
@@ -238,7 +243,9 @@ const ProductList: React.FC<ProductListProps> = ({
                             ) : product.comingSoon ? (
                                 <button onClick={handleProductClick(product.id)} className="p-2.5 bg-purple-100 text-purple-700 rounded-full" title="Ver Detalhes"><CalendarClock size={20} /></button>
                             ) : (
-                                <button onClick={() => onAddToCart(product)} disabled={isOutOfStock} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}><Plus size={20} /></button>
+                                <button onClick={() => onAddToCart(product)} disabled={isOutOfStock || isProcessing} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}>
+                                    {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                                </button>
                             )}
                         </div>
                     </div>
