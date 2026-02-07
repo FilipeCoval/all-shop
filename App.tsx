@@ -53,32 +53,10 @@ const App: React.FC = () => {
     return ADMIN_EMAILS.some(adminEmail => adminEmail.trim().toLowerCase() === userEmail);
   }, [user]);
 
-  // --- LÓGICA DE STOCK CORRIGIDA ---
+  // --- LÓGICA DE STOCK ---
   const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
-  const { reservations } = useStockReservations(); // Obtém reservas ativas
-
-  const getStockForProduct = (productId: number, variantName?: string): number => {
-    // Admin tem visão total e em tempo real, incluindo encomendas pendentes
-    if (isAdmin) {
-      return getAdminStock(productId, variantName);
-    }
-    
-    // Clientes usam o stock público + descontam as reservas de outros users
-    const product = dbProducts.find(p => p.id === productId);
-    if (!product) return 0;
-
-    let availableStock = product.stock || 0;
-
-    // Subtrai reservas ativas para este produto/variante
-    const reservedQuantity = reservations
-        .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
-        .reduce((sum, r) => sum + r.quantity, 0);
-
-    availableStock -= reservedQuantity;
-    
-    return Math.max(0, availableStock);
-  };
+  const { reservations } = useStockReservations(); 
 
   const sessionId = useMemo(() => {
     let id = sessionStorage.getItem('session_id');
@@ -89,10 +67,32 @@ const App: React.FC = () => {
     return id;
   }, []);
 
+  const getStockForProduct = (productId: number, variantName?: string): number => {
+    if (isAdmin) return getAdminStock(productId, variantName);
+    
+    const product = dbProducts.find(p => p.id === productId);
+    if (!product) return 0;
+
+    let availableStock = product.stock || 0;
+
+    const reservedQuantity = reservations
+        .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
+        .reduce((sum, r) => sum + r.quantity, 0);
+
+    availableStock -= reservedQuantity;
+    
+    return Math.max(0, availableStock);
+  };
+
+  const getMyReservedQuantity = (productId: number, variantName?: string): number => {
+      return reservations
+        .filter(r => r.sessionId === sessionId && r.productId === productId && (!variantName || r.variantName === variantName))
+        .reduce((sum, r) => sum + r.quantity, 0);
+  };
+
   // --- REDIRECT LOGIC FOR SHARED LINKS ---
   useEffect(() => {
     const path = window.location.pathname;
-    // Corrigido para lidar com /p/ e /product/
     if (path.startsWith('/p/') || path.startsWith('/product/')) {
         const id = path.split('/').pop();
         if (id && !isNaN(Number(id))) {
@@ -283,6 +283,49 @@ const App: React.FC = () => {
     }
   };
 
+  const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number) => {
+      if (isAdmin) return; // Admin não reserva
+      try {
+          const snapshot = await db.collection('stock_reservations')
+              .where('sessionId', '==', sessionId)
+              .where('productId', '==', productId)
+              .get();
+          
+          let docFound = false;
+          const batch = db.batch();
+
+          snapshot.docs.forEach(doc => {
+              const data = doc.data();
+              if (data.variantName === (variantName || null)) {
+                  docFound = true;
+                  if (newQuantity <= 0) {
+                      batch.delete(doc.ref);
+                  } else {
+                      batch.update(doc.ref, { 
+                          quantity: newQuantity,
+                          expiresAt: Date.now() + (15 * 60 * 1000) // Renova tempo
+                      });
+                  }
+              }
+          });
+
+          if (!docFound && newQuantity > 0) {
+              const newRef = db.collection('stock_reservations').doc();
+              batch.set(newRef, {
+                  productId,
+                  variantName: variantName || null,
+                  quantity: newQuantity,
+                  sessionId,
+                  expiresAt: Date.now() + (15 * 60 * 1000)
+              });
+          }
+
+          await batch.commit();
+      } catch (e) {
+          console.error("Erro ao atualizar reserva:", e);
+      }
+  };
+
   const addToCart = async (product: Product, variant?: ProductVariant) => {
     const currentAvailable = getStockForProduct(product.id, variant?.name);
     if (currentAvailable <= 0) {
@@ -290,44 +333,35 @@ const App: React.FC = () => {
         return;
     }
 
-    // ALTERAÇÃO PARA DEBUG: Aumentado limite para 1000 para forçar a criação da reserva e testar o timer
-    if (currentAvailable <= 1000 && !isAdmin) {
-        console.log("Tentando criar reserva para:", product.name);
-        try {
-            await db.collection('stock_reservations').add({
-                productId: product.id,
-                variantName: variant?.name || null,
-                quantity: 1,
-                sessionId,
-                expiresAt: Date.now() + (15 * 60 * 1000)
-            });
-            console.log("Reserva criada com sucesso na coleção 'stock_reservations'");
-        } catch (e) { 
-            console.error("Erro CRÍTICO ao criar reserva:", e); 
-        }
-    } else {
-        if(isAdmin) console.log("Reserva ignorada: É Admin.");
-        else console.log("Reserva ignorada: Stock > 1000 (" + currentAvailable + ")");
-    }
-
     const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
-    // Atualiza o estado local para refletir a reserva (Timer)
-    const reservedUntil = (currentAvailable <= 1000 && !isAdmin) ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
+    const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === cartItemId);
+      const newQty = existing ? existing.quantity + 1 : 1;
+
+      // Se já existe, verificamos se podemos aumentar
       if (existing) {
-        if (existing.quantity + 1 > currentAvailable) {
-            alert(`Apenas ${currentAvailable} unidades disponíveis.`);
-            return prev;
-        }
+          // Aqui usamos a lógica: Stock Restante + O que eu já tenho reservado (se houver)
+          // Mas como currentAvailable já desconta MINHA reserva, a conta deve ser simples.
+          // NÃO! currentAvailable = Total - Todas Reservas.
+          // Se eu tenho 1 reservado, e Stock Total = 1. currentAvailable = 0.
+          // Se eu quero adicionar mais 1 (Total 2).
+          // 0 > 0 ? Não.
+          // Mas eu quero saber se há MAIS stock para mim.
+          if (currentAvailable <= 0) {
+              alert(`Apenas ${existing.quantity} unidades disponíveis.`);
+              return prev;
+          }
+      }
+
+      // Atualiza reserva no Firebase
+      updateReservationInFirebase(product.id, variant?.name, newQty);
+
+      if (existing) {
         return prev.map(item => {
             if (item.cartItemId === cartItemId) {
-                return { 
-                    ...item, 
-                    quantity: item.quantity + 1,
-                    reservedUntil: item.reservedUntil || reservedUntil 
-                };
+                return { ...item, quantity: newQty, reservedUntil: item.reservedUntil || reservedUntil };
             }
             return item;
         });
@@ -341,20 +375,8 @@ const App: React.FC = () => {
     const item = cartItems.find(i => i.cartItemId === cartItemId);
     setCartItems(prev => prev.filter(i => i.cartItemId !== cartItemId));
     
-    if (item && item.reservedUntil) {
-        try {
-            const snap = await db.collection('stock_reservations')
-                .where('sessionId', '==', sessionId)
-                .where('productId', '==', item.id)
-                .get();
-            if (!snap.empty) {
-                const batch = db.batch();
-                snap.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
-            }
-        } catch (e) {
-            console.debug("Error clearing reservation on remove", e);
-        }
+    if (item) {
+        updateReservationInFirebase(item.id, item.selectedVariant, 0);
     }
   };
 
@@ -365,51 +387,34 @@ const App: React.FC = () => {
 
       const newQty = itemToUpdate.quantity + delta;
 
-      // Se a quantidade baixar para zero, remove o item
       if (newQty < 1) {
-        // Se o item tinha uma reserva, limpa da BD
-        if (itemToUpdate.reservedUntil) {
-          db.collection('stock_reservations')
-            .where('sessionId', '==', sessionId)
-            .where('productId', '==', itemToUpdate.id)
-            .get()
-            .then(snap => {
-              if (!snap.empty) {
-                const batch = db.batch();
-                snap.forEach(doc => batch.delete(doc.ref));
-                batch.commit();
-              }
-            }).catch(e => console.debug("Error clearing reservation on quantity update", e));
-        }
+        updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, 0);
         return prev.filter(i => i.cartItemId !== cartItemId);
       }
 
-      const currentStock = getStockForProduct(itemToUpdate.id, itemToUpdate.selectedVariant);
-      if (newQty > currentStock) {
-        alert(`Máximo em stock: ${currentStock}`);
+      // LÓGICA ROBUSTA DE STOCK:
+      // Stock Disponível para MIM = (Stock Restante Global) + (Minha Reserva Atual que está a ser contada como "ocupada")
+      const remainingGlobal = getStockForProduct(itemToUpdate.id, itemToUpdate.selectedVariant);
+      
+      // Como o getStockForProduct já subtraiu a minha reserva, eu "adiciono-a de volta" ao pool disponível para saber o meu teto máximo.
+      // O limite real é o que está livre + o que eu já segurei.
+      // Nota: Devido a delays de rede do Firebase, 'remainingGlobal' pode estar desatualizado por segundos.
+      // Por isso, usamos getMyReservedQuantity para saber quanto o sistema acha que eu tenho.
+      const myReservedLaggy = getMyReservedQuantity(itemToUpdate.id, itemToUpdate.selectedVariant);
+      const maxAllowedForMe = remainingGlobal + myReservedLaggy;
+
+      // Se o utilizador tenta meter 2, e maxAllowed é 1 -> Bloqueia.
+      if (newQty > maxAllowedForMe) {
+        alert(`Stock insuficiente. Máximo disponível para si: ${maxAllowedForMe}`);
         return prev;
       }
       
-      let reservedUntil = itemToUpdate.reservedUntil; // Preserva a reserva existente por defeito
-      // Também atualizado para 1000 para consistência
-      const shouldStartReservation = currentStock <= 1000 && !isAdmin && !itemToUpdate.reservedUntil && delta > 0;
-
-      if (shouldStartReservation) {
-          reservedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-          try {
-              db.collection('stock_reservations').add({
-                  productId: itemToUpdate.id,
-                  variantName: itemToUpdate.selectedVariant || null,
-                  quantity: 1,
-                  sessionId,
-                  expiresAt: Date.now() + (15 * 60 * 1000)
-              });
-          } catch(e) { console.debug("Erro reserva temporária em updateQty:", e); }
-      }
+      // Se passou, atualiza no Firebase
+      updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
 
       return prev.map(item =>
         item.cartItemId === cartItemId
-          ? { ...item, quantity: newQty, reservedUntil }
+          ? { ...item, quantity: newQty }
           : item
       );
     });
