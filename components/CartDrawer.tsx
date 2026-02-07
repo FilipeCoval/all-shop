@@ -46,18 +46,22 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
   // Efeito para o cronómetro de reserva (Apenas se houver itens com reserva ativa)
   useEffect(() => {
-    const reservedItem = cartItems.find(i => i.reservedUntil);
-    if (!reservedItem || !reservedItem.reservedUntil || !isOpen) {
+    // Encontra o item com o tempo de reserva mais curto para ser o de referência.
+    const soonestReservedItem = cartItems
+      .filter(i => i.reservedUntil)
+      .sort((a, b) => new Date(a.reservedUntil!).getTime() - new Date(b.reservedUntil!).getTime())[0];
+
+    if (!soonestReservedItem || !soonestReservedItem.reservedUntil || !isOpen) {
         setTimeRemaining('');
-        return;
+        return () => {};
     }
 
     const interval = setInterval(() => {
-      const remaining = new Date(reservedItem.reservedUntil!).getTime() - Date.now();
+      const remaining = new Date(soonestReservedItem.reservedUntil!).getTime() - Date.now();
       if (remaining <= 0) {
           setTimeRemaining('Expirada');
           clearInterval(interval);
-          // Opcional: Adicionar lógica para remover item do carrinho ou reserva.
+          // A lógica de remoção/limpeza da reserva acontece no App.tsx ou expira no backend
       } else {
           const mins = Math.floor(remaining / 60000);
           const secs = Math.floor((remaining % 60000) / 1000);
