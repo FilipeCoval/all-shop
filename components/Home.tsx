@@ -13,6 +13,7 @@ interface HomeProps {
   searchTerm: string;
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
+  processingProductIds?: number[];
 }
 
 const Home: React.FC<HomeProps> = ({ 
@@ -23,7 +24,8 @@ const Home: React.FC<HomeProps> = ({
     onToggleWishlist, 
     searchTerm, 
     selectedCategory, 
-    onCategoryChange
+    onCategoryChange,
+    processingProductIds = []
 }) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -71,8 +73,6 @@ const Home: React.FC<HomeProps> = ({
     setSubStatus('loading');
     
     try {
-      // A verificação de duplicados foi removida para resolver o erro de permissão
-      // para utilizadores não autenticados, garantindo a segurança.
       const normalizedEmail = email.trim().toLowerCase();
       
       await db.collection('newsletter_subscriptions').add({
@@ -82,12 +82,12 @@ const Home: React.FC<HomeProps> = ({
       });
 
       setSubStatus('success');
-      setEmail(''); // Limpa o campo apenas em caso de sucesso
+      setEmail(''); 
     
     } catch (error) {
       console.error(error);
       setSubStatus('error');
-      setTimeout(() => setSubStatus('idle'), 4000); // Reset after showing message
+      setTimeout(() => setSubStatus('idle'), 4000); 
     }
   };
 
@@ -111,7 +111,6 @@ const Home: React.FC<HomeProps> = ({
       });
       
       const uniqueFinal = mapCats(uniqueCats);
-      // Duplicar a lista uma vez é essencial para a animação 'marquee' ser contínua
       return [...uniqueFinal, ...uniqueFinal];
   }, [products]);
 
@@ -147,7 +146,6 @@ const Home: React.FC<HomeProps> = ({
              </div>
           </div>
         ))}
-        {/* Carousel Nav Dots */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">
             {slides.map((_, i) => (
                 <button 
@@ -185,7 +183,7 @@ const Home: React.FC<HomeProps> = ({
           </div>
       </section>
 
-      <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} wishlist={wishlist} onToggleWishlist={onToggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={onCategoryChange} />
+      <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} wishlist={wishlist} onToggleWishlist={onToggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={onCategoryChange} processingProductIds={processingProductIds} />
 
       <section className="bg-secondary text-white py-8 relative overflow-hidden mt-8">
           <div className="container mx-auto px-4 text-center relative z-10">
