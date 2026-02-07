@@ -21,6 +21,7 @@ import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, Point
 import { auth, db, firebase } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
+import { useStockReservations } from './hooks/useStockReservations'; // NOVO
 import { notifyNewOrder } from './services/telegramNotifier';
 
 const App: React.FC = () => {
@@ -56,14 +57,28 @@ const App: React.FC = () => {
   // --- LÓGICA DE STOCK CORRIGIDA ---
   const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
+  const { reservations } = useStockReservations(); // NOVO: Obtém reservas ativas
 
   const getStockForProduct = (productId: number, variantName?: string): number => {
+    // Admin tem visão total e em tempo real, incluindo encomendas pendentes
     if (isAdmin) {
       return getAdminStock(productId, variantName);
     }
+    
+    // Clientes usam o stock público + descontam as reservas de outros users
     const product = dbProducts.find(p => p.id === productId);
     if (!product) return 0;
-    return product.stock || 0;
+
+    let availableStock = product.stock || 0;
+
+    // Subtrai reservas ativas para este produto/variante
+    const reservedQuantity = reservations
+        .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
+        .reduce((sum, r) => sum + r.quantity, 0);
+
+    availableStock -= reservedQuantity;
+    
+    return Math.max(0, availableStock);
   };
 
   const sessionId = useMemo(() => {
