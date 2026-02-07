@@ -1,18 +1,50 @@
-import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
+
+import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type, Tool } from "@google/genai";
 import { STORE_NAME } from '../constants';
-import { InventoryProduct, Product } from '../types';
+import { InventoryProduct, Product, SupportTicket } from '../types';
+import { db } from './firebaseConfig';
 
 let chatSession: Chat | null = null;
 
-// Agora aceita a lista de produtos como argumento
+// --- DEFINIÇÃO DA FERRAMENTA (TOOL) ---
+const createTicketTool: FunctionDeclaration = {
+    name: "createSupportTicket",
+    description: "Cria um ticket de suporte oficial quando o cliente quer acionar a garantia, fazer uma devolução ou reportar um problema técnico grave.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            customerEmail: { type: Type.STRING, description: "O email do cliente (perguntar se não souber)." },
+            customerName: { type: Type.STRING, description: "O nome do cliente." },
+            subject: { type: Type.STRING, description: "Um título curto para o problema (ex: 'TV Box não liga')." },
+            description: { type: Type.STRING, description: "Um resumo detalhado e técnico do problema relatado pelo cliente." },
+            category: { type: Type.STRING, description: "Categoria do problema.", enum: ["Garantia", "Devolução", "Dúvida Técnica", "Outros"] },
+            orderId: { type: Type.STRING, description: "O número da encomenda (opcional, mas tentar obter)." },
+            priority: { type: Type.STRING, description: "Prioridade baseada na urgência ou gravidade.", enum: ["Baixa", "Média", "Alta"] },
+        },
+        required: ["subject", "description", "category", "priority"]
+    }
+};
+
+const tools: Tool[] = [{ functionDeclarations: [createTicketTool] }];
+
 const getSystemInstruction = (products: Product[]): string => {
   const productsList = products.map(p => 
     `- **${p.name}** (€ ${p.price.toFixed(2)})${p.variants ? ' [Várias Opções/Variantes Disponíveis]' : ''}${p.comingSoon ? ' [PRODUTO EM BREVE - Brevemente no Stock]' : ''}\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
   ).join('\n\n');
 
   return `
-Atue como o **Especialista de Tecnologia e Vendas** da loja **${STORE_NAME}**.
-Sua missão é converter curiosos em clientes, explicando as diferenças técnicas de forma simples e profissional.
+Atue como o **Especialista de Tecnologia e Suporte** da loja **${STORE_NAME}**.
+Sua missão é dupla:
+1. VENDER: Converter curiosos em clientes, explicando as diferenças técnicas.
+2. SUPORTE: Ajudar clientes com problemas técnicos.
+
+**REGRAS DE SUPORTE (Garantias/Devoluções):**
+- Se o cliente reportar um defeito ou quiser devolver, **NÃO mande enviar email**.
+- Faça uma triagem técnica primeiro (ex: "Já tentou reiniciar?", "A luz acende?").
+- Se o problema persistir, diga que vai abrir um processo de suporte técnico interno.
+- Peça os detalhes necessários (Nome, Email, ID da Encomenda se tiverem, descrição do erro).
+- **USE A FERRAMENTA 'createSupportTicket'** para registar o pedido no sistema.
+- Após criar o ticket, informe o cliente que a equipa técnica vai analisar e entrar em contacto brevemente.
 
 Responda sempre em Português de Portugal. Use emojis para ser amigável.
 
@@ -21,16 +53,40 @@ ${productsList}
 `;
 }
 
+// Função real que guarda no Firebase
+async function executeCreateTicket(args: any): Promise<string> {
+    try {
+        const newTicket: SupportTicket = {
+            id: `TICKET-${Date.now().toString().slice(-6)}`,
+            customerEmail: args.customerEmail || 'Não fornecido',
+            customerName: args.customerName || 'Cliente Chat',
+            subject: args.subject,
+            description: args.description,
+            category: args.category,
+            status: 'Aberto',
+            priority: args.priority,
+            createdAt: new Date().toISOString(),
+            orderId: args.orderId,
+            aiSummary: "Gerado automaticamente pelo Assistente IA."
+        };
+
+        await db.collection('support_tickets').doc(newTicket.id).set(newTicket);
+        return `Ticket criado com sucesso! ID: ${newTicket.id}. Informe o cliente.`;
+    } catch (error) {
+        console.error("Erro ao criar ticket via Tool:", error);
+        return "Erro interno ao criar ticket. Peça ao cliente para tentar mais tarde.";
+    }
+}
+
 // Inicia sessão com os produtos atuais
 export const initializeChat = async (products: Product[]): Promise<Chat> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   chatSession = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash', // Modelo mais rápido e capaz de tool use
     config: {
       systemInstruction: getSystemInstruction(products),
       temperature: 0.3,
-      maxOutputTokens: 600,
-      thinkingConfig: { thinkingBudget: 300 },
+      tools: tools
     },
   });
   return chatSession;
@@ -39,19 +95,41 @@ export const initializeChat = async (products: Product[]): Promise<Chat> => {
 // Recebe os produtos para garantir que a IA sabe do que está a falar
 export const sendMessageToGemini = async (message: string, currentProducts: Product[]): Promise<string> => {
   try {
-    // Recria a sessão se for a primeira vez ou se os produtos mudarem (idealmente)
-    // Para simplificar, recriamos se não existir
     if (!chatSession) {
         await initializeChat(currentProducts);
     }
     
     if (!chatSession) return "A ligar sistemas...";
     
-    const response: GenerateContentResponse = await chatSession.sendMessage({ message });
+    let response = await chatSession.sendMessage({ message });
+    
+    // LOOP para lidar com chamadas de função (Tools)
+    // O modelo pode chamar a função, nós executamos, e devolvemos o resultado
+    // para ele gerar a resposta final ao utilizador.
+    while (response.functionCalls && response.functionCalls.length > 0) {
+        const call = response.functionCalls[0];
+        if (call.name === 'createSupportTicket') {
+            const toolResult = await executeCreateTicket(call.args);
+            
+            // Enviar o resultado da função de volta para o modelo
+            response = await chatSession.sendToolResponse({
+                functionResponses: [
+                    {
+                        id: call.id,
+                        name: call.name,
+                        response: { result: toolResult }
+                    }
+                ]
+            });
+        }
+    }
+
     return response.text || "Pode repetir?";
   } catch (error) {
     console.error(error);
-    return "Tive um soluço técnico. Pode tentar de novo?";
+    // Tenta recuperar sessão
+    chatSession = null;
+    return "Tive um pequeno lapso. Pode repetir a pergunta?";
   }
 };
 
@@ -105,6 +183,7 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
     
     try {
         // Usar gemini-3-flash-preview que é multimodal (vê imagens e texto)
+        // O anterior 'flash-image' pode estar restrito a geração de imagem.
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
             contents: {
@@ -116,24 +195,20 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
                         }
                     },
                     {
-                        text: "Look for a product barcode, Serial Number (S/N), SN, IMEI, or alphanumeric identifier. Return ONLY the code found. Remove labels like 'S/N:', 'IMEI:', 'Batch:'. If multiple codes exist, prefer S/N. If unclear, return 'NOT_FOUND'."
+                        text: "Look at this product label. Locate the Serial Number (S/N), SN, IMEI, or the main alphanumeric barcode string. Return ONLY the code itself (letters and numbers). Do not include prefixes like 'S/N:', 'SN', or explanations. If multiple codes exist, prefer the one labeled S/N. If nothing is found, return 'NOT_FOUND'."
                     }
                 ]
             }
         });
 
         const text = response.text?.trim();
-        
         if (!text || text.includes('NOT_FOUND')) return null;
         
-        // Limpeza extra para garantir que só vem o código (remove espaços e caracteres especiais indesejados)
-        // Mantém letras, números, hífens e barras que são comuns em S/Ns
-        const cleanCode = text.replace(/[^a-zA-Z0-9\-\/]/g, '');
-        
-        return cleanCode.length > 3 ? cleanCode : null; // Filtra leituras muito curtas/ruído
+        // Limpeza extra para garantir que só vem o código
+        return text.replace(/[^a-zA-Z0-9\-\/]/g, '');
     } catch (error) {
         console.error("Gemini OCR Error:", error);
-        // Lança o erro para que o Dashboard o possa mostrar no alert (incluindo erros de permissão)
+        // Lança o erro para que o Dashboard o possa mostrar no alert
         throw error;
     }
 };
