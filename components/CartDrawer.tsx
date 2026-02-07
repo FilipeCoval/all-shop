@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User, OrderItem, StatusHistory } from '../types';
 import { X, Trash2, Smartphone, Send, Check, TicketPercent, Loader2, ChevronLeft, Copy, User as UserIcon, LogIn, Award, Coins, AlertCircle, Clock } from 'lucide-react';
@@ -46,7 +47,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   // Efeito para o cronómetro de reserva (Apenas se houver itens com reserva ativa)
   useEffect(() => {
     const reservedItem = cartItems.find(i => i.reservedUntil);
-    if (!reservedItem || !reservedItem.reservedUntil) {
+    if (!reservedItem || !reservedItem.reservedUntil || !isOpen) {
         setTimeRemaining('');
         return;
     }
@@ -56,6 +57,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       if (remaining <= 0) {
           setTimeRemaining('Expirada');
           clearInterval(interval);
+          // Opcional: Adicionar lógica para remover item do carrinho ou reserva.
       } else {
           const mins = Math.floor(remaining / 60000);
           const secs = Math.floor((remaining % 60000) / 1000);
@@ -64,7 +66,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [cartItems]);
+  }, [cartItems, isOpen]);
 
   // Efeito para avançar automaticamente após o login
   useEffect(() => {
@@ -291,20 +293,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24} /></button>
         </div>
 
+        {/* AVISO DE RESERVA FIXO NO TOPO */}
+        {isOpen && checkoutStep === 'cart' && cartItems.some(i => i.reservedUntil) && (
+            <div className="bg-orange-50 border-b border-orange-200 p-3 flex items-center gap-3 animate-pulse shrink-0">
+                <Clock className="text-orange-600" size={18} />
+                <div>
+                    <p className="text-xs text-orange-800 font-bold">RESERVA ATIVA: {timeRemaining}</p>
+                    <p className="text-[10px] text-orange-700">Stock garantido! Finalize antes que o tempo acabe.</p>
+                </div>
+            </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
             {checkoutStep === 'cart' && (
                 <div className="space-y-4">
-                    {/* AVISO DE RESERVA ATIVA */}
-                    {cartItems.some(i => i.reservedUntil) && (
-                        <div className="bg-orange-50 border border-orange-200 p-3 rounded-xl flex items-center gap-3 animate-pulse">
-                            <Clock className="text-orange-600" size={18} />
-                            <div>
-                                <p className="text-xs text-orange-800 font-bold">RESERVA ATIVA: {timeRemaining} min</p>
-                                <p className="text-[10px] text-orange-700">Stock garantido para si. Finalize antes que o tempo acabe!</p>
-                            </div>
-                        </div>
-                    )}
-
                     {cartItems.map((item) => (
                         <div key={item.cartItemId} className="bg-white p-3 rounded-xl border border-gray-100 flex gap-3 shadow-sm animate-slide-in">
                             <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden shrink-0"><img src={item.image} alt={item.name} className="w-full h-full object-cover" /></div>
