@@ -330,18 +330,24 @@ const App: React.FC = () => {
           const productData = productDoc.data() as Product;
           const totalStock = productData.stock || 0;
 
-          // 2. FRESH FETCH: Obter TODAS as reservas ativas AGORA
+          // 2. FRESH FETCH: Obter TODAS as reservas para este produto
+          // NOTA: Removemos o filtro expiresAt da query para evitar erro de índice composto no Firebase.
+          // Filtramos a data localmente no JavaScript.
           const activeReservationsSnap = await db.collection('stock_reservations')
               .where('productId', '==', productId)
-              .where('expiresAt', '>', Date.now())
               .get();
 
           // 3. CALCULAR disponibilidade real
           let reservedByOthers = 0;
           let myCurrentResDoc: any = null;
+          const now = Date.now();
 
           activeReservationsSnap.forEach(doc => {
               const data = doc.data();
+              
+              // Filtro de expiração (Client-side)
+              if (data.expiresAt <= now) return;
+
               // CRÍTICO: Identificar se a reserva é "MINHA" (Sessão Atual OU Mesmo User ID)
               const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
 
