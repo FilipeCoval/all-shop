@@ -35,7 +35,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow create: if (request.auth.uid == userId && request.resource.data.uid == userId) || isAdmin();
-      allow get, update, delete: if request.auth.uid == userId || isAdmin();
+      // ALTERAÇÃO: 'read' permite tanto 'get' (individual) como 'list' (todos), essencial para o Dashboard.
+      allow read, update, delete: if request.auth.uid == userId || isAdmin();
     }
 
     match /orders/{orderId} {
@@ -72,3 +73,4 @@ service cloud.firestore {
     }
   }
 }
+
