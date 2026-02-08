@@ -653,9 +653,20 @@ const App: React.FC = () => {
                 </div>
             </div>
         </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center text-[10px]">
-            <span>&copy; {new Date().getFullYear()} Allshop Store.</span>
-            {isAdmin && <a href="#dashboard" onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} className="mt-2 md:mt-0 text-gray-600 hover:text-white transition-colors">Painel Admin</a>}
+        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-center md:justify-between items-center text-[10px] relative">
+            <span className="opacity-50">&copy; {new Date().getFullYear()} Allshop Store.</span>
+            
+            {isAdmin && (
+                <div className="md:absolute md:left-1/2 md:-translate-x-1/2 mt-2 md:mt-0">
+                    <a 
+                        href="#dashboard" 
+                        onClick={(e) => { e.preventDefault(); window.location.hash = 'dashboard'; }} 
+                        className="px-4 py-2 bg-gray-800 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-all font-bold shadow-md"
+                    >
+                        Painel Admin
+                    </a>
+                </div>
+            )}
         </div>
       </footer>
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => { setIsCartOpen(false); setIsLoginOpen(true); }} />
