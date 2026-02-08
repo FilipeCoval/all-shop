@@ -1,8 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, Loader2 } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
 import { ChatMessage, Product } from '../types';
 import { sendMessageToGemini } from '../services/geminiService';
-import { STORE_NAME } from '../constants';
+import { STORE_NAME, BOT_NAME, BOT_AVATAR_URL } from '../constants';
 
 interface AIChatProps {
   products: Product[];
@@ -14,7 +15,7 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
     {
       id: 'welcome',
       role: 'model',
-      text: `Olá! Sou o assistente virtual da ${STORE_NAME}. Posso ajudar a encontrar o produto ideal ou tirar dúvidas?`,
+      text: `Olá! Sou a ${BOT_NAME}, a assistente virtual da ${STORE_NAME}. 😊\nPosso ajudar a encontrar o produto ideal ou resolver problemas técnicos?`,
       timestamp: new Date()
     }
   ]);
@@ -46,7 +47,6 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
     setIsLoading(true);
 
     try {
-      // Passamos 'products' (que vem do Firebase no App.tsx) para o serviço
       const responseText = await sendMessageToGemini(userMsg.text, products);
       
       const botMsg: ChatMessage = {
@@ -65,28 +65,38 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Botão Flutuante (Silhueta Grande) */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-blue-600 hover:scale-110 transition-all duration-300 animate-bounce-slow"
+          className="fixed bottom-4 right-4 z-40 w-24 h-24 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
           aria-label="Abrir chat"
         >
-          <MessageSquare size={28} />
+          <img 
+            src={BOT_AVATAR_URL} 
+            alt={BOT_NAME} 
+            className="w-full h-full object-contain drop-shadow-2xl filter" 
+          />
         </button>
       )}
 
-      {/* Chat Window */}
+      {/* Janela do Chat */}
       {isOpen && (
         <div className="fixed bottom-6 right-6 z-50 w-full max-w-[350px] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[500px] animate-fade-in-up">
+          
           {/* Header */}
-          <div className="bg-primary p-4 flex items-center justify-between text-white">
-            <div className="flex items-center gap-2">
-              <div className="bg-white/20 p-1.5 rounded-lg">
-                <Bot size={20} />
+          <div className="bg-primary p-4 flex items-center justify-between text-white relative overflow-hidden">
+            <div className="flex items-center gap-2 relative z-10">
+              {/* Avatar no Header (Silhueta Média) */}
+              <div className="w-14 h-14 flex items-center justify-center -my-2">
+                <img 
+                    src={BOT_AVATAR_URL} 
+                    alt={BOT_NAME} 
+                    className="w-full h-full object-contain drop-shadow-lg"
+                />
               </div>
               <div>
-                <h3 className="font-bold text-sm">Assistente IA</h3>
+                <h3 className="font-bold text-sm">{BOT_NAME}</h3>
                 <span className="text-xs text-blue-100 flex items-center gap-1">
                   <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                   Online
@@ -95,21 +105,35 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
             </div>
             <button 
               onClick={() => setIsOpen(false)}
-              className="text-white/80 hover:text-white hover:bg-white/10 p-1 rounded transition-colors"
+              className="text-white/80 hover:text-white hover:bg-white/10 p-1 rounded transition-colors z-10"
             >
               <X size={20} />
             </button>
+            
+            {/* Decoração de fundo */}
+            <div className="absolute -left-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
           </div>
 
-          {/* Messages Area */}
+          {/* Área de Mensagens */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
             {messages.map((msg) => (
               <div 
                 key={msg.id} 
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start items-end gap-1'}`}
               >
+                {/* Avatar nas Mensagens (AUMENTADO) */}
+                {msg.role === 'model' && (
+                    <div className="w-12 h-12 flex-shrink-0 flex items-end -mb-1">
+                        <img 
+                            src={BOT_AVATAR_URL} 
+                            alt="Bot" 
+                            className="w-full h-full object-contain drop-shadow-sm transform scale-110 origin-bottom-left" 
+                        />
+                    </div>
+                )}
+
                 <div 
-                  className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                  className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === 'user' 
                       ? 'bg-primary text-white rounded-br-none' 
                       : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
@@ -119,8 +143,13 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
                 </div>
               </div>
             ))}
+            
+            {/* Indicador de Loading (AUMENTADO TAMBÉM) */}
             {isLoading && (
-              <div className="flex justify-start">
+              <div className="flex justify-start items-end gap-1">
+                 <div className="w-12 h-12 flex-shrink-0 flex items-end -mb-1">
+                    <img src={BOT_AVATAR_URL} alt="Bot" className="w-full h-full object-contain drop-shadow-sm transform scale-110 origin-bottom-left" />
+                </div>
                 <div className="bg-white border border-gray-200 p-3 rounded-2xl rounded-bl-none shadow-sm">
                   <Loader2 size={20} className="animate-spin text-primary" />
                 </div>
@@ -129,7 +158,7 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
+          {/* Área de Input */}
           <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-gray-100 flex gap-2">
             <input
               type="text"
