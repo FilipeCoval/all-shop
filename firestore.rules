@@ -27,6 +27,12 @@ service cloud.firestore {
     match /online_users/{sessionId} { allow write: if true; allow read: if isAdmin(); }
     match /stock_reservations/{docId} { allow read, write: if true; }
 
+    // NOVA REGRA: Permitir criação de tickets pela IA (qualquer utilizador)
+    match /support_tickets/{ticketId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     match /coupons/{docId} {
       allow get, list: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
@@ -35,7 +41,6 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow create: if (request.auth.uid == userId && request.resource.data.uid == userId) || isAdmin();
-      // ALTERAÇÃO: 'read' permite tanto 'get' (individual) como 'list' (todos), essencial para o Dashboard.
       allow read, update, delete: if request.auth.uid == userId || isAdmin();
     }
 
