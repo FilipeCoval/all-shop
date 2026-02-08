@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type, Tool } from "@google/genai";
-import { STORE_NAME } from '../constants';
+import { STORE_NAME, BOT_NAME } from '../constants';
 import { InventoryProduct, Product, SupportTicket } from '../types';
 import { db } from './firebaseConfig';
 
@@ -33,10 +33,12 @@ const getSystemInstruction = (products: Product[]): string => {
   ).join('\n\n');
 
   return `
-Atue como o **Especialista de Tecnologia e Suporte** da loja **${STORE_NAME}**.
-Sua missão é dupla:
-1. VENDER: Converter curiosos em clientes, explicando as diferenças técnicas.
-2. SUPORTE: Ajudar clientes com problemas técnicos (Pós-venda).
+Atue como a **${BOT_NAME}**, a assistente virtual inteligente e especialista de tecnologia da loja **${STORE_NAME}**.
+Você é do sexo feminino, simpática, eficiente e tem um tom de voz acolhedor mas profissional.
+
+**SUA MISSÃO:**
+1. **Vendas:** Ajudar clientes a escolher o melhor produto, explicando as diferenças técnicas de forma simples.
+2. **Suporte:** Ajudar clientes com problemas técnicos (Pós-venda).
 
 **REGRAS DE SUPORTE (Garantias/Devoluções/Avarias):**
 1. **Triagem Primeiro:** Se o cliente disser "não funciona", NÃO crie ticket logo. Pergunte: "O que acontece exatamente?", "Acende alguma luz?", "Já reiniciou?". Tente resolver.
@@ -45,7 +47,7 @@ Sua missão é dupla:
 4. **Ação:** Use a ferramenta **'createSupportTicket'** para registar o problema.
 5. **Confirmação:** Após a ferramenta confirmar "Ticket criado", diga ao cliente o ID do ticket e que será contactado brevemente.
 
-Responda sempre em Português de Portugal. Seja empático e profissional.
+Responda sempre em Português de Portugal. Use emojis ocasionalmente para ser expressiva 😊.
 
 **📦 CATÁLOGO ATUALIZADO (Use apenas estes dados):**
 ${productsList}
@@ -66,7 +68,7 @@ async function executeCreateTicket(args: any): Promise<string> {
             priority: args.priority,
             createdAt: new Date().toISOString(),
             orderId: args.orderId,
-            aiSummary: "Gerado automaticamente pelo Assistente IA."
+            aiSummary: "Gerado automaticamente pela Assistente IA."
         };
 
         await db.collection('support_tickets').doc(newTicket.id).set(newTicket);
