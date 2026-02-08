@@ -7,10 +7,11 @@ import { STORE_NAME, BOT_NAME, BOT_AVATAR_URL } from '../constants';
 
 interface AIChatProps {
   products: Product[];
+  isOpen: boolean;
+  onToggle: (isOpen: boolean) => void;
 }
 
-const AIChat: React.FC<AIChatProps> = ({ products }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -68,8 +69,8 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
       {/* Botão Flutuante (Silhueta Grande) */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-4 right-4 z-40 w-24 h-36 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
+          onClick={() => onToggle(true)}
+          className="fixed bottom-4 right-4 z-40 w-24 h-24 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
           aria-label="Abrir chat"
         >
           <img 
@@ -104,7 +105,7 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
               </div>
             </div>
             <button 
-              onClick={() => setIsOpen(false)}
+              onClick={() => onToggle(false)}
               className="text-white/80 hover:text-white hover:bg-white/10 p-1 rounded transition-colors z-10"
             >
               <X size={20} />
