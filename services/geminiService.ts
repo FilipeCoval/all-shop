@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type, Tool } from "@google/genai";
 import { STORE_NAME, BOT_NAME } from '../constants';
-import { InventoryProduct, Product, SupportTicket } from '../types';
+import { InventoryProduct, Product, SupportTicket, Order, OrderItem } from '../types';
 import { db } from './firebaseConfig';
 
 let chatSession: Chat | null = null;
@@ -18,7 +18,7 @@ const createTicketTool: FunctionDeclaration = {
             subject: { type: Type.STRING, description: "Um título curto para o problema (ex: 'TV Box não liga')." },
             description: { type: Type.STRING, description: "Um resumo detalhado e técnico do problema relatado pelo cliente. Inclua passos já tentados." },
             category: { type: Type.STRING, description: "Categoria do problema.", enum: ["Garantia", "Devolução", "Dúvida Técnica", "Outros"] },
-            orderId: { type: Type.STRING, description: "O número da encomenda (opcional, mas tentar obter)." },
+            orderId: { type: Type.STRING, description: "O número da encomenda associada ao problema." },
             priority: { type: Type.STRING, description: "Prioridade baseada na urgência ou gravidade.", enum: ["Baixa", "Média", "Alta"] },
         },
         required: ["subject", "description", "category", "priority"]
@@ -27,10 +27,26 @@ const createTicketTool: FunctionDeclaration = {
 
 const tools: Tool[] = [{ functionDeclarations: [createTicketTool] }];
 
-const getSystemInstruction = (products: Product[]): string => {
+// Helper para formatar os itens da encomenda
+const formatOrderItems = (items: (OrderItem | string)[]): string => {
+    if (!items) return "";
+    return items.map(i => {
+        if (typeof i === 'string') return i;
+        return `${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`;
+    }).join(', ');
+};
+
+const getSystemInstruction = (products: Product[], userOrders: Order[] = []): string => {
   const productsList = products.map(p => 
     `- **${p.name}** (€ ${p.price.toFixed(2)})${p.variants ? ' [Várias Opções/Variantes Disponíveis]' : ''}${p.comingSoon ? ' [PRODUTO EM BREVE - Brevemente no Stock]' : ''}\n  Categoria: ${p.category}\n  Descrição: ${p.description}\n  Specs: ${p.features.join(', ')}`
   ).join('\n\n');
+
+  let ordersContext = "O cliente ainda não tem compras registadas ou não fez login.";
+  if (userOrders.length > 0) {
+      ordersContext = userOrders.map(o => 
+        `- Encomenda #${o.id} (${new Date(o.date).toLocaleDateString()}): Status [${o.status}]. Itens: ${formatOrderItems(o.items)}`
+      ).join('\n');
+  }
 
   return `
 Atue como a **${BOT_NAME}**, a assistente virtual inteligente e especialista de tecnologia da loja **${STORE_NAME}**.
@@ -40,16 +56,21 @@ Você é do sexo feminino, simpática, eficiente e tem um tom de voz acolhedor m
 1. **Vendas:** Ajudar clientes a escolher o melhor produto, explicando as diferenças técnicas de forma simples.
 2. **Suporte:** Ajudar clientes com problemas técnicos (Pós-venda).
 
+**CONTEXTO DO CLIENTE (HISTÓRICO DE COMPRAS):**
+${ordersContext}
+
 **REGRAS DE SUPORTE (Garantias/Devoluções/Avarias):**
-1. **Triagem Primeiro:** Se o cliente disser "não funciona", NÃO crie ticket logo. Pergunte: "O que acontece exatamente?", "Acende alguma luz?", "Já reiniciou?". Tente resolver.
-2. **Criação de Ticket:** Se o problema persistir após as suas dicas, diga: "Vou abrir um processo de suporte técnico para a nossa equipa analisar.".
-3. **Dados:** Peça o Email e Nome (se ainda não tiver). O ID da encomenda é útil mas opcional.
-4. **Ação:** Use a ferramenta **'createSupportTicket'** para registar o problema.
-5. **Confirmação:** Após a ferramenta confirmar "Ticket criado", diga ao cliente o ID do ticket e que será contactado brevemente.
+1. **Validação de Compra (CRÍTICO):** Se o cliente reclamar de um produto, VERIFIQUE no "Histórico de Compras" acima se ele realmente comprou esse item connosco.
+   - Se a compra NÃO estiver na lista: Pergunte educadamente pelo número da encomenda ou se comprou com outro email. Diga: "Não estou a encontrar registo dessa compra na sua conta atual. Pode fornecer o número do pedido?".
+   - Se a compra estiver na lista: Avance para a triagem técnica.
+2. **Triagem Primeiro:** Se o cliente disser "não funciona", NÃO crie ticket logo. Pergunte: "O que acontece exatamente?", "Acende alguma luz?", "Já reiniciou?". Tente resolver.
+3. **Criação de Ticket:** Se o problema persistir E a compra for verificada, diga: "Vou abrir um processo de suporte técnico.".
+4. **Dados:** Peça o Email e Nome (se ainda não tiver). O ID da encomenda é OBRIGATÓRIO para garantias.
+5. **Ação:** Use a ferramenta **'createSupportTicket'** para registar o problema.
 
 Responda sempre em Português de Portugal. Use emojis ocasionalmente para ser expressiva 😊.
 
-**📦 CATÁLOGO ATUALIZADO (Use apenas estes dados):**
+**📦 CATÁLOGO ATUALIZADO (Use apenas estes dados para recomendações):**
 ${productsList}
 `;
 }
@@ -79,13 +100,13 @@ async function executeCreateTicket(args: any): Promise<string> {
     }
 }
 
-// Inicia sessão com os produtos atuais
-export const initializeChat = async (products: Product[]): Promise<Chat> => {
+// Inicia sessão com os produtos atuais e histórico do user
+export const initializeChat = async (products: Product[], userOrders: Order[] = []): Promise<Chat> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   chatSession = ai.chats.create({
     model: 'gemini-2.5-flash', // Modelo mais rápido e capaz de tool use
     config: {
-      systemInstruction: getSystemInstruction(products),
+      systemInstruction: getSystemInstruction(products, userOrders),
       temperature: 0.3, // Temperatura baixa para ser mais focado no suporte
       tools: tools
     },
@@ -93,11 +114,16 @@ export const initializeChat = async (products: Product[]): Promise<Chat> => {
   return chatSession;
 };
 
+// Resetar sessão (útil quando o user faz login/logout)
+export const resetChatSession = () => {
+    chatSession = null;
+};
+
 // Recebe os produtos para garantir que a IA sabe do que está a falar
-export const sendMessageToGemini = async (message: string, currentProducts: Product[]): Promise<string> => {
+export const sendMessageToGemini = async (message: string, currentProducts: Product[], userOrders: Order[] = []): Promise<string> => {
   try {
     if (!chatSession) {
-        await initializeChat(currentProducts);
+        await initializeChat(currentProducts, userOrders);
     }
     
     if (!chatSession) return "A ligar sistemas...";
@@ -105,18 +131,12 @@ export const sendMessageToGemini = async (message: string, currentProducts: Prod
     let response = await chatSession.sendMessage({ message });
     
     // LOOP para lidar com chamadas de função (Tools)
-    // O modelo pode chamar a função, nós executamos, e devolvemos o resultado
-    // para ele gerar a resposta final ao utilizador.
-    // Pode haver múltiplas chamadas em sequência, por isso usamos while.
     while (response.functionCalls && response.functionCalls.length > 0) {
-        const call = response.functionCalls[0]; // Gemini geralmente faz uma call de cada vez neste contexto
+        const call = response.functionCalls[0]; 
         
         if (call.name === 'createSupportTicket') {
-            // Executa a lógica real (gravar na DB)
             const toolResult = await executeCreateTicket(call.args);
             
-            // Enviar o resultado da função de volta para o modelo para ele formular a resposta final
-            // Usamos sendMessage com o functionResponse porque sendToolResponse não existe em Chat
             response = await chatSession.sendMessage({
                 message: [{
                     functionResponse: {
@@ -127,7 +147,6 @@ export const sendMessageToGemini = async (message: string, currentProducts: Prod
                 }]
             });
         } else {
-            // Se for outra ferramenta desconhecida, paramos para evitar loop infinito
             break;
         }
     }
@@ -135,7 +154,6 @@ export const sendMessageToGemini = async (message: string, currentProducts: Prod
     return response.text || "Pode repetir?";
   } catch (error) {
     console.error(error);
-    // Tenta recuperar sessão se houver erro
     chatSession = null;
     return "Tive um pequeno lapso. Pode repetir a pergunta?";
   }
