@@ -69,7 +69,7 @@ const AIChat: React.FC<AIChatProps> = ({ products }) => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-4 right-4 z-40 w-24 h-24 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
+          className="fixed bottom-4 right-4 z-40 w-24 h-36 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
           aria-label="Abrir chat"
         >
           <img 
