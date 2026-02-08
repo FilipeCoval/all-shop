@@ -1,4 +1,5 @@
 
+
 // Tipos principais da aplicação
 
 export interface User {
@@ -215,4 +216,3 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
-
