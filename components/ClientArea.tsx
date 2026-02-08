@@ -6,7 +6,7 @@ import {
     CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, 
     ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, 
     Camera, Home, ChevronDown, ChevronUp, Undo2, MessageSquareWarning,
-    History, Zap, TicketPercent, ShieldAlert
+    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage } from '../services/firebaseConfig';
@@ -20,6 +20,7 @@ interface ClientAreaProps {
   onToggleWishlist: (id: number) => void;
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
   publicProducts: Product[];
+  onOpenSupportChat: () => void; // Nova Prop
 }
 
 type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
@@ -60,7 +61,7 @@ const CircularProgress: React.FC<{ progress: number; size: number; strokeWidth: 
     );
 };
 
-const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts }) => {
+const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts, onOpenSupportChat }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   
   const [profileForm, setProfileForm] = useState({ 
@@ -78,7 +79,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [modalState, setModalState] = useState<{ type: 'cancel' | 'return' | 'claim'; order: Order | null }>({ type: 'cancel', order: null });
+  const [modalState, setModalState] = useState<{ type: 'cancel' | 'return'; order: Order | null }>({ type: 'cancel', order: null });
   const [modalReason, setModalReason] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
@@ -149,10 +150,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             await orderRef.update({ 
                 returnRequest: { date: now, reason: modalReason.trim(), status: 'Pendente' },
                 statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: 'Pendente Devolução', date: now, notes: `Pedido Devolução: ${modalReason.trim()}` })
-            });
-        } else if (modalState.type === 'claim') {
-            await orderRef.update({ 
-                statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: 'Reclamação', date: now, notes: `RECLAMAÇÃO/GARANTIA: ${modalReason.trim()}` }) 
             });
         }
         setModalState({ type: 'cancel', order: null });
@@ -446,7 +443,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                         
                                         {order.status === 'Entregue' && daysSinceDelivery >= 0 && daysSinceDelivery <= 14 && <button onClick={() => setModalState({ type: 'return', order })} className="flex items-center gap-2 text-sm font-bold text-orange-600 bg-orange-100 px-4 py-2 rounded-lg hover:bg-orange-200 shadow-sm"><Undo2 size={16}/> Pedir Devolução (14 dias)</button>}
                                         
-                                        {order.status === 'Entregue' && <button onClick={() => setModalState({ type: 'claim', order })} className="flex items-center gap-2 text-sm font-bold text-gray-700 bg-gray-100 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-200 shadow-sm"><ShieldAlert size={16} className="text-indigo-600"/> Acionar Garantia / Reclamação</button>}
+                                        {order.status === 'Entregue' && <button onClick={onOpenSupportChat} className="flex items-center gap-2 text-sm font-bold text-purple-700 bg-purple-100 border border-purple-200 px-4 py-2 rounded-lg hover:bg-purple-200 shadow-sm"><Sparkles size={16} /> Ajuda / Garantia (IA)</button>}
                                     </div>
                                 </div>
                             </div>
@@ -645,7 +642,6 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                               {modalState.type === 'cancel' && <><AlertTriangle className="text-red-500"/> Cancelar Encomenda</>}
                               {modalState.type === 'return' && <><Undo2 className="text-orange-500"/> Pedir Devolução</>}
-                              {modalState.type === 'claim' && <><ShieldAlert className="text-indigo-600"/> Acionar Garantia / Apoio</>}
                           </h3>
                           <p className="text-sm text-gray-500 mt-1">Ref: {displayOrderId(modalState.order.id)}</p>
                       </div>
@@ -653,16 +649,16 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                   </div>
                   <div className="mb-4">
                       <p className="text-sm text-gray-600 mb-4">
-                        {modalState.type === 'claim' ? 'Descreva o problema técnico ou avaria que encontrou. A sua compra tem 3 anos de garantia a contar da data de entrega.' : 'Descreva a situação detalhadamente (obrigatório).'}
+                        Descreva a situação detalhadamente (obrigatório).
                       </p>
-                      <label htmlFor="modalReason" className="block text-sm font-bold text-gray-700 mb-2">Descrição do Problema</label>
+                      <label htmlFor="modalReason" className="block text-sm font-bold text-gray-700 mb-2">Descrição</label>
                       <textarea id="modalReason" value={modalReason} onChange={(e) => setModalReason(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none" rows={4} placeholder="O que aconteceu?"/>
                   </div>
                   <div className="flex justify-end gap-3">
                       <button onClick={() => setModalState({type: 'cancel', order: null})} className="px-4 py-2 border rounded-lg text-gray-700 font-medium hover:bg-gray-50">Voltar</button>
                       <button onClick={handleOrderAction} disabled={!modalReason.trim() || isProcessingAction} className="px-6 py-2 bg-primary text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                           {isProcessingAction ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
-                          {isProcessingAction ? 'A processar...' : 'Confirmar Pedido'}
+                          {isProcessingAction ? 'A processar...' : 'Confirmar'}
                       </button>
                   </div>
               </div>
