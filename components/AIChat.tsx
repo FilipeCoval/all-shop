@@ -1,17 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
-import { ChatMessage, Product } from '../types';
-import { sendMessageToGemini } from '../services/geminiService';
+import { ChatMessage, Product, Order } from '../types';
+import { sendMessageToGemini, resetChatSession } from '../services/geminiService';
 import { STORE_NAME, BOT_NAME, BOT_AVATAR_URL } from '../constants';
 
 interface AIChatProps {
   products: Product[];
   isOpen: boolean;
   onToggle: (isOpen: boolean) => void;
+  userOrders?: Order[]; // Nova Prop para saber o histórico
 }
 
-const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle }) => {
+const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders = [] }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -32,6 +33,14 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle }) => {
     if (isOpen) scrollToBottom();
   }, [messages, isOpen]);
 
+  // Efeito para resetar a sessão se o utilizador fizer login/logout (número de encomendas muda)
+  // Isto garante que a IA recebe o contexto novo (com ou sem encomendas)
+  useEffect(() => {
+      resetChatSession();
+      // Opcional: Limpar mensagens antigas se mudar de utilizador drasticamente, 
+      // mas por agora mantemos o histórico visual para UX suave.
+  }, [userOrders.length]);
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim() || isLoading) return;
@@ -48,7 +57,8 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle }) => {
     setIsLoading(true);
 
     try {
-      const responseText = await sendMessageToGemini(userMsg.text, products);
+      // Passamos userOrders para o serviço
+      const responseText = await sendMessageToGemini(userMsg.text, products, userOrders);
       
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
