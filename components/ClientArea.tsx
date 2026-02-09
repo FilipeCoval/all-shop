@@ -1,12 +1,12 @@
 
-import React, { useState, useRef, useMemo } from 'react';
-import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus, StatusHistory } from '../types';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus, StatusHistory, SupportTicket } from '../types';
 import { 
     Package, User as UserIcon, LogOut, MapPin, CreditCard, Save, Plus, Trash2, 
     CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, 
     ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, 
     Camera, Home, ChevronDown, ChevronUp, Undo2, MessageSquareWarning,
-    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles
+    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage } from '../services/firebaseConfig';
@@ -23,7 +23,7 @@ interface ClientAreaProps {
   onOpenSupportChat: () => void; // Nova Prop
 }
 
-type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points';
+type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points' | 'support';
 
 const formatCurrency = (value: number) => 
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
@@ -83,11 +83,32 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [modalReason, setModalReason] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
+  // Tickets State
+  const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+
   const tierMap: Record<UserTier, keyof typeof LOYALTY_TIERS> = {
     'Bronze': 'BRONZE',
     'Prata': 'SILVER',
     'Ouro': 'GOLD'
   };
+
+  useEffect(() => {
+      if (activeTab === 'support' && user.email) {
+          setLoadingTickets(true);
+          const unsubscribe = db.collection('support_tickets')
+              .where('customerEmail', '==', user.email)
+              .orderBy('createdAt', 'desc')
+              .onSnapshot(snapshot => {
+                  setMyTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket)));
+                  setLoadingTickets(false);
+              }, err => {
+                  console.error("Erro tickets:", err);
+                  setLoadingTickets(false);
+              });
+          return () => unsubscribe();
+      }
+  }, [activeTab, user.email]);
 
   const getSafeItems = (items: any): (OrderItem | string)[] => {
       if (!items) return [];
@@ -296,6 +317,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 {[
                     { id: 'overview', icon: LayoutDashboard, label: 'Visão Geral' },
                     { id: 'orders', icon: Package, label: 'Encomendas' },
+                    { id: 'support', icon: Headphones, label: 'Suporte' },
                     { id: 'points', icon: Coins, label: 'AllPoints' },
                     { id: 'wishlist', icon: Heart, label: 'Favoritos' },
                     { id: 'profile', icon: UserIcon, label: 'Meu Perfil' },
@@ -355,6 +377,63 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               </div>
             )}
             
+            {/* SUPPORT TICKETS (NOVO) */}
+            {activeTab === 'support' && (
+                <div className="animate-fade-in space-y-6">
+                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <Headphones className="text-primary"/> Os Meus Pedidos de Suporte
+                            </h2>
+                            <p className="text-gray-500 text-sm mt-1">Histórico de assistência criada pela Rofi.</p>
+                        </div>
+                        <button onClick={onOpenSupportChat} className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-sm shadow hover:bg-blue-600 transition-colors flex items-center gap-2">
+                            <Sparkles size={16} /> Novo Pedido (Rofi)
+                        </button>
+                    </div>
+
+                    {loadingTickets ? (
+                        <div className="text-center py-12"><Loader2 className="animate-spin text-primary mx-auto" size={32} /></div>
+                    ) : myTickets.length === 0 ? (
+                        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+                            <div className="bg-blue-50 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                                <Headphones size={32} className="text-primary" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">Sem pedidos de suporte</h3>
+                            <p className="text-gray-500 mt-2">Se tiver algum problema com uma encomenda, fale com a Rofi no canto do ecrã.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {myTickets.map(ticket => (
+                                <div key={ticket.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-blue-300 transition-all">
+                                    <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === 'Aberto' ? 'bg-red-100 text-red-700' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                                    {ticket.status}
+                                                </span>
+                                                <span className="text-gray-400 text-xs font-mono">#{ticket.id}</span>
+                                            </div>
+                                            <h3 className="font-bold text-lg text-gray-900">{ticket.subject}</h3>
+                                        </div>
+                                        <div className="text-right text-xs text-gray-500 flex flex-col items-end">
+                                            <span className="flex items-center gap-1"><Clock size={12}/> {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                                            {ticket.orderId && <span className="font-bold text-primary bg-blue-50 px-2 py-0.5 rounded mt-1">Enc: {ticket.orderId}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <p className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                            <MessageSquare size={16} className="text-gray-400 shrink-0 mt-0.5"/>
+                                            {ticket.description}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* ORDERS */}
             {activeTab === 'orders' && (
               <div className="animate-fade-in space-y-6">
