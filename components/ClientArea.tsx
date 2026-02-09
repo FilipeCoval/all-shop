@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus, StatusHistory, SupportTicket } from '../types';
 import { 
@@ -98,9 +97,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           setLoadingTickets(true);
           const unsubscribe = db.collection('support_tickets')
               .where('customerEmail', '==', user.email)
-              .orderBy('createdAt', 'desc')
+              // .orderBy('createdAt', 'desc') // Removido para evitar erro de índice composto
               .onSnapshot(snapshot => {
-                  setMyTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket)));
+                  const loadedTickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket));
+                  // Ordenação em memória
+                  loadedTickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  setMyTickets(loadedTickets);
                   setLoadingTickets(false);
               }, err => {
                   console.error("Erro tickets:", err);
