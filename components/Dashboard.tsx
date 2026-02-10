@@ -474,13 +474,48 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       try {
           const currentSold = (selectedProductForSale.quantitySold || 0) + qty;
           const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL';
+          
+          // 1. Atualizar Inventário (Dar Baixa)
           await updateProduct(selectedProductForSale.id, {
               quantitySold: currentSold,
               salesHistory: [...(selectedProductForSale.salesHistory || []), newSale],
               status: status as ProductStatus
           });
+
+          // 2. Atualizar Encomenda Online (Se estiver vinculada e houver S/N)
+          if (linkedOrderId && selectedUnitsForSale.length > 0) {
+              const orderRef = db.collection('orders').doc(linkedOrderId);
+              const orderDoc = await orderRef.get();
+              
+              if (orderDoc.exists) {
+                  const orderData = orderDoc.data() as Order;
+                  const updatedItems = orderData.items.map((item: any) => {
+                      // Verifica se este é o item que estamos a vender (ID + Variante)
+                      const isMatch = item.productId === selectedProductForSale.publicProductId &&
+                                      ((!item.selectedVariant && !selectedProductForSale.variant) ||
+                                       (item.selectedVariant === selectedProductForSale.variant));
+
+                      if (isMatch) {
+                          // Junta os S/Ns existentes com os novos (evitando duplicados)
+                          const currentSn = item.serialNumbers || [];
+                          return { 
+                              ...item, 
+                              serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] 
+                          };
+                      }
+                      return item;
+                  });
+                  
+                  // Atualiza a encomenda com os novos S/Ns
+                  await orderRef.update({ items: updatedItems });
+              }
+          }
+
           setIsSaleModalOpen(false);
-      } catch(e) { alert("Erro ao registar venda."); }
+      } catch(e) { 
+          console.error(e);
+          alert("Erro ao registar venda."); 
+      }
   };
 
   const handleDeleteSale = async (saleId: string) => {
