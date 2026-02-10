@@ -95,6 +95,7 @@ export interface Product {
   badges?: string[];
   images?: string[];
   variantLabel?: string;
+  weight?: number; // Peso em KG
 }
 
 export interface ProductVariant {
@@ -133,6 +134,7 @@ export interface InventoryProduct {
   badges?: string[];
   images?: string[];
   comingSoon?: boolean;
+  weight?: number; // Peso em KG
 }
 
 export interface ProductUnit {
