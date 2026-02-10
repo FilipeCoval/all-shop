@@ -1,5 +1,4 @@
 
-
 // Tipos principais da aplicação
 
 export interface User {
@@ -119,8 +118,14 @@ export interface InventoryProduct {
   purchasePrice: number;
   targetSalePrice?: number;
   salePrice: number;
+  
+  // Cashback Fields Expandidos
   cashbackValue: number;
   cashbackStatus: CashbackStatus;
+  cashbackPlatform?: string; // Ex: Temu, AliExpress
+  cashbackAccount?: string;  // Ex: email@usado.com
+  cashbackExpectedDate?: string; // Data prevista para receber
+
   units?: ProductUnit[];
   status: ProductStatus;
   description?: string;
