@@ -57,7 +57,8 @@ export const useInventory = (isAdmin: boolean = false) => {
         comingSoon: inv.comingSoon || false,
         badges: inv.badges || [],
         images: inv.images || [],
-        variantLabel: 'Opção'
+        variantLabel: 'Opção',
+        weight: inv.weight || 0 // Mapeia o peso para a loja pública
     };
   };
 
