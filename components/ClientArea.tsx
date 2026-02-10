@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus, StatusHistory, SupportTicket } from '../types';
 import { 
@@ -5,7 +6,7 @@ import {
     CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, 
     ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, 
     Camera, Home, ChevronDown, ChevronUp, Undo2, MessageSquareWarning,
-    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare
+    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage } from '../services/firebaseConfig';
@@ -19,7 +20,7 @@ interface ClientAreaProps {
   onToggleWishlist: (id: number) => void;
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
   publicProducts: Product[];
-  onOpenSupportChat: () => void; // Nova Prop
+  onOpenSupportChat: () => void;
 }
 
 type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points' | 'support';
@@ -256,26 +257,202 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   const favoriteProducts = (publicProducts || []).filter(p => (wishlist || []).includes(p.id));
 
+  // --- FUNÇÃO DE IMPRESSÃO PROFISSIONAL RESTAURADA ---
   const handlePrintOrder = (order: Order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
     const dateFormatted = new Date(order.date).toLocaleString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const totalFormatted = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0);
     const items = getSafeItems(order.items);
     
+    // Tratamento robusto da morada (suporta formato antigo string e novo objeto)
+    let shippingHtml = '';
+    const info = order.shippingInfo as any;
+    
+    if (info && info.street) {
+        // Formato Novo (Objeto)
+        shippingHtml = `
+            <p><strong>${info.name}</strong></p>
+            <p>${info.street}, ${info.doorNumber || ''}</p>
+            <p>${info.zip} ${info.city}</p>
+            <p>Tel: ${info.phone}</p>
+            ${info.nif ? `<p>NIF: ${info.nif}</p>` : ''}
+        `;
+    } else if (info && info.address) {
+        // Formato Antigo (String única)
+        shippingHtml = `
+            <p><strong>${info.name}</strong></p>
+            <p>${info.address}</p>
+            <p>Tel: ${info.phone}</p>
+        `;
+    } else {
+        shippingHtml = `<p>Morada não disponível</p>`;
+    }
+
+    // Gerar linhas da tabela
+    const rowsHtml = items.map(item => {
+        const isObj = typeof item === 'object' && item !== null;
+        const name = isObj ? (item as OrderItem).name : item as string;
+        const qty = isObj ? (item as OrderItem).quantity : 1;
+        const price = isObj ? (item as OrderItem).price : 0;
+        const total = price * qty;
+        
+        const variant = isObj && (item as OrderItem).selectedVariant ? `<br><span style="font-size:11px; color:#666;">Opção: ${(item as OrderItem).selectedVariant}</span>` : '';
+        
+        // DESTAQUE DO NÚMERO DE SÉRIE (Essencial para Garantia)
+        const serials = isObj && (item as OrderItem).serialNumbers && (item as OrderItem).serialNumbers!.length > 0 
+            ? `<div class="sn-box">S/N: ${(item as OrderItem).serialNumbers!.join(', ')}</div>` 
+            : '';
+
+        return `
+            <tr>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee;">
+                    <strong>${name}</strong>${variant}
+                    ${serials}
+                </td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center;">${qty}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(price)}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right;"><strong>${formatCurrency(total)}</strong></td>
+            </tr>
+        `;
+    }).join('');
+
     const htmlContent = `
+      <!DOCTYPE html>
       <html>
-        <head><title>Fatura Allshop - ${order.id}</title><style>body{font-family:sans-serif;padding:40px;} .header{display:flex;justify-content:space-between;border-bottom:2px solid #eee;padding-bottom:20px;margin-bottom:20px;} .footer{margin-top:50px;border-top:1px solid #eee;padding-top:20px;font-size:12px;color:#666;}</style></head>
+        <head>
+            <title>Comprovativo #${order.id}</title>
+            <style>
+                @page { size: A4; margin: 0; }
+                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; max-width: 210mm; margin: 0 auto; color: #333; background: white; }
+                
+                /* Header Area */
+                .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #3b82f6; }
+                .logo-section h1 { margin: 0; color: #3b82f6; font-size: 28px; letter-spacing: -1px; }
+                .logo-section p { margin: 5px 0 0; color: #666; font-size: 12px; }
+                
+                .invoice-details { text-align: right; }
+                .invoice-details h2 { margin: 0 0 5px 0; font-size: 14px; color: #999; text-transform: uppercase; letter-spacing: 2px; }
+                .invoice-details p { margin: 0; font-size: 18px; font-weight: bold; color: #333; }
+                .invoice-details .date { font-size: 12px; font-weight: normal; color: #666; margin-top: 5px; }
+                
+                /* Address Grid */
+                .addresses { display: flex; margin-bottom: 50px; justify-content: space-between; gap: 40px; }
+                .addr-box { flex: 1; }
+                .addr-box h3 { font-size: 11px; color: #999; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; letter-spacing: 1px; }
+                .addr-box p { margin: 3px 0; font-size: 13px; line-height: 1.4; }
+
+                /* Product Table */
+                table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                th { text-align: left; padding: 10px; background-color: #f8fafc; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0; font-weight: 700; letter-spacing: 0.5px; }
+                
+                /* S/N Box Style */
+                .sn-box {
+                    margin-top: 6px; 
+                    font-family: 'Courier New', monospace; 
+                    font-size: 11px; 
+                    color: #333; 
+                    background: #f1f5f9; 
+                    padding: 4px 8px; 
+                    border-radius: 4px; 
+                    border: 1px solid #cbd5e1;
+                    display: inline-block;
+                    font-weight: bold;
+                }
+                
+                /* Totals Area */
+                .totals { display: flex; justify-content: flex-end; margin-top: 20px; }
+                .totals-box { width: 250px; }
+                .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+                .total-row.final { border-top: 2px solid #333; border-bottom: none; margin-top: 10px; padding-top: 15px; font-size: 20px; font-weight: bold; color: #3b82f6; }
+
+                /* Footer / Warranty */
+                .footer { margin-top: 80px; padding-top: 30px; border-top: 1px solid #eee; font-size: 11px; color: #94a3b8; text-align: center; }
+                
+                .warranty-badge { 
+                    margin-top: 40px;
+                    background: #f0fdf4; 
+                    border: 1px solid #bbf7d0; 
+                    color: #166534; 
+                    padding: 20px; 
+                    border-radius: 8px; 
+                    font-size: 12px; 
+                    line-height: 1.6;
+                    text-align: left;
+                }
+                .warranty-title { font-weight: bold; font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #15803d; text-transform: uppercase; }
+
+            </style>
+        </head>
         <body>
-          <div class="header"><div><h1>Allshop</h1><p>Ref: ${order.id}</p></div><div style="text-align:right"><p>${dateFormatted}</p></div></div>
-          <h3>Dados do Cliente</h3>
-          <p>Nome: ${order.shippingInfo.name}</p>
-          <p>Email: ${order.shippingInfo.email}</p>
-          <h3>Artigos</h3>
-          <ul>${items.map(i => `<li>${typeof i === 'object' ? `${i.quantity}x ${i.name} (${i.price}€)` : i}</li>`).join('')}</ul>
-          <h2 style="text-align:right">Total: ${totalFormatted}</h2>
-          <div class="footer"><p>Este documento serve como comprovativo de compra e garantia de 3 anos para os equipamentos eletrónicos. Allshop Store Portugal.</p></div>
-          <script>window.print();</script>
+          <div class="header">
+            <div class="logo-section">
+                ${LOGO_URL ? `<img src="${LOGO_URL}" style="height: 50px; object-fit: contain; margin-bottom: 10px;">` : `<h1>${STORE_NAME}</h1>`}
+                <p>Tecnologia e Gadgets</p>
+                <p>NIF: 999999999</p>
+            </div>
+            <div class="invoice-details">
+                <h2>Comprovativo de Compra</h2>
+                <p>#${order.id}</p>
+                <p class="date">${dateFormatted}</p>
+            </div>
+          </div>
+
+          <div class="addresses">
+            <div class="addr-box">
+                <h3>Vendedor</h3>
+                <p><strong>${STORE_NAME}</strong></p>
+                <p>Av. da Liberdade, 100</p>
+                <p>Lisboa, Portugal</p>
+                <p>suporte@allshop.com</p>
+            </div>
+            <div class="addr-box">
+                <h3>Faturar / Enviar a</h3>
+                ${shippingHtml}
+            </div>
+          </div>
+
+          <table>
+            <thead>
+                <tr>
+                    <th width="50%">Descrição do Artigo</th>
+                    <th width="10%" style="text-align: center;">Qtd</th>
+                    <th width="20%" style="text-align: right;">Preço Unit.</th>
+                    <th width="20%" style="text-align: right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="totals-box">
+                <div class="total-row final">
+                    <span>TOTAL A PAGAR</span>
+                    <span>${totalFormatted}</span>
+                </div>
+            </div>
+          </div>
+
+          <div class="warranty-badge">
+            <div class="warranty-title">🛡️ Certificado de Garantia (3 Anos)</div>
+            Este documento serve como prova de compra para efeitos de garantia legal (Decreto-Lei n.º 84/2021). 
+            Todos os equipamentos eletrónicos novos beneficiam de uma garantia de 3 anos contra defeitos de fabrico.
+            <br><br>
+            <strong>Importante:</strong> Os números de série (S/N) indicados acima identificam inequivocamente os artigos adquiridos. 
+            Conserve este documento e a caixa original do produto.
+          </div>
+
+          <div class="footer">
+            <p>Obrigado pela sua preferência!</p>
+            <p>Documento processado por computador.</p>
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
         </body>
       </html>
     `;
