@@ -12,14 +12,16 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
-      chunkSizeWarningLimit: 2000,
+      chunkSizeWarningLimit: 3000,
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
               if (id.includes('firebase')) return 'firebase';
               if (id.includes('react')) return 'vendor';
-              if (id.includes('lucide') || id.includes('zxing') || id.includes('google')) return 'utils';
+              if (id.includes('lucide')) return 'icons';
+              if (id.includes('@google/genai')) return 'ai';
+              if (id.includes('zxing') || id.includes('barcode')) return 'scanner';
               return 'libs';
             }
           }
@@ -31,4 +33,3 @@ export default defineConfig(({ mode }) => {
     }
   };
 });
-
