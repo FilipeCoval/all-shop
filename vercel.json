@@ -1,20 +1,17 @@
 
 {
-  "routes": [
+  "rewrites": [
     {
-      "src": "/product/(.*)",
-      "dest": "/api/og?id=$1"
+      "source": "/product/:id",
+      "destination": "/api/og?id=:id"
     },
     {
-      "src": "/p/(.*)",
-      "dest": "/api/og?id=$1"
+      "source": "/p/:id",
+      "destination": "/api/og?id=:id"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
