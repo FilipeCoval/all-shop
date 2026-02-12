@@ -38,9 +38,63 @@ export const useInventory = (isAdmin: boolean = false) => {
     return () => unsubscribe();
   }, [isAdmin]);
 
-  // Função auxiliar para mapear Produto de Inventário -> Produto Público
+  // --- FUNÇÃO DE SINCRONIZAÇÃO AUTOMÁTICA ---
+  // Esta função garante que o stock público é sempre a soma de todos os lotes
+  const refreshPublicProductStock = async (publicId: number) => {
+      try {
+          const idStr = publicId.toString();
+          
+          // 1. Buscar todos os lotes deste produto
+          const snapshot = await db.collection('products_inventory')
+              .where('publicProductId', '==', publicId)
+              .get();
+
+          if (snapshot.empty) {
+              // Se não houver lotes, coloca stock a 0 mas não apaga o produto (para manter SEO/Histórico)
+              // Se quiser apagar mesmo, seria .delete()
+              await db.collection('products_public').doc(idStr).update({ stock: 0, variants: [] }).catch(() => {});
+              return;
+          }
+
+          let totalStock = 0;
+          const variantsMap = new Map<string, ProductVariant>();
+
+          snapshot.forEach(doc => {
+              const item = doc.data() as InventoryProduct;
+              // Cálculo de stock deste lote
+              const itemStock = Math.max(0, (item.quantityBought || 0) - (item.quantitySold || 0));
+              totalStock += itemStock;
+
+              // Reconstruir variantes baseadas nos lotes existentes
+              if (item.variant) {
+                  // Se a variante já existe, mantemos a imagem existente se a nova não tiver
+                  const existing = variantsMap.get(item.variant);
+                  
+                  variantsMap.set(item.variant, {
+                      name: item.variant,
+                      price: item.salePrice || item.targetSalePrice || 0,
+                      image: (item.images && item.images[0]) ? item.images[0] : (existing?.image || undefined)
+                  });
+              }
+          });
+
+          const variants = Array.from(variantsMap.values());
+
+          // 2. Atualizar a Loja Pública com a SOMA TOTAL
+          await db.collection('products_public').doc(idStr).update({
+              stock: totalStock,
+              variants: variants
+          });
+          
+          console.log(`Stock sincronizado para Produto ${publicId}: ${totalStock} unidades.`);
+
+      } catch (err) {
+          console.error("Erro ao sincronizar stock público automaticamente:", err);
+      }
+  };
+
+  // Função auxiliar para mapear Produto de Inventário -> Produto Público (Base)
   const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicId: number): Product => {
-    // Garante que existe pelo menos uma imagem válida ou usa um placeholder interno
     const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) 
         ? inv.images[0] 
         : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23e2e8f0"/%3E%3C/svg%3E';
@@ -52,13 +106,13 @@ export const useInventory = (isAdmin: boolean = false) => {
         price: inv.salePrice || 0, 
         image: mainImage, 
         description: inv.description || `Produto ${inv.name}`,
-        stock: inv.quantityBought - inv.quantitySold,
+        stock: 0, // Será calculado pelo refreshPublicProductStock
         features: inv.features || [],
         comingSoon: inv.comingSoon || false,
         badges: inv.badges || [],
         images: inv.images || [],
         variantLabel: 'Opção',
-        weight: inv.weight || 0 // Mapeia o peso para a loja pública
+        weight: inv.weight || 0
     };
   };
 
@@ -67,48 +121,34 @@ export const useInventory = (isAdmin: boolean = false) => {
       // 1. Adicionar ao Inventário (Privado)
       const docRef = await db.collection('products_inventory').add(product);
       
-      // 2. Sincronizar com a Loja Pública (Se tiver Public ID)
       const publicId = product.publicProductId || Date.now();
       
+      // 2. Atualizar ou Criar Produto Público
       if (product.publicProductId) {
-          const publicDocRef = db.collection('products_public').doc(publicId.toString());
-          const publicDocSnap = await publicDocRef.get();
-          
-          let existingVariants: ProductVariant[] = [];
-          if (publicDocSnap.exists) {
-              const existingData = publicDocSnap.data() as Product;
-              existingVariants = existingData.variants || [];
-          }
-
-          // Se o novo produto é uma variante, adiciona à lista
-          if (product.variant) {
-              existingVariants = existingVariants.filter(v => v.name !== product.variant);
-              
-              const newVariant: ProductVariant = {
-                  name: product.variant,
-                  price: product.salePrice || 0
-              };
-              
-              // FIX: Apenas adiciona a imagem se ela existir e não for undefined
-              if (product.images && product.images.length > 0 && product.images[0]) {
-                  newVariant.image = product.images[0];
-              }
-
-              existingVariants.push(newVariant);
-          }
-
+          // Se já existe ID público, atualizamos os dados gerais (Nome, Imagem, Descrição)
+          // assumindo que o novo lote tem a info mais recente.
           const publicProduct = mapToPublicProduct(product, publicId);
-          publicProduct.variants = existingVariants;
-          
-          // Remove campos undefined antes de salvar
           const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
-          await publicDocRef.set(cleanPublicProduct, { merge: true });
+          
+          // Removemos stock e variantes do update direto, deixamos o refresh calcular
+          delete cleanPublicProduct.stock;
+          delete cleanPublicProduct.variants;
+
+          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
       } else {
+          // Se é novo produto sem ID público, cria do zero
           const publicProduct = mapToPublicProduct(product, publicId);
-          // Remove campos undefined antes de salvar
           const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
           await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct);
           await docRef.update({ publicProductId: publicId });
+      }
+
+      // 3. SINCRONIZAÇÃO AUTOMÁTICA DE STOCK
+      if (product.publicProductId) {
+          await refreshPublicProductStock(product.publicProductId);
+      } else {
+          // Se foi criado agora, o ID é novo
+          await refreshPublicProductStock(publicId);
       }
 
     } catch (error) {
@@ -122,43 +162,26 @@ export const useInventory = (isAdmin: boolean = false) => {
       // 1. Atualizar Inventário
       await db.collection('products_inventory').doc(id).update(updates);
 
-      // 2. Atualizar Loja Pública
+      // 2. Obter dados atualizados para sincronizar info pública
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const currentData = docSnap.data() as InventoryProduct;
       
       if (currentData && currentData.publicProductId) {
           const publicId = currentData.publicProductId;
-          const updatedFullData = { ...currentData, ...updates };
           
-          const publicDocRef = db.collection('products_public').doc(publicId.toString());
-          const publicDocSnap = await publicDocRef.get();
-
-          let existingVariants: ProductVariant[] = [];
-          if (publicDocSnap.exists) {
-              const existingData = publicDocSnap.data() as Product;
-              existingVariants = existingData.variants || [];
-          }
-
-          if (updatedFullData.variant) {
-              existingVariants = existingVariants.filter(v => v.name !== updatedFullData.variant);
-              
-              const newVariant: ProductVariant = {
-                  name: updatedFullData.variant,
-                  price: updatedFullData.salePrice || 0
-              };
-              
-              if (updatedFullData.images && updatedFullData.images.length > 0 && updatedFullData.images[0]) {
-                  newVariant.image = updatedFullData.images[0];
-              }
-
-              existingVariants.push(newVariant);
-          }
-
-          const publicProduct = mapToPublicProduct(updatedFullData, publicId);
-          publicProduct.variants = existingVariants;
-          
+          // Atualiza metadados públicos (Nome, Preço, Imagens)
+          const publicProduct = mapToPublicProduct(currentData, publicId);
           const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
-          await publicDocRef.set(cleanPublicProduct, { merge: true });
+          
+          // Removemos stock e variantes do update direto para não sobrescrever cálculo
+          delete cleanPublicProduct.stock;
+          delete cleanPublicProduct.variants;
+
+          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
+
+          // 3. SINCRONIZAÇÃO AUTOMÁTICA DE STOCK
+          // Recalcula a soma de todos os lotes
+          await refreshPublicProductStock(publicId);
       }
 
     } catch (error) {
@@ -172,8 +195,10 @@ export const useInventory = (isAdmin: boolean = false) => {
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const data = docSnap.data() as InventoryProduct;
 
+      // 1. Apagar do Inventário
       await db.collection('products_inventory').doc(id).delete();
 
+      // 2. Se tinha ID público, recalcular stock (ou apagar se for o último)
       if (data && data.publicProductId) {
           const remainingInventory = await db.collection('products_inventory')
               .where('publicProductId', '==', data.publicProductId)
@@ -182,15 +207,8 @@ export const useInventory = (isAdmin: boolean = false) => {
           if (remainingInventory.empty) {
               await db.collection('products_public').doc(data.publicProductId.toString()).delete();
           } else {
-              if (data.variant) {
-                  const publicDocRef = db.collection('products_public').doc(data.publicProductId.toString());
-                  const publicDocSnap = await publicDocRef.get();
-                  if (publicDocSnap.exists) {
-                      const pubData = publicDocSnap.data() as Product;
-                      const newVariants = (pubData.variants || []).filter(v => v.name !== data.variant);
-                      await publicDocRef.update({ variants: newVariants });
-                  }
-              }
+              // Ainda existem outros lotes, recalcula o total
+              await refreshPublicProductStock(data.publicProductId);
           }
       }
     } catch (error) {
@@ -201,3 +219,4 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
+
