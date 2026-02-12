@@ -3,7 +3,6 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // Carrega as variáveis de ambiente
   const env = loadEnv(mode, (process as any).cwd(), '');
   
   return {
@@ -13,19 +12,24 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
+      chunkSizeWarningLimit: 1500, // Aumenta limite para silenciar avisos não críticos
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-            utils: ['lucide-react', 'react-barcode', '@zxing/library', '@google/genai']
+          manualChunks(id) {
+            // Separação inteligente de bibliotecas
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'firebase';
+              if (id.includes('react') || id.includes('react-dom')) return 'vendor';
+              if (id.includes('lucide') || id.includes('zxing') || id.includes('google')) return 'utils';
+              return 'libs'; // O restante vai para um chunk genérico
+            }
           }
         }
       }
     },
-    // Isto é crucial para a API do Gemini funcionar no browser/telemóvel
     define: {
       'process.env.API_KEY': JSON.stringify(env.API_KEY || "")
     }
   };
 });
+
