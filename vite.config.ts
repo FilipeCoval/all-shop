@@ -12,16 +12,15 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
-      chunkSizeWarningLimit: 1500, // Aumenta limite para silenciar avisos não críticos
+      chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            // Separação inteligente de bibliotecas
             if (id.includes('node_modules')) {
               if (id.includes('firebase')) return 'firebase';
-              if (id.includes('react') || id.includes('react-dom')) return 'vendor';
+              if (id.includes('react')) return 'vendor';
               if (id.includes('lucide') || id.includes('zxing') || id.includes('google')) return 'utils';
-              return 'libs'; // O restante vai para um chunk genérico
+              return 'libs';
             }
           }
         }
