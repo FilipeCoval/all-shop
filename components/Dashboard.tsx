@@ -150,7 +150,6 @@ const OrderDetailsModal: React.FC<{ order: Order | null; onClose: () => void; on
 
     return (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><FileText size={20} className="text-indigo-600"/> Detalhes da Encomenda</h3><button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">ID Encomenda</p><p className="font-bold text-indigo-700 text-sm mt-1">{order.id}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Estado</p><p className="font-bold text-sm mt-1">{order.status}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Data</p><p className="font-bold text-sm mt-1">{new Date(order.date).toLocaleDateString()}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Total</p><p className="font-bold text-sm mt-1">{formatCurrency(order.total)}</p></div></div>
     
-    {/* Painel de Logística (NOVO) */}
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <h4 className="font-bold text-blue-900 text-sm mb-3 flex items-center gap-2"><Truck size={16} /> Logística & Envio</h4>
         <div className="flex items-center justify-between mb-4">
@@ -330,7 +329,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleSelectUnitForSale = (code: string) => { if (!selectedProductForSale) return; const unit = selectedProductForSale.units?.find(u => u.id === code); if (!unit) return alert("Erro: Este S/N não pertence a este lote de produto."); if (unit.status !== 'AVAILABLE') return alert("Erro: Este S/N já foi vendido ou está reservado."); if (selectedUnitsForSale.includes(code)) return alert("Aviso: Este S/N já foi adicionado a esta venda."); setSelectedUnitsForSale(prev => [...prev, code]); setSecurityCheckPassed(true); };
   const handleVerifyProduct = (code: string) => { if (!selectedProductForSale) return; const cleanCode = code.trim().toUpperCase(); if (cleanCode === selectedProductForSale.publicProductId?.toString() || selectedProductForSale.units?.some(u => u.id.toUpperCase() === cleanCode)) { setSecurityCheckPassed(true); setVerificationCode(code); } else { alert(`Código ${code} NÃO corresponde a este produto! Verifique se pegou na caixa correta.`); setSecurityCheckPassed(false); } };
   const handleNotifySubscribers = (productId: number, productName: string, variantName?: string) => { /* ... */ };
-  const handleClearSentAlerts = async () => { /* ... */ };
+  
+  // FIXED: Clear Sent Alerts Logic
+  const handleClearSentAlerts = async () => {
+      if (!notificationModalData) return;
+      if (!window.confirm("Isto irá apagar os alertas da base de dados. Confirma que já enviou o email?")) return;
+      
+      try {
+          const batch = db.batch();
+          notificationModalData.alertsToDelete.forEach(alert => {
+              batch.delete(db.collection('stock_alerts').doc(alert.id));
+          });
+          await batch.commit();
+          setNotificationModalData(null);
+          alert("Lista de espera limpa com sucesso!");
+      } catch(e) {
+          alert("Erro ao limpar alertas.");
+      }
+  };
+
   const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); return true; };
   const handleCopyToClipboard = (text: string, type: string) => { if (copyToClipboard(text)) { setCopySuccess(type); setTimeout(() => setCopySuccess(''), 2000); } else alert("Não foi possível copiar."); };
   
@@ -439,191 +456,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
   const handleAddImage = () => { if (formData.newImageUrl && formData.newImageUrl.trim()) { setFormData(prev => ({ ...prev, images: [...prev.images, prev.newImageUrl.trim()], newImageUrl: '' })); } };
-  
-  // FUNÇÃO DE UPLOAD CORRIGIDA
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    const storageRef = storage.ref(`products/${Date.now()}_${file.name}`);
-    const uploadTask = storageRef.put(file);
-
-    uploadTask.on('state_changed', 
-        (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-        }, 
-        (error) => {
-            console.error("Upload error:", error);
-            alert("Erro ao fazer upload da imagem.");
-            setIsUploading(false);
-            setUploadProgress(null);
-        }, 
-        async () => {
-            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-            setFormData(prev => ({
-                ...prev,
-                images: [...prev.images, downloadURL]
-            }));
-            setIsUploading(false);
-            setUploadProgress(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    );
-  };
-
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploading(true); setUploadProgress(0); const storageRef = storage.ref(`products/${Date.now()}_${file.name}`); const uploadTask = storageRef.put(file); uploadTask.on('state_changed', (snapshot) => { const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; setUploadProgress(progress); }, (error) => { console.error("Upload error:", error); alert("Erro ao fazer upload da imagem."); setIsUploading(false); setUploadProgress(null); }, async () => { const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); setIsUploading(false); setUploadProgress(null); if (fileInputRef.current) fileInputRef.current.value = ''; }); };
   const handleRemoveImage = (indexToRemove: number) => { setFormData(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== indexToRemove) })); };
   const handleMoveImage = (index: number, direction: 'left' | 'right') => { if ((direction === 'left' && index === 0) || (direction === 'right' && index === formData.images.length - 1)) return; const newImages = [...formData.images]; const targetIndex = direction === 'left' ? index - 1 : index + 1; [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setFormData(prev => ({ ...prev, images: newImages })); };
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
-  const handleSyncPublicStock = async () => {
-    if (products.length === 0) {
-        alert("O inventário parece estar vazio ou ainda a carregar.");
-        return;
-    }
-
-    if (!window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return;
-    
-    setIsSyncingStock(true);
-    try {
-        const stockMap: Record<string, number> = {};
-        let linkedItemsCount = 0;
-        
-        products.forEach(p => {
-            if (p.publicProductId) {
-                const pid = p.publicProductId.toString();
-                const remaining = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
-                
-                if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0;
-                stockMap[pid] += remaining;
-                linkedItemsCount++;
-            }
-        });
-
-        if (linkedItemsCount === 0) {
-            alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos.");
-            setIsSyncingStock(false);
-            return;
-        }
-
-        const entries = Object.entries(stockMap);
-        const batches = [];
-        
-        for (let i = 0; i < entries.length; i += 500) {
-            const chunk = entries.slice(i, i + 500);
-            const batch = db.batch();
-            chunk.forEach(([publicId, totalStock]) => {
-                const ref = db.collection('products_public').doc(publicId);
-                batch.set({ stock: totalStock }, { merge: true });
-            });
-            batches.push(batch);
-        }
-
-        await Promise.all(batches.map(b => b.commit()));
-
-        alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
-
-    } catch (error: any) {
-        console.error("Erro ao sincronizar:", error);
-        alert(`Ocorreu um erro ao sincronizar: ${error.message}`);
-    } finally {
-        setIsSyncingStock(false);
-    }
-  };
-  
-  // Updated Submit to include new fields
+  const handleSyncPublicStock = async () => { if (products.length === 0) { alert("O inventário parece estar vazio ou ainda a carregar."); return; } if (!window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return; setIsSyncingStock(true); try { const stockMap: Record<string, number> = {}; let linkedItemsCount = 0; products.forEach(p => { if (p.publicProductId) { const pid = p.publicProductId.toString(); const remaining = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0)); if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0; stockMap[pid] += remaining; linkedItemsCount++; } }); if (linkedItemsCount === 0) { alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos."); setIsSyncingStock(false); return; } const entries = Object.entries(stockMap); const batches = []; for (let i = 0; i < entries.length; i += 500) { const chunk = entries.slice(i, i + 500); const batch = db.batch(); chunk.forEach(([publicId, totalStock]) => { const ref = db.collection('products_public').doc(publicId); batch.set({ stock: totalStock }, { merge: true }); }); batches.push(batch); } await Promise.all(batches.map(b => b.commit())); alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`); } catch (error: any) { console.error("Erro ao sincronizar:", error); alert(`Ocorreu um erro ao sincronizar: ${error.message}`); } finally { setIsSyncingStock(false); } };
   const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const currentSalePrice = formData.salePrice ? Number(formData.salePrice) : 0; let productStatus: ProductStatus = 'IN_STOCK'; if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; else if (currentSold > 0) productStatus = 'PARTIAL'; const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0 }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { alert('Erro ao guardar.'); } };
-  
   const toggleBadge = (badge: string) => { setFormData(prev => { const badges = prev.badges || []; if (badges.includes(badge)) return { ...prev, badges: badges.filter(b => b !== badge) }; else return { ...prev, badges: [...badges, badge] }; }); };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
-  
-  const handleSaleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!selectedProductForSale) return;
-      const qty = parseInt(saleForm.quantity) || 1;
-      const price = parseFloat(saleForm.unitPrice) || 0;
-      const shipping = parseFloat(saleForm.shippingCost) || 0;
-      
-      const newSale: SaleRecord = {
-          id: `MANUAL-${Date.now()}`,
-          date: saleForm.date,
-          quantity: qty,
-          unitPrice: price,
-          shippingCost: shipping,
-          notes: saleForm.notes
-      };
-      
-      try {
-          const currentSold = (selectedProductForSale.quantitySold || 0) + qty;
-          const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL';
-          
-          // 1. Atualizar Inventário (Dar Baixa)
-          await updateProduct(selectedProductForSale.id, {
-              quantitySold: currentSold,
-              salesHistory: [...(selectedProductForSale.salesHistory || []), newSale],
-              status: status as ProductStatus
-          });
-
-          // 2. Atualizar Encomenda Online (Se estiver vinculada e houver S/N)
-          if (linkedOrderId && selectedUnitsForSale.length > 0) {
-              const orderRef = db.collection('orders').doc(linkedOrderId);
-              const orderDoc = await orderRef.get();
-              
-              if (orderDoc.exists) {
-                  const orderData = orderDoc.data() as Order;
-                  const updatedItems = orderData.items.map((item: any) => {
-                      // Verifica se este é o item que estamos a vender (ID + Variante)
-                      const isMatch = item.productId === selectedProductForSale.publicProductId &&
-                                      ((!item.selectedVariant && !selectedProductForSale.variant) ||
-                                       (item.selectedVariant === selectedProductForSale.variant));
-
-                      if (isMatch) {
-                          // Junta os S/Ns existentes com os novos (evitando duplicados)
-                          const currentSn = item.serialNumbers || [];
-                          return { 
-                              ...item, 
-                              serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] 
-                          };
-                      }
-                      return item;
-                  });
-                  
-                  // Atualiza a encomenda com os novos S/Ns
-                  await orderRef.update({ items: updatedItems });
-              }
-          }
-
-          setIsSaleModalOpen(false);
-      } catch(e) { 
-          console.error(e);
-          alert("Erro ao registar venda."); 
-      }
-  };
-
-  const handleDeleteSale = async (saleId: string) => {
-      if(!editingId || !window.confirm("Anular venda e repor stock?")) return;
-      const product = products.find(p => p.id === editingId);
-      if(!product) return;
-      
-      const sale = product.salesHistory?.find(s => s.id === saleId);
-      if(!sale) return;
-      
-      const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity);
-      const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || [];
-      const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK';
-      
-      try {
-          await updateProduct(editingId, {
-              quantitySold: newSold,
-              salesHistory: newHistory,
-              status: newStatus as ProductStatus
-          });
-      } catch(e) { alert("Erro ao anular venda."); }
-  };
-
+  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes }; try { const currentSold = (selectedProductForSale.quantitySold || 0) + qty; const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL'; await updateProduct(selectedProductForSale.id, { quantitySold: currentSold, salesHistory: [...(selectedProductForSale.salesHistory || []), newSale], status: status as ProductStatus }); if (linkedOrderId && selectedUnitsForSale.length > 0) { const orderRef = db.collection('orders').doc(linkedOrderId); const orderDoc = await orderRef.get(); if (orderDoc.exists) { const orderData = orderDoc.data() as Order; const updatedItems = orderData.items.map((item: any) => { const isMatch = item.productId === selectedProductForSale.publicProductId && ((!item.selectedVariant && !selectedProductForSale.variant) || (item.selectedVariant === selectedProductForSale.variant)); if (isMatch) { const currentSn = item.serialNumbers || []; return { ...item, serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] }; } return item; }); await orderRef.update({ items: updatedItems }); } } setIsSaleModalOpen(false); } catch(e) { console.error(e); alert("Erro ao registar venda."); } };
+  const handleDeleteSale = async (saleId: string) => { if(!editingId || !window.confirm("Anular venda e repor stock?")) return; const product = products.find(p => p.id === editingId); if(!product) return; const sale = product.salesHistory?.find(s => s.id === saleId); if(!sale) return; const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity); const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || []; const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; try { await updateProduct(editingId, { quantitySold: newSold, salesHistory: newHistory, status: newStatus as ProductStatus }); } catch(e) { alert("Erro ao anular venda."); } };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
   const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
   const handleRecalculateData = async () => { /* ... */ };
@@ -633,20 +476,181 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const productsForSelect = useMemo(() => publicProductsList.filter(p => !p.comingSoon).flatMap(p => { if (p.variants?.length) return p.variants.map(v => ({ value: `${p.id}|${v.name}`, label: `${p.name} - ${v.name}` })); return { value: `${p.id}|`, label: p.name }; }), [publicProductsList]);
   const addProductToManualOrder = (value: string) => { if (!value) return; const [idStr, variantName] = value.split('|'); const product = publicProductsList.find(p => p.id === Number(idStr)); if (!product) return; const key = `${product.id}|${variantName}`; setManualOrderItems(prev => { const existing = prev.find(item => `${item.id}|${item.selectedVariant}` === key); if (existing) return prev.map(item => (`${item.id}|${item.selectedVariant}` === key) ? { ...item, quantity: item.quantity + 1 } : item); let finalPrice = product.price; if (variantName) { const variant = product.variants?.find(v => v.name === variantName); if (variant) finalPrice = variant.price; } return [...prev, { ...product, quantity: 1, selectedVariant: variantName, finalPrice: finalPrice }]; }); };
   const updateManualOrderItemQuantity = (key: string, delta: number) => { setManualOrderItems(prev => prev.map(item => { if (`${item.id}|${item.selectedVariant}` === key) { const newQuantity = item.quantity + delta; return newQuantity > 0 ? { ...item, quantity: newQuantity } : item; } return item; }).filter(item => item.quantity > 0)); };
-  const handleManualOrderSubmit = async (e: React.FormEvent) => { /* ... */ };
   const handleOpenInvestedModal = () => { setDetailsModalData({ title: "Detalhe do Investimento", data: products.map(p => ({ id: p.id, name: p.name, qty: p.quantityBought, cost: p.purchasePrice, total: p.quantityBought * p.purchasePrice })).filter(i => i.total > 0).sort((a,b) => b.total - a.total), total: stats.totalInvested, columns: [{ header: "Produto", accessor: "name" }, { header: "Qtd. Comprada", accessor: "qty" }, { header: "Custo Unit.", accessor: (i) => formatCurrency(i.cost) }, { header: "Total", accessor: (i) => formatCurrency(i.total) }] }); };
   const handleOpenRevenueModal = () => { setDetailsModalData({ title: "Receita Realizada", data: products.flatMap(p => (p.salesHistory || []).map(s => ({ id: s.id, name: p.name, date: s.date, qty: s.quantity, val: s.quantity * s.unitPrice }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), total: stats.realizedRevenue, columns: [{ header: "Data", accessor: (i) => new Date(i.date).toLocaleDateString() }, { header: "Produto", accessor: "name" }, { header: "Qtd", accessor: "qty" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
   const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const cogs = p.quantitySold * p.purchasePrice; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
   
-  // Replace simple cashback modal with the new Manager
-  const handleOpenCashbackManager = () => { 
-      setIsCashbackManagerOpen(true);
+  const handleOpenCashbackManager = () => { setIsCashbackManagerOpen(true); };
+  const handleImportProducts = async () => { /* ... */ };
+  
+  // FIXED: Manual Order Submission
+  const handleManualOrderSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (manualOrderItems.length === 0) return alert("Adicione produtos primeiro.");
+      
+      const orderId = `MANUAL-${Date.now().toString().slice(-6)}`;
+      const total = manualOrderItems.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0);
+      
+      const newOrder: Order = {
+          id: orderId,
+          date: new Date().toISOString(),
+          total: total,
+          status: 'Pago', // Assumimos pago se for manual, ou pode ser editado depois
+          items: manualOrderItems.map(i => ({
+              productId: i.id,
+              name: i.name,
+              price: i.finalPrice,
+              quantity: i.quantity,
+              selectedVariant: i.selectedVariant,
+              addedAt: new Date().toISOString()
+          })),
+          shippingInfo: {
+              name: manualOrderCustomer.name || 'Cliente Balcão',
+              email: manualOrderCustomer.email || '',
+              street: manualOrderShipping || 'Levantamento em Loja',
+              doorNumber: '', zip: '', city: '', phone: '',
+              paymentMethod: manualOrderPayment as any
+          },
+          userId: null
+      };
+
+      try {
+          // 1. Criar Encomenda
+          await db.collection('orders').doc(orderId).set(newOrder);
+
+          // 2. Abater Stock Automaticamente
+          for (const item of manualOrderItems) {
+              // Encontra o lote mais antigo com stock disponível (FIFO)
+              const relevantBatches = products
+                  .filter(p => p.publicProductId === item.id)
+                  .filter(p => {
+                      // Se o item tem variante, o lote tem de ter a mesma variante OU ser genérico
+                      if (item.selectedVariant) return p.variant === item.selectedVariant;
+                      return true;
+                  })
+                  .sort((a,b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+
+              let qtyToDeduct = item.quantity;
+
+              for (const batch of relevantBatches) {
+                  if (qtyToDeduct <= 0) break;
+                  
+                  const availableInBatch = Math.max(0, (batch.quantityBought || 0) - (batch.quantitySold || 0));
+                  
+                  if (availableInBatch > 0) {
+                      const deduct = Math.min(availableInBatch, qtyToDeduct);
+                      const newSold = (batch.quantitySold || 0) + deduct;
+                      const status: ProductStatus = newSold >= batch.quantityBought ? 'SOLD' : 'PARTIAL';
+                      
+                      const saleRecord: SaleRecord = {
+                          id: `SALE-${orderId}-${batch.id}`,
+                          date: new Date().toISOString(),
+                          quantity: deduct,
+                          unitPrice: item.finalPrice,
+                          shippingCost: 0,
+                          notes: `Encomenda Manual ${orderId}`
+                      };
+
+                      await updateProduct(batch.id, {
+                          quantitySold: newSold,
+                          status: status,
+                          salesHistory: [...(batch.salesHistory || []), saleRecord]
+                      });
+                      
+                      qtyToDeduct -= deduct;
+                  }
+              }
+              
+              if (qtyToDeduct > 0) {
+                  alert(`Aviso: Stock insuficiente para "${item.name}". Stock ficou negativo no sistema.`);
+              }
+          }
+
+          setManualOrderItems([]);
+          setManualOrderCustomer({ name: '', email: '' });
+          setManualOrderShipping('');
+          setIsManualOrderModalOpen(false);
+          alert("Encomenda registada com sucesso!");
+
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao criar encomenda.");
+      }
   };
 
-  const handleImportProducts = async () => { /* ... */ };
-  const handleGenerateCodes = () => { /* ... */ };
-  const PrintableLabels = ({ codes }: { codes: string[] }) => { /* ... */ return null; };
-  const handlePrintLabels = () => { /* ... */ };
+  // FIXED: Generate Internal Codes
+  const handleGenerateCodes = () => {
+      const newCodes: string[] = [];
+      for(let i=0; i < generateQty; i++) {
+          // Gera código tipo: INT-X7Z9A2
+          const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+          newCodes.push(`INT-${randomPart}`);
+      }
+      
+      // Adiciona à lista visual de impressão
+      setGeneratedCodes(prev => [...prev, ...newCodes]);
+      
+      // Adiciona automaticamente ao produto que estamos a editar (se houver)
+      if (isModalOpen) {
+          const newUnits = newCodes.map(code => ({
+              id: code,
+              status: 'AVAILABLE' as const,
+              addedAt: new Date().toISOString()
+          }));
+          setModalUnits(prev => [...prev, ...newUnits]);
+      }
+  };
+
+  // FIXED: Print Labels
+  const handlePrintLabels = () => {
+      if (generatedCodes.length === 0) return;
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const html = `
+        <html>
+        <head>
+            <title>Imprimir Etiquetas</title>
+            <style>
+                body { font-family: monospace; padding: 20px; }
+                .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+                .label { 
+                    border: 1px dashed #000; 
+                    padding: 10px; 
+                    text-align: center; 
+                    height: 80px; 
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: center; 
+                    align-items: center;
+                }
+                .code { font-size: 18px; font-weight: bold; letter-spacing: 2px; }
+                .store { font-size: 10px; margin-top: 5px; text-transform: uppercase; }
+                @media print {
+                    .no-print { display: none; }
+                    .label { border: 1px solid #000; break-inside: avoid; }
+                }
+            </style>
+        </head>
+        <body>
+            <button class="no-print" onclick="window.print()" style="padding: 10px 20px; font-size: 16px; margin-bottom: 20px; cursor: pointer;">🖨️ Imprimir Agora</button>
+            <div class="grid">
+                ${generatedCodes.map(code => `
+                    <div class="label">
+                        <div class="code">${code}</div>
+                        <div class="store">${STORE_NAME} - Inventário</div>
+                    </div>
+                `).join('')}
+            </div>
+        </body>
+        </html>
+      `;
+      
+      printWindow.document.write(html);
+      printWindow.document.close();
+  };
+
   const filteredClients = useMemo(() => { if (!clientsSearchTerm) return allUsers; return allUsers.filter(u => u.name.toLowerCase().includes(clientsSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(clientsSearchTerm.toLowerCase()) ); }, [allUsers, clientsSearchTerm]);
 
   // CASHBACK MANAGER LOGIC
@@ -948,7 +952,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       {selectedUserDetails && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-indigo-600"/> Detalhes do Cliente</h3><button onClick={() => setSelectedUserDetails(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p></div></div><div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div><div className="pt-6 border-t"><h4 className="font-bold text-gray-800 text-sm mb-3">Histórico de Pontos</h4>{(selectedUserDetails.pointsHistory && selectedUserDetails.pointsHistory.length > 0) ? (<div className="max-h-60 overflow-y-auto space-y-2 pr-2">{selectedUserDetails.pointsHistory.map(h => (<div key={h.id} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded-lg"><div className="flex flex-col"><span>{h.reason}</span><span className="text-xs text-gray-400">{new Date(h.date).toLocaleString()}</span></div><span className={`font-bold ${h.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{h.amount > 0 ? '+' : ''}{h.amount}</span></div>))}</div>) : (<p className="text-sm text-gray-500 italic">Sem histórico de pontos.</p>)}</div><div className="pt-6 border-t border-dashed"><h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4><div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4"><p className="text-sm font-bold text-orange-900">1. Recalcular Dados de Lealdade</p><p className="text-xs text-orange-800 -mt-2">Use esta função para corrigir o "Total Gasto", nível e pontos, com base em todas as encomendas associadas a este cliente.</p><button onClick={handleRecalculateClientData} disabled={isRecalculatingClient} className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">{isRecalculatingClient ? <Loader2 className="animate-spin" /> : <><RefreshCw size={14}/> Sincronizar Agora</>}</button></div><div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4 mt-4"><p className="text-sm font-bold text-gray-800">2. Fundir Contas Duplicadas</p><div className="flex gap-2"><input type="email" value={mergeSearchEmail} onChange={(e) => setMergeSearchEmail(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded text-sm" placeholder="Email da conta a fundir" /><button onClick={handleSearchDuplicate} className="bg-gray-700 text-white px-4 rounded font-bold text-sm hover:bg-gray-800">Procurar</button></div>{foundDuplicate && (<div className="bg-white p-4 rounded border border-orange-300 animate-fade-in space-y-2"><h5 className="font-bold text-sm">Conta duplicada encontrada:</h5><p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p><p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p><p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p><p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(duplicateOrdersTotal || 0)}</p><p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p><button onClick={handleConfirmMerge} disabled={isMerging} className="w-full mt-2 bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">{isMerging ? <Loader2 className="animate-spin" /> : <><AlertTriangle size={14}/> Confirmar Fusão</>}</button></div>)}</div></div></div></div></div>)}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={handleUpdateOrderState} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
       
-      {/* ... (Existing Product Modal - MODIFIED FOR CASHBACK) ... */}
       {isModalOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"><div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}/><div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div><div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4><textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}<div className="flex gap-2"><div className="relative flex-1"><input type="url" placeholder="Cole o link da imagem (ex: imgur.com/...)" className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" value={formData.newImageUrl} onChange={e => setFormData({...formData, newImageUrl: e.target.value})} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" title="Upload do PC">{isUploading && uploadProgress === null ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}</button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/></div><button type="button" onClick={handleAddImage} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors">Adicionar</button></div>{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div>
       
       {/* CASHBACK SECTION */}
