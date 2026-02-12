@@ -10,7 +10,7 @@
       "destination": "/api/og?id=:id"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/.*|assets/.*|favicon.ico).*)",
       "destination": "/index.html"
     }
   ]
