@@ -1,18 +1,5 @@
 
 {
-  "builds": [
-    {
-      "src": "api/og.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
   "rewrites": [
     {
       "source": "/p/:id",
@@ -25,5 +12,4 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-
 
