@@ -16,6 +16,7 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import Dashboard from './components/Dashboard'; 
+import InstallPrompt from './components/InstallPrompt';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
 import { auth, db, firebase } from './services/firebaseConfig';
@@ -627,6 +628,9 @@ const App: React.FC = () => {
         </div>
       )}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
+      
+      <InstallPrompt /> {/* NOVO BOTÃO DE INSTALAÇÃO */}
+
       <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
             <div className="flex flex-col items-center md:items-start"><div className="flex items-center gap-2 mb-4">{LOGO_URL ? <img src={LOGO_URL} alt={STORE_NAME} className="h-10 invert brightness-0" /> : <h3 className="text-xl font-bold text-white">{STORE_NAME}</h3>}</div><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
