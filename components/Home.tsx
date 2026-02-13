@@ -157,38 +157,50 @@ const Home: React.FC<HomeProps> = ({
         </div>
       </section>
 
-      <section className="py-8 bg-gray-50 border-b border-gray-100 select-none overflow-hidden group">
+      {/* MARQUEE CAROUSEL (CATEGORIAS) */}
+      <section className="py-8 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 select-none overflow-hidden group transition-colors duration-300">
           <div 
             className="flex gap-4 md:gap-8 animate-marquee group-hover:[animation-play-state:paused]"
             style={{ willChange: 'transform' }}
           >
               {categoryVisuals.map((cat, idx) => (
                   <div key={idx} onClick={() => handleCategoryClick(cat.name)} className="flex flex-col items-center gap-3 min-w-[100px] md:min-w-[140px] group/item flex-shrink-0 cursor-pointer transition-transform active:scale-95">
-                      <div className={`w-20 h-20 md:w-32 md:h-32 rounded-full p-1 border-4 transition-all duration-300 overflow-hidden relative shadow-md bg-white ${selectedCategory === cat.name ? 'border-primary ring-4 ring-primary/20 scale-105 shadow-xl z-10' : 'border-white group-hover/item:border-primary group-hover/item:shadow-lg group-hover/item:scale-105'}`}>
-                          <img src={cat.image} alt={cat.name} draggable={false} className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50 select-none" />
+                      <div className={`w-20 h-20 md:w-32 md:h-32 rounded-full p-1 border-4 transition-all duration-300 overflow-hidden relative shadow-md bg-white dark:bg-gray-800 ${selectedCategory === cat.name ? 'border-primary ring-4 ring-primary/20 scale-105 shadow-xl z-10' : 'border-white dark:border-gray-700 group-hover/item:border-primary group-hover/item:shadow-lg group-hover/item:scale-105'}`}>
+                          <img src={cat.image} alt={cat.name} draggable={false} className="w-full h-full object-cover rounded-full transition-transform duration-700 group-hover/item:scale-110 bg-gray-50 dark:bg-gray-700 select-none" />
                       </div>
-                      <span className={`text-xs md:text-base font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 group-hover/item:text-primary'}`}>{cat.name}</span>
+                      <span className={`text-xs md:text-base font-bold transition-colors text-center leading-tight px-1 whitespace-nowrap ${selectedCategory === cat.name ? 'text-primary' : 'text-gray-600 dark:text-gray-200 group-hover/item:text-primary'}`}>{cat.name}</span>
                   </div>
               ))}
           </div>
       </section>
 
-      <section className="py-4 bg-gray-50 border-b border-gray-200/50">
+      {/* DESTAQUES (QUALIDADE, ENVIO, SEGURANÇA) */}
+      <section className="py-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200/50 dark:border-gray-800 transition-colors duration-300">
           <div className="container mx-auto px-2 md:px-4 max-w-4xl">
               <div className="grid grid-cols-3 gap-2 md:gap-6">
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-blue-100 p-1.5 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform"><StarIcon fill="currentColor" size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Qualidade</h3><p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">Garantida</p></div></div>
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-green-100 p-1.5 md:p-2.5 rounded-full text-green-600 shrink-0 group-hover:scale-110 transition-transform"><Truck size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Envio Grátis</h3><p className="text-[9px] md:text-xs text-gray-500 block">acima de 50€</p></div></div>
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg cursor-default group"><div className="bg-purple-100 p-1.5 md:p-2.5 rounded-full text-purple-600 shrink-0 group-hover:scale-110 transition-transform"><ShieldCheck size={14} className="md:w-5 md:h-5" /></div><div><h3 className="font-bold text-gray-900 text-[10px] md:text-sm leading-tight">Segurança</h3><p className="text-[9px] md:text-xs text-gray-500 hidden sm:block md:block">100% Seguro</p></div></div>
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg cursor-default group">
+                      <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 md:p-2.5 rounded-full text-primary shrink-0 group-hover:scale-110 transition-transform"><StarIcon fill="currentColor" size={14} className="md:w-5 md:h-5" /></div>
+                      <div><h3 className="font-bold text-gray-900 dark:text-gray-100 text-[10px] md:text-sm leading-tight">Qualidade</h3><p className="text-[9px] md:text-xs text-gray-500 dark:text-gray-400 hidden sm:block md:block">Garantida</p></div>
+                  </div>
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg cursor-default group">
+                      <div className="bg-green-100 dark:bg-green-900/30 p-1.5 md:p-2.5 rounded-full text-green-600 dark:text-green-400 shrink-0 group-hover:scale-110 transition-transform"><Truck size={14} className="md:w-5 md:h-5" /></div>
+                      <div><h3 className="font-bold text-gray-900 dark:text-gray-100 text-[10px] md:text-sm leading-tight">Envio Grátis</h3><p className="text-[9px] md:text-xs text-gray-500 dark:text-gray-400 block">acima de 50€</p></div>
+                  </div>
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-1.5 md:gap-3 p-2 md:p-3 rounded-2xl transition-all duration-300 hover:bg-white dark:hover:bg-gray-800 hover:shadow-lg cursor-default group">
+                      <div className="bg-purple-100 dark:bg-purple-900/30 p-1.5 md:p-2.5 rounded-full text-purple-600 dark:text-purple-400 shrink-0 group-hover:scale-110 transition-transform"><ShieldCheck size={14} className="md:w-5 md:h-5" /></div>
+                      <div><h3 className="font-bold text-gray-900 dark:text-gray-100 text-[10px] md:text-sm leading-tight">Segurança</h3><p className="text-[9px] md:text-xs text-gray-500 dark:text-gray-400 hidden sm:block md:block">100% Seguro</p></div>
+                  </div>
               </div>
           </div>
       </section>
 
       <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} wishlist={wishlist} onToggleWishlist={onToggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={onCategoryChange} processingProductIds={processingProductIds} />
 
-      <section className="bg-secondary text-white py-8 relative overflow-hidden mt-8">
+      {/* NEWSLETTER SECTION */}
+      <section className="bg-secondary dark:bg-gray-900 text-white py-8 relative overflow-hidden mt-8 border-t border-transparent dark:border-gray-800 transition-colors duration-300">
           <div className="container mx-auto px-4 text-center relative z-10">
               <div className="inline-flex items-center justify-center p-2 bg-white/10 rounded-full mb-3"><Mail className="text-primary" size={18} /></div>
-              <h2 className="text-xl font-bold mb-2">Fique a par das novidades</h2>
+              <h2 className="text-xl font-bold mb-2 text-white">Fique a par das novidades</h2>
               <p className="text-gray-300 mb-4 max-w-xl mx-auto text-xs md:text-sm">Inscreva-se para receber ofertas exclusivas e cupões de desconto.</p>
               
               <div className="max-w-md mx-auto">
