@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
+import MobileMenu from './components/MobileMenu'; // Importado
 import AIChat from './components/AIChat';
 import Home from './components/Home';
 import ProductDetails from './components/ProductDetails';
@@ -526,9 +527,16 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // --- PROTEÇÃO DO DASHBOARD ---
     if (route === '#dashboard') {
+        if (!isAdmin && !authLoading) {
+            // Se não for admin e já carregou, redireciona.
+            window.location.hash = '/';
+            return null;
+        }
         return <Dashboard user={user} isAdmin={isAdmin} />;
     }
+    
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
       return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={dbProducts} onOpenSupportChat={() => setIsAIChatOpen(true)} />;
@@ -573,31 +581,21 @@ const App: React.FC = () => {
         isDarkMode={isDarkMode}
         onToggleTheme={toggleTheme}
       />
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
-          <div className="relative">
-             <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400" />
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          </div>
-          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Início</a>
-          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Sobre</a>
-          <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Contato</a>
-          
-          {/* TOGGLE DARK MODE NO MENU MOBILE */}
-          <button onClick={toggleTheme} className="flex items-center gap-3 w-full py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">
-             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-             <span>{isDarkMode ? 'Modo Claro' : 'Modo Escuro'}</span>
-          </button>
+      
+      {/* MENU MOBILE PROFISSIONAL (OVERLAY) */}
+      <MobileMenu 
+        isOpen={isMobileMenuOpen} 
+        onClose={() => setIsMobileMenuOpen(false)}
+        user={user}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        onLogout={handleLogout}
+        searchTerm={searchTerm}
+        onSearchChange={handleSearchChange}
+        onResetHome={handleResetHome}
+        isDarkMode={isDarkMode}
+        onToggleTheme={toggleTheme}
+      />
 
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-            {user ? (
-                <button onClick={() => { window.location.hash = 'account'; setIsMobileMenuOpen(false); }} className="w-full text-left py-2 text-primary font-bold">A Minha Conta</button>
-            ) : (
-                <button onClick={() => { setIsLoginOpen(true); setIsMobileMenuOpen(false); }} className="w-full bg-secondary dark:bg-gray-700 text-white py-3 rounded-lg font-bold">Entrar / Registar</button>
-            )}
-          </div>
-        </div>
-      )}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       
       <InstallPrompt /> 
