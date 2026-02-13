@@ -12,9 +12,12 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        devOptions: {
+          enabled: true
+        },
         manifest: {
-          name: 'Allshop Store',
-          short_name: 'Allshop',
+          name: 'All-Shop',
+          short_name: 'All-Shop',
           description: 'A sua loja virtual completa para eletrônicos e gadgets.',
           theme_color: '#3b82f6',
           background_color: '#f8fafc',
@@ -27,13 +30,13 @@ export default defineConfig(({ mode }) => {
               src: 'https://i.imgur.com/nSiZKBf.png',
               sizes: '192x192',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
             },
             {
               src: 'https://i.imgur.com/nSiZKBf.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
             }
           ]
         },
