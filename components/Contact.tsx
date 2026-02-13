@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, CheckCircle, MessageCircle } from 'lucide-react';
 import { TELEGRAM_LINK, SELLER_PHONE } from '../constants';
@@ -39,7 +40,7 @@ const Contact: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-gray-900 mb-1">Telegram</h3>
-                    <p className="text-gray-600 mb-1">Canal Oficial Allshop</p>
+                    <p className="text-gray-600 mb-1">Canal Oficial All-Shop</p>
                     <p className="text-sm text-blue-500 font-medium flex items-center gap-1">
                         Clique para entrar <span className="text-xs">↗</span>
                     </p>
@@ -71,7 +72,7 @@ const Contact: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-gray-900 mb-1">E-mail</h3>
-                    <p className="text-gray-600 mb-1">suporte@allshop.com</p>
+                    <p className="text-gray-600 mb-1">suporte@all-shop.net</p>
                     <p className="text-sm text-gray-400">Resposta em até 24h</p>
                 </div>
             </div>
