@@ -172,7 +172,7 @@ export const getInventoryAnalysis = async (products: InventoryProduct[], userPro
       .join('\n');
 
     const prompt = `
-      Você é um consultor estratégico de e-commerce para a loja Allshop.
+      Você é um consultor estratégico de e-commerce para a loja All-Shop.
       O seu objetivo é analisar o inventário atual e fornecer conselhos práticos e criativos para maximizar o lucro e movimentar o stock.
       
       INVENTÁRIO ATUAL (APENAS PRODUTOS COM STOCK):
