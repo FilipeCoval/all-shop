@@ -54,7 +54,7 @@ const InstallPrompt: React.FC = () => {
             <Smartphone size={24} />
         </div>
         <div>
-            <h3 className="font-bold text-gray-900 leading-tight">Instalar App Allshop</h3>
+            <h3 className="font-bold text-gray-900 leading-tight">Instalar App All-Shop</h3>
             <p className="text-xs text-gray-500 mt-0.5">Acesso rápido, notificações e modo offline.</p>
         </div>
       </div>
