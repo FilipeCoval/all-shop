@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Target, Heart, Users, Award } from 'lucide-react';
 
 const About: React.FC = () => {
@@ -9,7 +9,7 @@ const About: React.FC = () => {
       <div className="bg-secondary text-white py-20 relative overflow-hidden">
          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80')] bg-cover bg-center opacity-20"></div>
          <div className="container mx-auto px-4 relative z-10 text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Sobre a Allshop</h1>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">Sobre a All-Shop</h1>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
                 Especialistas em tecnologia que simplifica a sua vida.
             </p>
@@ -26,7 +26,7 @@ const About: React.FC = () => {
                 </h2>
                 <div className="space-y-4 text-gray-600 leading-relaxed text-justify">
                     <p>
-                        A Allshop nasceu de uma frustração comum: a dificuldade em encontrar equipamentos de streaming e gadgets de qualidade em Portugal, sem ter de esperar semanas por encomendas vindas de fora ou lidar com alfândegas.
+                        A All-Shop nasceu de uma frustração comum: a dificuldade em encontrar equipamentos de streaming e gadgets de qualidade em Portugal, sem ter de esperar semanas por encomendas vindas de fora ou lidar com alfândegas.
                     </p>
                     <p>
                         Não somos apenas uma loja online; somos entusiastas de tecnologia. A nossa equipa testa exaustivamente cada <strong>TV Box, cabo e acessório</strong> antes de o colocar à venda. Acreditamos na filosofia: <em>"Se não serve para a nossa casa, não serve para a do cliente."</em>
@@ -56,7 +56,7 @@ const About: React.FC = () => {
       {/* Values Section */}
       <div className="bg-gray-50 py-16">
         <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">Porquê a Allshop?</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">Porquê a All-Shop?</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {[
                     { icon: Target, title: 'Curadoria', text: 'Não vendemos tudo. Vendemos o que funciona e tem qualidade comprovada.' },
