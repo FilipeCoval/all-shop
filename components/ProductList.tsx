@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2 } from 'lucide-react';
@@ -26,7 +27,26 @@ const ProductList: React.FC<ProductListProps> = ({
     processingProductIds = []
 }) => {
   const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // --- LÓGICA INTELIGENTE DE VISUALIZAÇÃO ---
+  // 1. Verifica se o user já escolheu antes (localStorage).
+  // 2. Se não, verifica o tamanho do ecrã: < 768px (Mobile) usa LISTA, >= 768px usa GRELHA.
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+      try {
+          const savedMode = localStorage.getItem('view_mode_pref');
+          if (savedMode === 'grid' || savedMode === 'list') return savedMode;
+          // Deteção de Mobile vs Desktop
+          return window.innerWidth < 768 ? 'list' : 'grid';
+      } catch {
+          return 'grid';
+      }
+  });
+
+  // Salvar a preferência sempre que o utilizador mudar
+  useEffect(() => {
+      localStorage.setItem('view_mode_pref', viewMode);
+  }, [viewMode]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9; 
 
@@ -270,3 +290,4 @@ const ProductList: React.FC<ProductListProps> = ({
 };
 
 export default ProductList;
+
