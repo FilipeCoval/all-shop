@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
 import Header from './components/Header';
@@ -29,8 +28,30 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAIChatOpen, setIsAIChatOpen] = useState(false); // NOVO: Estado do Chat
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false); 
   
+  // DARK MODE STATE
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+      try {
+          const saved = localStorage.getItem('theme');
+          return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      } catch {
+          return false;
+      }
+  });
+
+  useEffect(() => {
+      if (isDarkMode) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+      }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [wishlist, setWishlist] = useState<number[]>(() => {
@@ -72,30 +93,18 @@ const App: React.FC = () => {
   }, []);
 
   const getStockForProduct = (productId: number, variantName?: string): number => {
-    // 1. Se for Admin, usa a lógica complexa de inventário real (hooks/useStock)
     if (isAdmin) return getAdminStock(productId, variantName);
-    
-    // 2. Se for Visitante/Cliente, usa a coleção pública 'products_public'
-    // Esta coleção é atualizada pelo botão "Sincronizar Stock" no Dashboard.
     const product = dbProducts.find(p => p.id === productId);
-    
-    // Se o produto não existir ou o campo 'stock' for undefined/null, assume 0 para evitar overselling
-    // O operador (?? 0) garante que se stock for 0, mantém-se 0, mas se for null/undefined, vira 0.
     let availableStock = product?.stock ?? 0;
-
-    // 3. Subtrai as reservas ativas (pessoas com o item no carrinho agora)
-    // As reservas são globais, então afetam o stock disponível para todos
     const reservedQuantity = reservations
         .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
         .reduce((sum, r) => sum + r.quantity, 0);
 
     availableStock -= reservedQuantity;
-    
     return Math.max(0, availableStock);
   };
 
   const getMyReservedQuantity = (productId: number, variantName?: string): number => {
-      // Verifica reservas da sessão OU do utilizador logado
       return reservations
         .filter(r => 
             (r.sessionId === sessionId || (user?.uid && r['userId'] === user.uid)) && 
@@ -298,32 +307,19 @@ const App: React.FC = () => {
     }
   };
 
-  /**
-   * VERIFICAÇÃO ATÓMICA E ROBUSTA DE STOCK
-   * Retorna TRUE se conseguiu reservar, FALSE se falhou.
-   */
   const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number): Promise<boolean> => {
-      if (isAdmin) return true; // Admin não reserva, passa sempre.
-
-      // DELAY INTENCIONAL (200ms) para estabilização de leitura/escrita e evitar condições de corrida em cliques rápidos
+      if (isAdmin) return true; 
       await new Promise(resolve => setTimeout(resolve, 200));
 
       try {
-          // 1. FRESH FETCH: Obter dados reais do produto AGORA (ignora cache local)
           const productQuery = await db.collection('products_public').where('id', '==', productId).limit(1).get();
           
           if (productQuery.empty) {
-              // FALLBACK DE SEGURANÇA:
-              // Se o produto não estiver na DB, verificamos se é um dos produtos iniciais (demonstração).
-              // Se for, permitimos a adição para testes. Caso contrário, bloqueamos.
               const isDemoProduct = INITIAL_PRODUCTS.some(p => p.id === productId);
-              
               if (isDemoProduct) {
                   console.warn("Produto de demonstração (não sincronizado) adicionado ao carrinho.");
-                  // Para produtos demo, simulamos sucesso sem gravar reserva na DB (para não gerar erro de permissão ou documento órfão)
                   return true;
               }
-
               console.error("Produto não encontrado na base de dados pública:", productId);
               alert("Erro: Este produto parece não estar sincronizado com o sistema. Por favor, tente recarregar a página ou contacte o suporte.");
               return false;
@@ -333,27 +329,18 @@ const App: React.FC = () => {
           const productData = productDoc.data() as Product;
           const totalStock = productData.stock || 0;
 
-          // 2. FRESH FETCH: Obter TODAS as reservas para este produto
-          // NOTA: Removemos o filtro expiresAt da query para evitar erro de índice composto no Firebase.
-          // Filtramos a data localmente no JavaScript.
           const activeReservationsSnap = await db.collection('stock_reservations')
               .where('productId', '==', productId)
               .get();
 
-          // 3. CALCULAR disponibilidade real
           let reservedByOthers = 0;
           let myCurrentResDoc: any = null;
           const now = Date.now();
 
           activeReservationsSnap.forEach(doc => {
               const data = doc.data();
-              
-              // Filtro de expiração (Client-side)
               if (data.expiresAt <= now) return;
-
-              // CRÍTICO: Identificar se a reserva é "MINHA" (Sessão Atual OU Mesmo User ID)
               const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
-
               if (isMine && data.variantName === (variantName || null)) {
                   myCurrentResDoc = doc; 
               } else {
@@ -361,11 +348,9 @@ const App: React.FC = () => {
               }
           });
 
-          // 4. VERIFICAÇÃO CRÍTICA
           const availableForMe = totalStock - reservedByOthers;
           
           if (newQuantity > availableForMe) {
-              console.warn(`Overselling preventido. Stock Total: ${totalStock}, Ocupado Outros: ${reservedByOthers}, Pedido: ${newQuantity}, Disp: ${availableForMe}`);
               if (availableForMe <= 0) {
                   alert("Lamentamos, mas este artigo acabou de esgotar ou está reservado por outro cliente.");
               } else {
@@ -374,9 +359,7 @@ const App: React.FC = () => {
               return false;
           }
 
-          // 5. ATUALIZAR (Só se passou na verificação)
           const batch = db.batch();
-          
           if (newQuantity <= 0) {
               if (myCurrentResDoc) batch.delete(myCurrentResDoc.ref);
           } else {
@@ -402,33 +385,23 @@ const App: React.FC = () => {
 
       } catch (e) {
           console.error("Erro crítico na transação de reserva:", e);
-          // Em caso de erro de rede, assumimos falha para não vender sem stock
           alert("Ocorreu um erro de comunicação com o servidor. Verifique a sua internet.");
           return false;
       }
   };
 
   const addToCart = async (product: Product, variant?: ProductVariant) => {
-    // Evita cliques múltiplos no mesmo produto
     if (processingProductIds.includes(product.id)) return;
-
     setProcessingProductIds(prev => [...prev, product.id]);
     
     try {
-        // Calcula nova quantidade desejada
         const cartItemId = variant?.name ? `${product.id}-${variant.name}` : `${product.id}`;
         const existingItem = cartItems.find(item => item.cartItemId === cartItemId);
         const newQty = existingItem ? existingItem.quantity + 1 : 1;
 
-        // Tenta reservar no servidor PRIMEIRO
         const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
+        if (!success) return;
 
-        if (!success) {
-            // O alert já é mostrado dentro do updateReservationInFirebase com detalhes
-            return;
-        }
-
-        // Se sucesso, atualiza UI
         const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
         setCartItems(prev => {
@@ -447,29 +420,23 @@ const App: React.FC = () => {
     } catch (err) {
         console.error("Erro inesperado no carrinho:", err);
     } finally {
-        // GARANTIR QUE O LOADING PÁRA SEMPRE
         setProcessingProductIds(prev => prev.filter(id => id !== product.id));
     }
   };
 
   const removeFromCart = async (cartItemId: string) => {
     const item = cartItems.find(i => i.cartItemId === cartItemId);
-    // Atualização otimista para remover é segura
     setCartItems(prev => prev.filter(i => i.cartItemId !== cartItemId));
-    
     if (item) {
-        // Liberta stock sem bloquear UI
         updateReservationInFirebase(item.id, item.selectedVariant, 0);
     }
   };
 
   const updateQuantity = async (cartItemId: string, delta: number) => {
-    // Encontra item e calcula nova quantidade
     const itemToUpdate = cartItems.find(i => i.cartItemId === cartItemId);
     if (!itemToUpdate) return;
     const newQty = itemToUpdate.quantity + delta;
 
-    // Se for para remover ou diminuir, é seguro fazer logo
     if (newQty < itemToUpdate.quantity) {
         setCartItems(prev => {
             if (newQty < 1) return prev.filter(i => i.cartItemId !== cartItemId);
@@ -479,16 +446,9 @@ const App: React.FC = () => {
         return;
     }
 
-    // Se for para AUMENTAR, precisamos de verificar stock rigorosamente
-    // Aqui usamos um loading global simples ou apenas esperamos
     const success = await updateReservationInFirebase(itemToUpdate.id, itemToUpdate.selectedVariant, newQty);
+    if (!success) return;
 
-    if (!success) {
-        // O alert é mostrado no updateReservationInFirebase
-        return;
-    }
-
-    // Sucesso, atualiza UI
     setCartItems(prev =>
         prev.map(item =>
           item.cartItemId === cartItemId
@@ -513,32 +473,25 @@ const App: React.FC = () => {
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
           await db.collection("orders").doc(newOrder.id).set(newOrder);
-          
           const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
           if (!reservationQuery.empty) {
             const batch = db.batch();
             reservationQuery.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
           }
-
           setOrders(prev => [newOrder, ...prev]);
           setCartItems([]);
-          
           notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
-          
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
               const userDoc = await transaction.get(userRef);
               if (!userDoc.exists) return;
-              
               const userData = userDoc.data() as User;
               const newTotalSpent = (userData.totalSpent || 0) + newOrder.total;
-              
               let newTier: UserTier = userData.tier || 'Bronze';
               if (newTotalSpent >= LOYALTY_TIERS.GOLD.threshold) newTier = 'Ouro';
               else if (newTotalSpent >= LOYALTY_TIERS.SILVER.threshold) newTier = 'Prata';
-              
               transaction.update(userRef, { totalSpent: newTotalSpent, tier: newTier });
             });
           }
@@ -583,7 +536,6 @@ const App: React.FC = () => {
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = dbProducts.find(p => p.id === id);
-        // FIX: Passando processingProductIds para ProductDetails
         if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} />;
     }
     switch (route) {
@@ -599,7 +551,7 @@ const App: React.FC = () => {
 
   if (authLoading || productsLoading || (isAdmin && stockLoading)) {
       return (
-          <div className="fixed inset-0 bg-white flex flex-col items-center justify-center gap-4">
+          <div className="fixed inset-0 bg-white dark:bg-gray-900 flex flex-col items-center justify-center gap-4">
               <img src={LOGO_URL} alt={STORE_NAME} className="w-48 h-auto animate-pulse" />
               <Loader2 className="animate-spin text-primary" size={32} />
           </div>
@@ -607,29 +559,41 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen font-sans text-gray-900 bg-gray-50">
-      <Header cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} user={user} onOpenLogin={() => setIsLoginOpen(true)} onLogout={handleLogout} searchTerm={searchTerm} onSearchChange={handleSearchChange} onResetHome={handleResetHome} />
+    <div className="flex flex-col min-h-screen font-sans text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      <Header 
+        cartCount={cartCount} 
+        onOpenCart={() => setIsCartOpen(true)} 
+        onOpenMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+        user={user} 
+        onOpenLogin={() => setIsLoginOpen(true)} 
+        onLogout={handleLogout} 
+        searchTerm={searchTerm} 
+        onSearchChange={handleSearchChange} 
+        onResetHome={handleResetHome}
+        isDarkMode={isDarkMode}
+        onToggleTheme={toggleTheme}
+      />
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
+        <div className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 space-y-4 animate-fade-in-down shadow-lg relative z-50">
           <div className="relative">
-             <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
+             <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400" />
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           </div>
-          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Início</a>
-          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Sobre</a>
-          <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 font-medium">Contato</a>
-          <div className="pt-4 border-t border-gray-100">
+          <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Início</a>
+          <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Sobre</a>
+          <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Contato</a>
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
             {user ? (
                 <button onClick={() => { window.location.hash = 'account'; setIsMobileMenuOpen(false); }} className="w-full text-left py-2 text-primary font-bold">A Minha Conta</button>
             ) : (
-                <button onClick={() => { setIsLoginOpen(true); setIsMobileMenuOpen(false); }} className="w-full bg-secondary text-white py-3 rounded-lg font-bold">Entrar / Registar</button>
+                <button onClick={() => { setIsLoginOpen(true); setIsMobileMenuOpen(false); }} className="w-full bg-secondary dark:bg-gray-700 text-white py-3 rounded-lg font-bold">Entrar / Registar</button>
             )}
           </div>
         </div>
       )}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       
-      <InstallPrompt /> {/* NOVO BOTÃO DE INSTALAÇÃO */}
+      <InstallPrompt /> 
 
       <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
@@ -639,21 +603,12 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center md:items-start">
                 <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
                 <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm">
-                        <img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" />
-                    </div>
+                    {/* Payment Icons */}
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://gestplus.pt/imgs/mbway.png" alt="MBWay" className="h-full w-full object-contain" /></div>
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse2.mm.bing.net/th/id/OIP.pnNR_ET5AlZNDtMd2n1m5wHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Multibanco" className="h-full w-full object-contain" /></div>
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://tse1.mm.bing.net/th/id/OIP.ygZGQKeZ0aBwHS7e7wbJVgHaDA?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Visa" className="h-full w-full object-contain" /></div>
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" className="h-full w-full object-contain" /></div>
+                    <div className="bg-white p-0.5 rounded h-8 w-12 flex items-center justify-center shadow-sm"><img src="https://www.oservidor.pt/img/s/166.jpg" alt="Cobrança" className="h-full w-full object-contain" /></div>
                 </div>
             </div>
         </div>
