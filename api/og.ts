@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // --- CONSTANTES ---
-const STORE_NAME = "Allshop";
+const STORE_NAME = "All-Shop";
 const LOGO_URL = "https://i.imgur.com/nSiZKBf.png";
 const PUBLIC_URL = "https://www.all-shop.net";
 const SHARE_URL = "https://share.all-shop.net";
