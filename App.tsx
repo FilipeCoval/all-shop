@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Smartphone, Landmark, Banknote, Search, Loader2 } from 'lucide-react';
+import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
 import AIChat from './components/AIChat';
@@ -582,6 +582,13 @@ const App: React.FC = () => {
           <a href="#/" onClick={(e) => { e.preventDefault(); handleResetHome(); setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Início</a>
           <a href="#about" onClick={(e) => { e.preventDefault(); window.location.hash = 'about'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Sobre</a>
           <a href="#contact" onClick={(e) => { e.preventDefault(); window.location.hash = 'contact'; setIsMobileMenuOpen(false); }} className="block py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">Contato</a>
+          
+          {/* TOGGLE DARK MODE NO MENU MOBILE */}
+          <button onClick={toggleTheme} className="flex items-center gap-3 w-full py-2 text-gray-600 dark:text-gray-300 font-medium hover:text-primary dark:hover:text-white">
+             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+             <span>{isDarkMode ? 'Modo Claro' : 'Modo Escuro'}</span>
+          </button>
+
           <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
             {user ? (
                 <button onClick={() => { window.location.hash = 'account'; setIsMobileMenuOpen(false); }} className="w-full text-left py-2 text-primary font-bold">A Minha Conta</button>
