@@ -162,11 +162,11 @@ const Header: React.FC<HeaderProps> = ({
                 )}
             </div>
 
-            {/* TOGGLE DARK MODE */}
+            {/* TOGGLE DARK MODE - AGORA VISÍVEL EM MOBILE */}
             {onToggleTheme && (
                 <button
                     onClick={onToggleTheme}
-                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors hidden sm:block"
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     title={isDarkMode ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
                 >
                     {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
