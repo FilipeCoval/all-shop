@@ -1,7 +1,7 @@
 
 import { Product } from './types';
 
-export const STORE_NAME = "Allshop";
+export const STORE_NAME = "All-Shop";
 export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
@@ -44,3 +44,4 @@ export const LOYALTY_REWARDS = [
 // LISTA LIMPA: Os produtos antigos foram removidos para evitar confusão.
 // A loja carrega tudo da Firebase.
 export const INITIAL_PRODUCTS: Product[] = [];
+
