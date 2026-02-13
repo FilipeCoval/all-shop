@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2 } from 'lucide-react';
@@ -147,9 +146,9 @@ const ProductList: React.FC<ProductListProps> = ({
                             onChange={(e) => setSortOption(e.target.value as any)}
                             className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary outline-none cursor-pointer text-gray-700 dark:text-gray-200 font-medium"
                         >
-                            <option value="default">Relevância</option>
-                            <option value="price-asc">Preço: Menor para Maior</option>
-                            <option value="price-desc">Preço: Maior para Menor</option>
+                            <option value="default" className="dark:bg-gray-700">Relevância</option>
+                            <option value="price-asc" className="dark:bg-gray-700">Preço: Menor para Maior</option>
+                            <option value="price-desc" className="dark:bg-gray-700">Preço: Maior para Menor</option>
                         </select>
                     </div>
 
