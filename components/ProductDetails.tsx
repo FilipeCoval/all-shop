@@ -6,7 +6,7 @@ import {
     Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
-import { STORE_NAME, PUBLIC_URL } from '../constants';
+import { STORE_NAME, PUBLIC_URL, SHARE_URL } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
@@ -86,7 +86,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
   const handleShare = async () => {
-    const shareUrl = `${PUBLIC_URL}/product/${product.id}`;
+    // MUDANÇA AQUI: Usar SHARE_URL para o link de partilha
+    const shareUrl = `${SHARE_URL}/product/${product.id}`;
     
     const shareData: ShareData = {
       title: product.name,
