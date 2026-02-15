@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, TrendingUp, Percent, BrainCircuit, Info } from 'lucide-react';
 
@@ -16,6 +15,7 @@ interface CalcItem {
 interface ResultItem {
   name: string;
   pricePaid: number;
+  priceExVat: number; // Novo campo para mostrar valor base
   realCost: number;
   allocatedCashback: number;
   sellPrice: string;
@@ -25,13 +25,12 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-PT', { style
 
 const ProfitCalculatorModal: React.FC<ProfitCalculatorModalProps> = ({ isOpen, onClose }) => {
   const [items, setItems] = useState<CalcItem[]>([{ id: 1, name: '', price: '' }]);
-  const [totalCashback, setTotalCashback] = useState('');
+  const [totalCashback, setTotalCashback] = useState(''); 
   const [vatRate, setVatRate] = useState('23');
   const [results, setResults] = useState<ResultItem[]>([]);
 
   useEffect(() => {
     if (!isOpen) {
-      // Reset state when modal closes
       setItems([{ id: 1, name: '', price: '' }]);
       setTotalCashback('');
       setVatRate('23');
@@ -56,10 +55,10 @@ const ProfitCalculatorModal: React.FC<ProfitCalculatorModalProps> = ({ isOpen, o
   };
 
   const handleCalculate = () => {
-    const parsedVat = parseFloat(vatRate) / 100;
-    const parsedCashback = parseFloat(totalCashback) || 0;
+    const vatNum = parseFloat(vatRate);
+    const cashbackPercentage = parseFloat(totalCashback) || 0; 
     
-    if (isNaN(parsedVat)) {
+    if (isNaN(vatNum)) {
       alert("Taxa de IVA inválida.");
       return;
     }
@@ -74,20 +73,21 @@ const ProfitCalculatorModal: React.FC<ProfitCalculatorModalProps> = ({ isOpen, o
       return;
     }
     
-    const itemsWithPreTax = processedItems.map(item => ({
-        ...item,
-        priceWithoutVat: item.priceWithVat / (1 + parsedVat)
-    }));
-    
-    const totalWithoutVat = itemsWithPreTax.reduce((sum, item) => sum + item.priceWithoutVat, 0);
-    
-    const newResults: ResultItem[] = itemsWithPreTax.map(item => {
-        const proportion = totalWithoutVat > 0 ? item.priceWithoutVat / totalWithoutVat : 0;
-        const allocatedCashback = parsedCashback * proportion;
+    // CORREÇÃO: Cashback calculado sobre o valor SEM IVA (Base Taxável)
+    const newResults: ResultItem[] = processedItems.map(item => {
+        // 1. Encontrar o valor sem IVA (Ex: 116 / 1.23 = 94.30)
+        const priceExVat = item.priceWithVat / (1 + (vatNum / 100));
+
+        // 2. Calcular cashback sobre o valor base
+        const allocatedCashback = priceExVat * (cashbackPercentage / 100);
+        
+        // 3. Custo real é o que saiu do bolso (c/ IVA) menos o que volta (cashback)
         const realCost = item.priceWithVat - allocatedCashback;
+        
         return {
             name: item.name,
             pricePaid: item.priceWithVat,
+            priceExVat: priceExVat,
             realCost: realCost,
             allocatedCashback: allocatedCashback,
             sellPrice: ''
@@ -113,8 +113,18 @@ const ProfitCalculatorModal: React.FC<ProfitCalculatorModalProps> = ({ isOpen, o
                 <h4 className="font-bold text-blue-900 mb-3">Dados da Compra</h4>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cashback Total (€)</label>
-                        <input type="number" placeholder="47.00" value={totalCashback} onChange={e => setTotalCashback(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg" />
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cashback (%)</label>
+                        <div className="relative">
+                            <input 
+                                type="number" 
+                                placeholder="Ex: 75" 
+                                value={totalCashback} 
+                                onChange={e => setTotalCashback(e.target.value)} 
+                                className="w-full p-2 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                            />
+                            <Percent size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        </div>
+                        <p className="text-[10px] text-blue-600 mt-1">Calculado sobre valor s/ IVA.</p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Taxa IVA (%)</label>
@@ -160,9 +170,23 @@ const ProfitCalculatorModal: React.FC<ProfitCalculatorModalProps> = ({ isOpen, o
                         return (
                             <div key={index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
                                 <p className="font-bold text-gray-800">{res.name || `Produto #${index + 1}`}</p>
-                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100" title={`Preço pago: ${formatCurrency(res.pricePaid)} - Cashback alocado: ${formatCurrency(res.allocatedCashback)}`}>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase">Custo Real</label>
+                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">Custo Real (c/ Cashback)</label>
                                     <p className="text-2xl font-bold text-green-700">{formatCurrency(res.realCost)}</p>
+                                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-200">
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold">Pago (c/ IVA)</p>
+                                            <p className="text-xs font-medium">{formatCurrency(res.pricePaid)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold">Base (s/ IVA)</p>
+                                            <p className="text-xs font-medium">{formatCurrency(res.priceExVat)}</p>
+                                        </div>
+                                        <div className="col-span-2 bg-yellow-50 p-1.5 rounded text-center border border-yellow-100">
+                                            <p className="text-[10px] text-yellow-700 font-bold">Retorno Cashback ({totalCashback}%)</p>
+                                            <p className="text-xs font-bold text-yellow-600">{formatCurrency(res.allocatedCashback)}</p>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="space-y-2 pt-3 border-t border-gray-100">
                                   <label className="block text-xs font-bold text-gray-500 uppercase">Simulador de Preço</label>
