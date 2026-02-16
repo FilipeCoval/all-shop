@@ -251,7 +251,100 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleOpenRevenueModal = () => { setDetailsModalData({ title: "Receita Realizada", data: products.flatMap(p => (p.salesHistory || []).map(s => ({ id: s.id, name: p.name, date: s.date, qty: s.quantity, val: s.quantity * s.unitPrice }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), total: stats.realizedRevenue, columns: [{ header: "Data", accessor: (i) => new Date(i.date).toLocaleDateString() }, { header: "Produto", accessor: "name" }, { header: "Qtd", accessor: "qty" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
   const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const cogs = p.quantitySold * p.purchasePrice; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
   const handleOpenCashbackManager = () => { setIsCashbackManagerOpen(true); };
-  const handlePrintLabels = () => { if (generatedCodes.length === 0) return; const printWindow = window.open('', '_blank'); if (!printWindow) return; const html = `<html><head><title>Imprimir Etiquetas</title><style>body { font-family: monospace; padding: 20px; } .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .label { border: 1px dashed #000; padding: 10px; text-align: center; height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; } .code { font-size: 18px; font-weight: bold; letter-spacing: 2px; } .store { font-size: 10px; margin-top: 5px; text-transform: uppercase; } @media print { .no-print { display: none; } .label { border: 1px solid #000; break-inside: avoid; } }</style></head><body><button class="no-print" onclick="window.print()" style="padding: 10px 20px; font-size: 16px; margin-bottom: 20px; cursor: pointer;">🖨️ Imprimir Agora</button><div class="grid">${generatedCodes.map(code => `<div class="label"><div class="code">${code}</div><div class="store">${STORE_NAME} - Inventário</div></div>`).join('')}</div></body></html>`; printWindow.document.write(html); printWindow.document.close(); };
+  
+  // --- HANDLE PRINT LABELS COM BARCODE REAL ---
+  const handlePrintLabels = () => {
+    if (generatedCodes.length === 0) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    // HTML Template para impressão com JsBarcode
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Imprimir Etiquetas</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+          <style>
+            body { 
+                font-family: 'Arial', sans-serif; 
+                padding: 10px; 
+                margin: 0;
+            }
+            .grid { 
+                display: grid; 
+                grid-template-columns: repeat(3, 1fr); 
+                gap: 15px; 
+            }
+            .label { 
+                border: 1px dashed #ccc; 
+                padding: 10px; 
+                text-align: center; 
+                height: 100px; /* Altura fixa para etiqueta padrão */
+                display: flex; 
+                flex-direction: column; 
+                justify-content: center; 
+                align-items: center; 
+                page-break-inside: avoid;
+            }
+            .barcode {
+                width: 100%;
+                max-height: 80px;
+            }
+            
+            /* Botão de impressão (escondido na impressão) */
+            @media print { 
+                .no-print { display: none; } 
+                .label { border: none; } /* Remove borda na impressão se preferir */
+            }
+            .no-print {
+                padding: 12px 24px;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 16px;
+                cursor: pointer;
+                margin-bottom: 20px;
+                display: block;
+            }
+          </style>
+        </head>
+        <body>
+          <button class="no-print" onclick="window.print()">🖨️ Imprimir Agora</button>
+          
+          <div class="grid">
+            ${generatedCodes.map(code => `
+              <div class="label">
+                <svg class="barcode"
+                  jsbarcode-format="CODE128"
+                  jsbarcode-value="${code}"
+                  jsbarcode-textmargin="0"
+                  jsbarcode-fontoptions="bold"
+                  jsbarcode-height="50"
+                  jsbarcode-width="2"
+                  jsbarcode-displayValue="true"
+                  jsbarcode-fontSize="14"
+                ></svg>
+              </div>
+            `).join('')}
+          </div>
+
+          <script>
+            // Inicializar todos os códigos de barras
+            JsBarcode(".barcode").init();
+            
+            // Auto-print (opcional)
+            // window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const toggleCashbackAccount = (account: string) => { setExpandedCashbackAccounts(prev => prev.includes(account) ? prev.filter(a => a !== account) : [...prev, account]); };
   const handleMarkBatchReceived = async (itemsToUpdate: InventoryProduct[]) => { if(!window.confirm(`Marcar ${itemsToUpdate.length} itens como RECEBIDO?`)) return; try { const batch = db.batch(); itemsToUpdate.forEach(item => { const ref = db.collection('products_inventory').doc(item.id); batch.update(ref, { cashbackStatus: 'RECEIVED' }); }); await batch.commit(); alert("Cashback atualizado com sucesso!"); } catch(e) { alert("Erro ao atualizar cashback."); } };
   const handleUpdateTicketStatus = async (ticketId: string, newStatus: string) => { try { await db.collection('support_tickets').doc(ticketId).update({ status: newStatus }); if(selectedTicket) setSelectedTicket({...selectedTicket, status: newStatus} as any); } catch (error) { alert("Erro ao atualizar ticket."); } };
