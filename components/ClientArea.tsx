@@ -133,20 +133,27 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   const handleEnableNotifications = async () => {
       setNotifLoading(true);
-      const token = await requestPushPermission();
-      if (token) {
-          try {
+      try {
+          const token = await requestPushPermission();
+          if (token) {
               await db.collection('users').doc(user.uid).update({ fcmToken: token });
               onUpdateUser({ ...user, fcmToken: token });
               alert("Notificações ativadas com sucesso!");
-          } catch (e) {
-              console.error(e);
-              alert("Erro ao guardar preferência.");
+          } else {
+              // Se requestPushPermission retorna null, geralmente logámos o erro na consola.
+              // Pode ser permissão do browser OU erro de API.
+              if (Notification.permission === 'denied') {
+                  alert("As notificações estão bloqueadas no seu navegador. Clique no cadeado na barra de endereço para desbloquear.");
+              } else {
+                  alert("Erro ao ativar: Verifique a consola. Provavelmente a 'Browser Key' na Google Cloud Console está a bloquear a API de Cloud Messaging.");
+              }
           }
-      } else {
-          alert("Não foi possível ativar notificações. Verifique as permissões do navegador.");
+      } catch (e) {
+          console.error("Erro fatal ativação:", e);
+          alert("Ocorreu um erro inesperado ao ativar as notificações.");
+      } finally {
+          setNotifLoading(false);
       }
-      setNotifLoading(false);
   };
 
   const handleAddAddress = (e: React.FormEvent) => { 
