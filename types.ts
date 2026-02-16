@@ -14,6 +14,8 @@ export interface User {
   tier?: UserTier;
   totalSpent?: number;
   wishlist?: number[];
+  fcmToken?: string; // Token para Push Notifications
+  lastShareDate?: string; // Data da última partilha premiada (ISO Date string)
 }
 
 export interface Address {
