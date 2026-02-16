@@ -67,6 +67,7 @@ export interface UserCheckoutInfo {
   phone: string;
   nif?: string;
   paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança';
+  deliveryMethod?: 'Shipping' | 'Pickup'; // Novo campo
 }
 
 export interface CartItem {
