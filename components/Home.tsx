@@ -1,3 +1,4 @@
+
 import { Product, ProductVariant } from '../types';
 import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
@@ -43,19 +44,19 @@ const Home: React.FC<HomeProps> = ({
     },
     {
       id: 2,
-      title: "Envios Grátis > 50€",
-      subtitle: "Entrega rápida em 24h/48h para Portugal Continental.",
-      cta: "Ver Catálogo",
-      image: "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=2500&auto=format&fit=crop",
+      title: "Stock 100% Nacional 🇵🇹",
+      subtitle: "Nada de Dropshipping. Armazém em Lisboa com entrega em 24h.",
+      cta: "Ver Stock Real",
+      image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2500&auto=format&fit=crop",
       action: () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
     },
     {
       id: 3,
-      title: "Acessórios Premium",
-      subtitle: "Cabos e Hubs de alta performance para o seu setup.",
-      cta: "Explorar",
-      image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2500&auto=format&fit=crop",
-      category: "Acessórios"
+      title: "Envios Grátis > 50€",
+      subtitle: "Para Portugal Continental. Compre com confiança e rapidez.",
+      cta: "Aproveitar",
+      image: "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=2500&auto=format&fit=crop",
+      action: () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
     }
   ];
 
