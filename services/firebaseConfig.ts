@@ -1,8 +1,10 @@
+
 // FIX: Import firebase to resolve UMD global errors
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/storage';
+import 'firebase/compat/messaging';
 
 // Configuração do Firebase da Allshop Store
 // Estas chaves são públicas e necessárias para o browser comunicar com o Firebase.
@@ -25,6 +27,17 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
+// Inicializar Messaging (Push Notifications) de forma segura
+// O Messaging não é suportado em todos os browsers (ex: Safari antigo)
+let messaging: firebase.messaging.Messaging | null = null;
+try {
+  if (firebase.messaging.isSupported()) {
+    messaging = firebase.messaging();
+  }
+} catch (e) {
+  console.warn("Firebase Messaging not supported in this environment.", e);
+}
+
 // CORREÇÃO DE ERRO DE LIGAÇÃO:
 // Força o uso de Long Polling em vez de WebSockets. 
 // Isto resolve o erro "Backend didn't respond within 10 seconds" em muitas redes.
@@ -33,5 +46,25 @@ db.settings({ experimentalForceLongPolling: true });
 // Forçar idioma para Português (ajuda nos emails de recuperação e verificação)
 auth.languageCode = 'pt';
 
+// Helper para pedir permissão
+export const requestPushPermission = async (): Promise<string | null> => {
+  if (!messaging) return null;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      // VAPID Key pública é necessária para gerar o token
+      // Se não tiver uma gerada, o firebase usa a default se configurada no console
+      const token = await messaging.getToken({ 
+        vapidKey: "BBMG3o7-xxxxxxxxxxxxxxxxxxxx" // Substituir pela VAPID Key real do Firebase Console > Cloud Messaging > Web Configuration
+      }); 
+      return token;
+    }
+    return null;
+  } catch (error) {
+    console.error("Erro ao pedir permissão de notificação:", error);
+    return null;
+  }
+};
+
 // Exportar 'firebase' para acesso a FieldValue.increment/arrayUnion sem conflitos de importação
-export { auth, db, storage, firebase };
+export { auth, db, storage, messaging, firebase };
