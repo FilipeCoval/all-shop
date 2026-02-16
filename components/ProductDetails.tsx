@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, Review, User, ProductVariant } from '../types';
+import { Product, Review, User, ProductVariant, PointHistory } from '../types';
 import { 
     ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
     Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
-    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle
+    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle, Coins
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 import { STORE_NAME, PUBLIC_URL, SHARE_URL } from '../constants';
-import { db } from '../services/firebaseConfig';
+import { db, firebase } from '../services/firebaseConfig';
 
 interface ProductDetailsProps {
   product: Product;
@@ -27,7 +28,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 }) => {
   const [selectedImage, setSelectedImage] = useState<string>(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
-  const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared'>('idle');
+  const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared' | 'points_earned'>('idle');
   
   const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
   const [alertStatus, setAlertStatus] = useState<'idle' | 'loading' | 'success'>('idle');
@@ -85,8 +86,39 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
       else onAddToCart(product);
   };
 
+  const awardSharePoints = async () => {
+      if (!currentUser) return;
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Verifica se já partilhou hoje
+      if (currentUser.lastShareDate && currentUser.lastShareDate.startsWith(today)) {
+          return; // Já ganhou pontos hoje
+      }
+
+      try {
+          const points = 5;
+          const newHistory: PointHistory = {
+              id: `share-${Date.now()}`,
+              date: new Date().toISOString(),
+              amount: points,
+              reason: 'Partilha de Produto Diária'
+          };
+
+          await db.collection('users').doc(currentUser.uid).update({
+              loyaltyPoints: firebase.firestore.FieldValue.increment(points),
+              pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory),
+              lastShareDate: new Date().toISOString()
+          });
+          
+          setShareFeedback('points_earned');
+          setTimeout(() => setShareFeedback('idle'), 4000);
+      } catch (e) {
+          console.error("Erro ao atribuir pontos de partilha:", e);
+      }
+  };
+
   const handleShare = async () => {
-    // MUDANÇA AQUI: Usar SHARE_URL para o link de partilha
+    // Usar SHARE_URL para o link de partilha
     const shareUrl = `${SHARE_URL}/product/${product.id}`;
     
     const shareData: ShareData = {
@@ -98,21 +130,25 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
     try {
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
-        setShareFeedback('shared');
+        if (shareFeedback !== 'points_earned') setShareFeedback('shared');
+        awardSharePoints();
       } else {
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        setShareFeedback('copied');
+        if (shareFeedback !== 'points_earned') setShareFeedback('copied');
+        awardSharePoints();
       } catch (clipboardErr) {
         console.warn("Share fallback failed", clipboardErr);
         prompt("Copie o link:", shareUrl);
       }
     }
 
-    setTimeout(() => setShareFeedback('idle'), 3000);
+    if (shareFeedback !== 'points_earned') {
+        setTimeout(() => setShareFeedback('idle'), 3000);
+    }
   };
 
   const handleStockAlertSubmit = async (e: React.FormEvent) => {
@@ -169,19 +205,29 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                     <span className="text-sm font-bold text-primary tracking-wider uppercase">{product.category}</span>
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-2 mb-4 leading-tight">{product.name}</h1>
                 </div>
-                <button 
-                    onClick={handleShare} 
-                    className={`p-3 rounded-full transition-all flex items-center justify-center
-                        ${shareFeedback === 'idle' ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-primary' : 
-                          shareFeedback === 'copied' ? 'bg-green-100 text-green-600' : 
-                          'bg-blue-100 text-blue-600'}
-                    `}
-                    title={shareFeedback === 'copied' ? 'Link Copiado' : 'Partilhar'}
-                >
-                    {shareFeedback === 'idle' && <Share2 size={24} />}
-                    {shareFeedback === 'copied' && <Check size={24} />}
-                    {shareFeedback === 'shared' && <Check size={24} />}
-                </button>
+                <div className="flex flex-col items-center">
+                    <button 
+                        onClick={handleShare} 
+                        className={`p-3 rounded-full transition-all flex items-center justify-center shadow-sm relative
+                            ${shareFeedback === 'idle' ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-primary' : 
+                            shareFeedback === 'points_earned' ? 'bg-yellow-100 text-yellow-600 animate-bounce' :
+                            shareFeedback === 'copied' ? 'bg-green-100 text-green-600' : 
+                            'bg-blue-100 text-blue-600'}
+                        `}
+                        title={shareFeedback === 'copied' ? 'Link Copiado' : 'Partilhar e Ganhar'}
+                    >
+                        {shareFeedback === 'idle' && <Share2 size={24} />}
+                        {shareFeedback === 'copied' && <Check size={24} />}
+                        {shareFeedback === 'shared' && <Check size={24} />}
+                        {shareFeedback === 'points_earned' && <Coins size={24} />}
+                        
+                        {/* Indicador de Pontos */}
+                        {currentUser && (!currentUser.lastShareDate || !currentUser.lastShareDate.startsWith(new Date().toISOString().split('T')[0])) && shareFeedback === 'idle' && (
+                            <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-[9px] font-bold px-1 rounded-full animate-pulse">+5</span>
+                        )}
+                    </button>
+                    {shareFeedback === 'points_earned' && <span className="text-[10px] font-bold text-yellow-600 mt-1">+5 Pontos!</span>}
+                </div>
            </div>
 
            <div className="flex items-end gap-3 mb-6">
