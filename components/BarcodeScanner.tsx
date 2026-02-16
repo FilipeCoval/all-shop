@@ -33,7 +33,15 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onCodeSubmit, onClose, 
             else formats = [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.QR_CODE];
             hints.set(2, formats); hints.set(3, true); codeReaderRef.current = new BrowserMultiFormatReader(hints, 300);
             try {
-                const constraints = { video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, focusMode: 'continuous' } };
+                // ALTERADO: Baixado de 4K (3840) para 1080p (1920) para melhor performance em Android
+                const constraints = { 
+                    video: { 
+                        facingMode: 'environment', 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 }, 
+                        focusMode: 'continuous' 
+                    } 
+                };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints as any); streamRef.current = stream;
                 const track = stream.getVideoTracks()[0]; trackRef.current = track;
                 const capabilities = track.getCapabilities() as any;
