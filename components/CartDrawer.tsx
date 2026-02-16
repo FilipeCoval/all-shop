@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Check, Loader2, ChevronLeft, Copy, User as UserIcon, Clock, ShoppingCart, Tag, AlertCircle } from 'lucide-react';
-import { SELLER_PHONE, TELEGRAM_LINK, STORE_NAME } from '../constants';
+import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin } from 'lucide-react';
+import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig';
 
 const ReservationBanner: React.FC<{ items: CartItem[] }> = ({ items }) => {
@@ -75,10 +75,41 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform' | 'success'>('cart');
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
+  
+  // State para o método de entrega
+  const [deliveryMethod, setDeliveryMethod] = useState<'Shipping' | 'Pickup'>('Shipping');
+  
   const [userInfo, setUserInfo] = useState<UserCheckoutInfo>({
-    name: '', email: '', street: '', doorNumber: '', zip: '', city: '', phone: '', paymentMethod: 'MB Way'
+    name: user?.name || '', 
+    email: user?.email || '', 
+    street: '', 
+    doorNumber: '', 
+    zip: '', 
+    city: '', 
+    phone: user?.phone || '', 
+    nif: user?.nif || '',
+    paymentMethod: 'MB Way'
   });
   
+  // Atualizar info se o utilizador fizer login entretanto
+  useEffect(() => {
+      if (user) {
+          setUserInfo(prev => ({
+              ...prev,
+              name: prev.name || user.name,
+              email: prev.email || user.email,
+              phone: prev.phone || user.phone || '',
+              nif: prev.nif || user.nif || '',
+              // Se tiver moradas guardadas, usar a primeira como default
+              ...(user.addresses && user.addresses.length > 0 && !prev.street ? {
+                  street: user.addresses[0].street,
+                  city: user.addresses[0].city,
+                  zip: user.addresses[0].zip
+              } : {})
+          }));
+      }
+  }, [user]);
+
   // Coupon State
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -93,6 +124,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           setCouponCode('');
           setAppliedCoupon(null);
           setCouponError('');
+          setDeliveryMethod('Shipping'); // Reset para envio por defeito
       }, 300);
     }
   }, [isOpen]);
@@ -152,38 +184,47 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   // Cálculo do desconto
   const discountAmount = useMemo(() => {
       if (!appliedCoupon) return 0;
-      
       let amount = 0;
-      
-      // Se o cupão for específico para um produto, calcula o desconto APENAS sobre esse produto
       if (appliedCoupon.validProductId) {
           const eligibleItems = cartItems.filter(item => item.id === appliedCoupon.validProductId);
           const eligibleTotal = eligibleItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-          
           if (appliedCoupon.type === 'PERCENTAGE') {
               amount = eligibleTotal * (appliedCoupon.value / 100);
           } else {
-              // Se for valor fixo, não pode ser superior ao valor do item
               amount = Math.min(appliedCoupon.value, eligibleTotal);
           }
       } else {
-          // Cupão geral
           if (appliedCoupon.type === 'PERCENTAGE') {
               amount = total * (appliedCoupon.value / 100);
           } else {
               amount = appliedCoupon.value;
           }
       }
-      
-      return Math.min(amount, total); // Nunca descontar mais que o total
+      return Math.min(amount, total); 
   }, [appliedCoupon, total, cartItems]);
 
-  const shippingCost = (total - discountAmount) >= 50 ? 0 : 4.99;
+  // Cálculo Portes (0 se Levantamento em Loja)
+  const shippingCost = useMemo(() => {
+      if (deliveryMethod === 'Pickup') return 0;
+      return (total - discountAmount) >= 50 ? 0 : 4.99;
+  }, [total, discountAmount, deliveryMethod]);
+
   const finalTotal = Math.max(0, total - discountAmount + shippingCost);
 
   const handleProceed = () => {
     if (checkoutStep === 'cart') setCheckoutStep('info');
     else if (checkoutStep === 'info') {
+        // Validação
+        if (!userInfo.name || !userInfo.phone) {
+            alert("Por favor, preencha o Nome e Telemóvel.");
+            return;
+        }
+        // Se for envio, exige morada completa
+        if (deliveryMethod === 'Shipping' && (!userInfo.street || !userInfo.zip || !userInfo.city)) {
+            alert("Por favor, preencha a morada completa.");
+            return;
+        }
+
         const id = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
         setCurrentOrderId(id);
         setCheckoutStep('platform');
@@ -202,20 +243,32 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         } catch (e) { console.error("Erro ao atualizar cupão", e); }
     }
 
+    // Preparar dados finais 
+    // (Se for Pickup, preenchemos a morada com dados fictícios ou da loja para manter o tipo Order consistente)
+    const finalUserInfo = { ...userInfo, deliveryMethod };
+    if (deliveryMethod === 'Pickup') {
+        finalUserInfo.street = "Levantamento na Loja (All-Shop)";
+        finalUserInfo.city = "Lisboa";
+        finalUserInfo.zip = "1000-000";
+        finalUserInfo.doorNumber = "-";
+    }
+
     const newOrder: Order = {
         id: currentOrderId,
         date: new Date().toISOString(),
         total: finalTotal,
         status: 'Processamento',
         items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', addedAt: new Date().toISOString() })),
-        shippingInfo: userInfo,
+        shippingInfo: finalUserInfo,
         userId: user?.uid || null
     };
 
     const success = await onCheckout(newOrder);
     if (success) {
         let msg = `🛍️ Pedido ${currentOrderId}\n`;
-        msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name}`).join('\n')}\n`;
+        msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja' : '🚚 Envio CTT'}\n`;
+        msg += `Cliente: ${userInfo.name} (${userInfo.phone})\n`;
+        msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`).join('\n')}\n`;
         if (discountAmount > 0) msg += `Desconto (${appliedCoupon?.code}): -${formatCurrency(discountAmount)}\n`;
         msg += `Portes: ${shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}\n`;
         msg += `Total Final: *${formatCurrency(finalTotal)}*`;
@@ -257,9 +310,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                         <p className="font-bold text-sm text-gray-800 dark:text-gray-100">{item.name}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{item.selectedVariant}</p>
                         <div className="flex items-center gap-3 mt-2">
-                          <button onClick={() => onUpdateQuantity(item.cartItemId, -1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white">-</button>
+                          <button onClick={() => onUpdateQuantity(item.cartItemId, -1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white flex items-center justify-center">-</button>
                           <span className="text-sm font-bold dark:text-white">{item.quantity}</span>
-                          <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white">+</button>
+                          <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white flex items-center justify-center">+</button>
                         </div>
                       </div>
                       <div className="text-right">
@@ -307,14 +360,60 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           )}
 
           {checkoutStep === 'info' && (
-            <div className="space-y-4 animate-fade-in">
-              <h3 className="font-bold text-lg mb-4 dark:text-white">Dados de Entrega</h3>
-              <input type="text" placeholder="Nome Completo" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
-              <input type="tel" placeholder="Telemóvel" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
-              <input type="text" placeholder="Morada" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="Localidade" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
-                <input type="text" placeholder="Cód. Postal" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
+            <div className="space-y-6 animate-fade-in">
+              <h3 className="font-bold text-lg dark:text-white">Dados de Entrega</h3>
+              
+              {/* Seletor de Método de Entrega */}
+              <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => setDeliveryMethod('Shipping')}
+                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Shipping' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 dark:text-gray-400 hover:border-gray-300'}`}
+                  >
+                      <Truck size={24} />
+                      <span className="font-bold text-sm">Envio CTT</span>
+                  </button>
+                  <button 
+                    onClick={() => setDeliveryMethod('Pickup')}
+                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Pickup' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 dark:text-gray-400 hover:border-gray-300'}`}
+                  >
+                      <Store size={24} />
+                      <span className="font-bold text-sm">Levantar na Loja</span>
+                  </button>
+              </div>
+
+              <div className="space-y-4">
+                  <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Dados Pessoais</label>
+                      <input type="text" placeholder="Nome Completo" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
+                      <input type="tel" placeholder="Telemóvel" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
+                      <input type="text" placeholder="NIF (Opcional)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} />
+                  </div>
+
+                  {deliveryMethod === 'Shipping' ? (
+                      <div className="animate-fade-in">
+                          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Morada de Entrega</label>
+                          <input type="text" placeholder="Morada (Rua, Nº)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
+                          <div className="grid grid-cols-2 gap-2">
+                            <input type="text" placeholder="Localidade" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
+                            <input type="text" placeholder="Cód. Postal" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-xl border border-green-200 dark:border-green-800 animate-fade-in">
+                          <div className="flex items-start gap-3">
+                              <MapPin className="text-green-600 dark:text-green-400 shrink-0 mt-1" size={20} />
+                              <div>
+                                  <h4 className="font-bold text-green-800 dark:text-green-300 text-sm">Ponto de Recolha</h4>
+                                  <p className="text-green-700 dark:text-green-400 text-sm mt-1">
+                                      All-Shop Store<br/>
+                                      Av. da Liberdade, 100<br/>
+                                      Lisboa, Portugal
+                                  </p>
+                                  <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">Horário: Seg-Sex, 10h-19h</p>
+                              </div>
+                          </div>
+                      </div>
+                  )}
               </div>
             </div>
           )}
