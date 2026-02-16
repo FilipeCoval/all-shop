@@ -6,7 +6,7 @@ import {
     CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, 
     ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, 
     Camera, Home, ChevronDown, ChevronUp, Undo2, MessageSquareWarning,
-    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale
+    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale, Copy, ExternalLink
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage } from '../services/firebaseConfig';
@@ -82,6 +82,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [modalState, setModalState] = useState<{ type: 'cancel' | 'return'; order: Order | null }>({ type: 'cancel', order: null });
   const [modalReason, setModalReason] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [copyTrackingSuccess, setCopyTrackingSuccess] = useState('');
 
   // Tickets State
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
@@ -208,6 +209,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       } finally { 
           setIsRedeeming(null); 
       }
+  };
+
+  const copyTracking = (code: string) => {
+      navigator.clipboard.writeText(code);
+      setCopyTrackingSuccess('Copiado!');
+      setTimeout(() => setCopyTrackingSuccess(''), 2000);
   };
 
   const currentPoints = user.loyaltyPoints || 0;
@@ -460,14 +467,10 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     printWindow.document.close();
   };
 
-  const timelineIcons: { [key: string]: React.ReactNode } = { 
-    'Processamento': <Package size={16} />, 
-    'Pago': <CreditCard size={16} />, 
-    'Enviado': <Truck size={16} />, 
-    'Entregue': <Home size={16} />, 
-    'Cancelado': <XCircle size={16} />, 
-    'Reclamação': <MessageSquareWarning size={16} />, 
-    'Devolvido': <Undo2 size={16} /> 
+  const getStatusStep = (status: string) => {
+      const steps = ['Processamento', 'Pago', 'Enviado', 'Entregue'];
+      if (status === 'Reclamação' || status === 'Devolvido' || status === 'Cancelado') return -1;
+      return steps.indexOf(status);
   };
 
   return (
@@ -631,6 +634,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     const deliveryEntry = order.statusHistory?.find(h => h.status === 'Entregue');
                     const daysSinceDelivery = deliveryEntry ? (new Date().getTime() - new Date(deliveryEntry.date).getTime()) / (1000 * 60 * 60 * 24) : -1;
                     
+                    // Cálculo da Timeline
+                    const currentStep = getStatusStep(order.status);
+
                     return (
                       <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300">
                         <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-50/50" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
@@ -656,19 +662,82 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
                         {isExpanded && (
                           <div className="p-6 border-t border-gray-100 bg-gray-50/30 animate-fade-in-down">
+                            
+                            {/* Visual Timeline (NOVO) */}
+                            <div className="mb-10 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                                <h4 className="font-bold text-gray-800 mb-6 text-sm flex items-center gap-2"><Truck size={16} className="text-primary"/> Rastreio da Encomenda</h4>
+                                {order.status === 'Cancelado' ? (
+                                    <div className="bg-red-50 p-4 rounded-lg text-center text-red-600 font-bold border border-red-100 flex items-center justify-center gap-2">
+                                        <XCircle size={20} /> Encomenda Cancelada
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -translate-y-1/2 rounded-full hidden md:block"></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
+                                            {['Processamento', 'Pago', 'Enviado', 'Entregue'].map((step, idx) => {
+                                                const isCompleted = currentStep >= idx;
+                                                const isCurrent = currentStep === idx;
+                                                
+                                                return (
+                                                    <div key={step} className="flex flex-row md:flex-col items-center gap-4 md:gap-2 relative z-10">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 transition-all duration-500 ${isCompleted ? 'bg-primary border-blue-200 text-white shadow-md' : 'bg-white border-gray-200 text-gray-300'}`}>
+                                                            {idx === 0 && <Clock size={16} />}
+                                                            {idx === 1 && <CheckCircle size={16} />}
+                                                            {idx === 2 && <Truck size={16} />}
+                                                            {idx === 3 && <Package size={16} />}
+                                                        </div>
+                                                        <div className="md:text-center">
+                                                            <p className={`font-bold text-sm ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>{step}</p>
+                                                            {isCurrent && <span className="text-[10px] text-primary font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block mt-1">Em curso</span>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Tracking Link Box (NOVO) */}
+                                {order.trackingNumber && (
+                                    <div className="mt-8 bg-green-50 border border-green-100 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-white p-2 rounded-lg text-green-600 border border-green-100"><Truck size={20} /></div>
+                                            <div>
+                                                <p className="text-xs text-green-800 font-bold uppercase">Código de Rastreio CTT</p>
+                                                <div className="font-mono text-lg font-bold text-green-900 tracking-wider">{order.trackingNumber}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            <button onClick={() => copyTracking(order.trackingNumber!)} className="bg-white hover:bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-bold border border-green-200 flex-1 sm:flex-none flex items-center justify-center gap-2">
+                                                {copyTrackingSuccess ? 'Copiado!' : <><Copy size={16}/> Copiar</>}
+                                            </button>
+                                            <a 
+                                                href={`https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${order.trackingNumber}`} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-1 sm:flex-none flex items-center justify-center gap-2 shadow-sm transition-colors"
+                                            >
+                                                Seguir Encomenda <ExternalLink size={16} />
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1">
-                                    <h4 className="font-bold text-gray-800 mb-4">Histórico do Pedido</h4>
+                                    <h4 className="font-bold text-gray-800 mb-4">Detalhes do Estado</h4>
                                     <ul className="space-y-4">
                                         {(order.statusHistory || [{ status: order.status, date: order.date }]).map((h, idx) => (
                                             <li key={idx} className="flex gap-3">
                                                 <div className="flex flex-col items-center">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-primary flex items-center justify-center">{timelineIcons[h.status] || <Package size={16}/>}</div>
+                                                    <div className="w-2 h-2 rounded-full bg-gray-300 mt-2"></div>
                                                     {idx < (order.statusHistory || []).length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1"></div>}
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-sm text-gray-900">{h.status}</p>
                                                     <p className="text-xs text-gray-500">{new Date(h.date).toLocaleString('pt-PT', { day: 'numeric', month: 'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
+                                                    {h.notes && <p className="text-xs text-gray-400 italic mt-0.5">{h.notes}</p>}
                                                 </div>
                                             </li>
                                         ))}
