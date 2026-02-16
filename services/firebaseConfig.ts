@@ -48,24 +48,46 @@ auth.languageCode = 'pt';
 
 // Helper para pedir permissão
 export const requestPushPermission = async (): Promise<string | null> => {
-  if (!messaging) return null;
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      // VAPID Key pública é necessária para gerar o token
-      // Se não tiver uma gerada, o firebase usa a default se configurada no console
-      const token = await messaging.getToken({ 
-        vapidKey: "BHAN25TjCBO3kai3pN3fd71nQbMYC_FU7dnHxe1cNpkeGqEey9nO7bewnRUu9t37q3iGxaAY9xlXSbzfwRTe3CI" 
-      }); 
-      return token;
-    }
+  if (!messaging) {
+    console.warn("Messaging não suportado neste browser.");
     return null;
+  }
+  
+  try {
+    // 1. Pedir permissão ao browser
+    const permission = await Notification.requestPermission();
+    
+    if (permission === 'granted') {
+      console.log("Permissão de notificação concedida.");
+      
+      // 2. Registar o Service Worker explicitamente para garantir que é encontrado
+      let registration;
+      try {
+        registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log("Service Worker registado com sucesso:", registration);
+      } catch (swError) {
+        console.error("Falha ao registar Service Worker:", swError);
+        // Tenta continuar mesmo sem registo explícito (fallback do firebase)
+      }
+
+      // 3. Obter o Token
+      // VAPID Key pública é necessária para gerar o token
+      const token = await messaging.getToken({ 
+        vapidKey: "BHAN25TjCBO3kai3pN3fd71nQbMYC_FU7dnHxe1cNpkeGqEey9nO7bewnRUu9t37q3iGxaAY9xlXSbzfwRTe3CI",
+        serviceWorkerRegistration: registration
+      }); 
+      
+      console.log("Token FCM gerado:", token);
+      return token;
+    } else {
+      console.warn("Permissão de notificação negada ou fechada.");
+      return null;
+    }
   } catch (error) {
-    console.error("Erro ao pedir permissão de notificação:", error);
+    console.error("ERRO CRÍTICO ao pedir notificação:", error);
     return null;
   }
 };
 
 // Exportar 'firebase' para acesso a FieldValue.increment/arrayUnion sem conflitos de importação
 export { auth, db, storage, messaging, firebase };
-
