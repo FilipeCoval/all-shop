@@ -181,6 +181,7 @@ export interface Coupon {
   minPurchase: number;
   isActive: boolean;
   usageCount: number;
+  validProductId?: number; // Opcional: Se definido, só funciona neste produto
 }
 
 export interface PointHistory {
