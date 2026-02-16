@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon } from 'lucide-react';
 import Header from './components/Header';
@@ -12,6 +13,7 @@ import Terms from './components/Terms';
 import Privacy from './components/Privacy';
 import FAQ from './components/FAQ';
 import Returns from './components/Returns';
+import OrderTracker from './components/OrderTracker'; // NOVO COMPONENTE
 import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
@@ -553,6 +555,7 @@ const App: React.FC = () => {
         case '#privacy': return <Privacy />;
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
+        case '#tracking': return <OrderTracker />; // ROTA NOVA
         default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} processingProductIds={processingProductIds} />;
     }
   };
@@ -604,7 +607,10 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
             <div className="flex flex-col items-center md:items-start"><div className="flex items-center gap-2 mb-4">{LOGO_URL ? <img src={LOGO_URL} alt={STORE_NAME} className="h-10 invert brightness-0" /> : <h3 className="text-xl font-bold text-white">{STORE_NAME}</h3>}</div><p className="text-sm max-w-[200px]">A sua loja de confiança para os melhores gadgets e eletrônicos do mercado nacional.</p></div>
             <div><h4 className="text-white font-bold mb-4">Links Úteis</h4><ul className="space-y-2 text-sm"><li><a href="#about" onClick={(e) => {e.preventDefault(); window.location.hash = 'about';}} className="hover:text-primary">Sobre Nós</a></li><li><a href="#terms" onClick={(e) => {e.preventDefault(); window.location.hash = 'terms';}} className="hover:text-primary">Termos</a></li><li><a href="#privacy" onClick={(e) => {e.preventDefault(); window.location.hash = 'privacy';}} className="hover:text-primary">Privacidade</a></li></ul></div>
-            <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li><li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
+            <div><h4 className="text-white font-bold mb-4">Atendimento</h4><ul className="space-y-2 text-sm"><li><a href="#contact" onClick={(e) => {e.preventDefault(); window.location.hash = 'contact';}} className="hover:text-primary">Fale Conosco</a></li>
+            {/* LINK CORRIGIDO AQUI: Removido text-white e font-bold */}
+            <li><a href="#tracking" onClick={(e) => {e.preventDefault(); window.location.hash = 'tracking';}} className="hover:text-primary">Rastrear Encomenda</a></li>
+            <li><a href="#returns" onClick={(e) => {e.preventDefault(); window.location.hash = 'returns';}} className="hover:text-primary">Garantia</a></li><li><a href="#faq" onClick={(e) => {e.preventDefault(); window.location.hash = 'faq';}} className="hover:text-primary">Dúvidas</a></li></ul></div>
             <div className="flex flex-col items-center md:items-start">
                 <h4 className="text-white font-bold mb-4">Pagamento Seguro</h4>
                 <div className="flex gap-2 items-center flex-wrap justify-center md:justify-start">
@@ -642,3 +648,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
