@@ -55,7 +55,7 @@ export const requestPushPermission = async (): Promise<string | null> => {
       // VAPID Key pública é necessária para gerar o token
       // Se não tiver uma gerada, o firebase usa a default se configurada no console
       const token = await messaging.getToken({ 
-        vapidKey: "BBMG3o7-xxxxxxxxxxxxxxxxxxxx" // Substituir pela VAPID Key real do Firebase Console > Cloud Messaging > Web Configuration
+        vapidKey: "BHAN25TjCBO3kai3pN3fd71nQbMYC_FU7dnHxe1cNpkeGqEey9nO7bewnRUu9t37q3iGxaAY9xlXSbzfwRTe3CI" 
       }); 
       return token;
     }
@@ -68,3 +68,4 @@ export const requestPushPermission = async (): Promise<string | null> => {
 
 // Exportar 'firebase' para acesso a FieldValue.increment/arrayUnion sem conflitos de importação
 export { auth, db, storage, messaging, firebase };
+
