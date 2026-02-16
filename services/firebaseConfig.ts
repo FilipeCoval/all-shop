@@ -73,7 +73,7 @@ export const requestPushPermission = async (): Promise<string | null> => {
       // 3. Obter o Token
       // VAPID Key pública é necessária para gerar o token
       const token = await messaging.getToken({ 
-        vapidKey: "BHAN25TjCBO3kai3pN3fd71nQbMYC_FU7dnHxe1cNpkeGqEey9nO7bewnRUu9t37q3iGxaAY9xlXSbzfwRTe3CI",
+        vapidKey: "YX94bDjvlMF63hKGvY0HOTNiYXO_PBdzFIurMldtpxk",
         serviceWorkerRegistration: registration
       }); 
       
