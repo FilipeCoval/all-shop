@@ -1,7 +1,8 @@
 
 // Scripts para background notifications
-importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
+// Atualizado para v10.14.1 para compatibilidade com a app principal
+importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
 const firebaseConfig = {
   apiKey: "AIzaSyCayoyBpHeO60v7VHUagX_qAHZ7xIyitpE",
