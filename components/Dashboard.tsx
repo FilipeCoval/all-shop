@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Megaphone
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket } from '../types';
@@ -38,7 +38,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing'>('inventory');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -112,6 +112,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const [inventorySearchTerm, setInventorySearchTerm] = useState('');
 
+  // Marketing State (NOVO)
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [isSendingPush, setIsSendingPush] = useState(false);
+
   // Coupon Calculator State
   const [couponCalcOriginal, setCouponCalcOriginal] = useState('');
   const [couponCalcTarget, setCouponCalcTarget] = useState('');
@@ -155,6 +160,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       return groups;
   }, [products, cashbackManagerFilter]);
 
+  const subscribersCount = useMemo(() => allUsers.filter(u => u.fcmToken).length, [allUsers]);
+
   // EFFECTS
   useEffect(() => { if (activeTab === 'support' && isAdmin) { setIsTicketsLoading(true); const unsubscribe = db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot(snapshot => { setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket))); setIsTicketsLoading(false); }); return () => unsubscribe(); } }, [activeTab, isAdmin]);
   useEffect(() => { if (linkedOrderId) { const order = allOrders.find(o => o.id === linkedOrderId); setSelectedOrderForSaleDetails(order || null); if (selectedProductForSale && order) { const safeItems = getSafeItems(order.items); const isCompatible = safeItems.some(item => { if (typeof item === 'string') return false; const idMatch = item.productId === selectedProductForSale.publicProductId; if (!idMatch) return false; const inventoryHasVariant = !!selectedProductForSale.variant; const orderHasVariant = !!item.selectedVariant; if (inventoryHasVariant && orderHasVariant) return item.selectedVariant === selectedProductForSale.variant; if (!inventoryHasVariant && !orderHasVariant) return true; if (!inventoryHasVariant && orderHasVariant) return false; if (inventoryHasVariant && !orderHasVariant) return true; return false; }); if (!isCompatible) setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!"); else setOrderMismatchWarning(null); if (order) { const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined; if (item) { setSaleForm(prev => ({ ...prev, unitPrice: item.price.toString(), shippingCost: (order.total - (item.price * item.quantity)).toFixed(2) })); } } } } else { setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); } }, [linkedOrderId, allOrders, selectedProductForSale]);
@@ -162,7 +169,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('products_public').onSnapshot(snap => { const loadedProducts: Product[] = []; snap.forEach(doc => { const id = parseInt(doc.id, 10); const data = doc.data(); if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product); }); setPublicProductsList(loadedProducts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('online_users').onSnapshot(snapshot => { const now = Date.now(); const activeUsers: any[] = []; snapshot.forEach(doc => { const data = doc.data(); if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) { activeUsers.push({ id: doc.id, ...data }); } }); setOnlineUsers(activeUsers); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
-  useEffect(() => { if (activeTab === 'coupons' && isAdmin) { setIsCouponsLoading(true); const unsubscribe = db.collection('coupons').onSnapshot(snapshot => { setCoupons(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[]); setIsCouponsLoading(false); }); return () => unsubscribe(); } if (activeTab === 'clients' && isAdmin) { setIsUsersLoading(true); const unsubscribe = db.collection('users').onSnapshot(snapshot => { setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserType))); setIsUsersLoading(false); }); return () => unsubscribe(); } }, [activeTab, isAdmin]);
+  
+  // ALTERADO: Carregar utilizadores também na aba 'marketing'
+  useEffect(() => { 
+      if (activeTab === 'coupons' && isAdmin) { setIsCouponsLoading(true); const unsubscribe = db.collection('coupons').onSnapshot(snapshot => { setCoupons(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[]); setIsCouponsLoading(false); }); return () => unsubscribe(); } 
+      if ((activeTab === 'clients' || activeTab === 'marketing') && isAdmin) { setIsUsersLoading(true); const unsubscribe = db.collection('users').onSnapshot(snapshot => { setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserType))); setIsUsersLoading(false); }); return () => unsubscribe(); } 
+  }, [activeTab, isAdmin]);
+  
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('stock_alerts').onSnapshot(snapshot => { const alerts: any[] = []; snapshot.forEach(doc => alerts.push({ id: doc.id, ...doc.data() })); setStockAlerts(alerts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { const fetchClientData = async () => { if (selectedUserDetails) { const [userOrdersSnap, guestOrdersSnap] = await Promise.all([ db.collection("orders").where("userId", "==", selectedUserDetails.uid).get(), db.collection('orders').where('shippingInfo.email', '==', selectedUserDetails.email.toLowerCase()).where('userId', '==', null).get() ]); const allClientOrders: Order[] = []; userOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order)); guestOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order)); setClientOrders(allClientOrders); setMergeSearchEmail(selectedUserDetails.email); setFoundDuplicate(null); setDuplicateOrdersCount(0); setDuplicateOrdersTotal(0); } else { setClientOrders([]); } }; fetchClientData(); }, [selectedUserDetails]);
 
@@ -350,6 +363,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleUpdateTicketStatus = async (ticketId: string, newStatus: string) => { try { await db.collection('support_tickets').doc(ticketId).update({ status: newStatus }); if(selectedTicket) setSelectedTicket({...selectedTicket, status: newStatus} as any); } catch (error) { alert("Erro ao atualizar ticket."); } };
   const handleDeleteTicket = async (ticketId: string) => { if(!window.confirm("Apagar ticket permanentemente?")) return; try { await db.collection('support_tickets').doc(ticketId).delete(); setSelectedTicket(null); } catch (error) { alert("Erro ao apagar."); } };
 
+  // New Marketing Handler
+  const handleSendPush = async () => {
+      if(!pushTitle || !pushBody) return alert("Preencha título e mensagem.");
+      if(!window.confirm("Confirmar envio para TODOS os subscritores?")) return;
+      
+      setIsSendingPush(true);
+      try {
+          // Guarda pedido na base de dados (que poderia disparar uma Cloud Function)
+          await db.collection('push_campaigns').add({
+              title: pushTitle,
+              body: pushBody,
+              target: 'all',
+              createdAt: new Date().toISOString(),
+              status: 'pending' // ou 'scheduled'
+          });
+          
+          setPushTitle('');
+          setPushBody('');
+          alert("Campanha agendada/enviada com sucesso!");
+      } catch(e) {
+          console.error(e);
+          alert("Erro ao criar campanha.");
+      } finally {
+          setIsSendingPush(false);
+      }
+  };
+
   const filteredClients = useMemo(() => { if (!clientsSearchTerm) return allUsers; return allUsers.filter(u => u.name.toLowerCase().includes(clientsSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(clientsSearchTerm.toLowerCase()) ); }, [allUsers, clientsSearchTerm]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   const calculatedTotalSpent = useMemo(() => { if (!selectedUserDetails) return 0; return clientOrders.filter(o => o.status !== 'Cancelado').reduce((sum, order) => sum + (order.total || 0), 0); }, [clientOrders, selectedUserDetails]);
@@ -375,6 +415,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
                 <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
                 <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Users size={16} /> Clientes</button>
+                <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
                 <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Headphones size={16} /> Suporte</button>
                 <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
             </div>
@@ -457,6 +498,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             </div>
         )}
 
+        {/* Marketing Tab (Push Notifications) */}
+        {activeTab === 'marketing' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="bg-purple-100 p-3 rounded-xl text-purple-600"><Megaphone size={32} /></div>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">Campanha Push Notification</h2>
+                            <p className="text-gray-500">Envie notificações para {subscribersCount} clientes subscritos.</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Título</label>
+                            <input 
+                                type="text" 
+                                value={pushTitle} 
+                                onChange={e => setPushTitle(e.target.value)} 
+                                placeholder="Ex: Promoção Relâmpago ⚡" 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Mensagem</label>
+                            <textarea 
+                                value={pushBody} 
+                                onChange={e => setPushBody(e.target.value)} 
+                                rows={3}
+                                placeholder="Ex: Aproveite 20% de desconto em todas as TV Boxes hoje!" 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none" 
+                            />
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <p className="text-xs text-gray-500 mb-2">Destinatários</p>
+                            <div className="flex items-center gap-2">
+                                <Users size={16} className="text-gray-400" />
+                                <span className="font-bold text-gray-700">{subscribersCount} utilizadores ativos</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                            <button 
+                                onClick={handleSendPush} 
+                                disabled={isSendingPush || subscribersCount === 0}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg disabled:opacity-50 transition-colors"
+                            >
+                                {isSendingPush ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+                                Enviar Notificação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ... (Coupons Tab - existing) ... */}
         {activeTab === 'coupons' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
                 {/* Create Coupon Card */}
@@ -1018,6 +1115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         <div>
                             <h4 className="font-bold text-xl">{selectedUserDetails.name}</h4>
                             <p className="text-sm text-gray-500">{selectedUserDetails.email}</p>
+                            <p className="text-xs text-gray-400 mt-1">Push Token: {selectedUserDetails.fcmToken ? 'Sim' : 'Não'}</p>
                         </div>
                     </div>
                     {/* ... (Rest of user details modal) ... */}
