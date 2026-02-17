@@ -212,7 +212,106 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   };
 
-  const handleProductSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); const qBought = Number(formData.quantityBought) || 0; const existingProduct = products.find(p => p.id === editingId); const currentSold = existingProduct ? existingProduct.quantitySold : 0; const currentSalePrice = formData.salePrice ? Number(formData.salePrice) : 0; let productStatus: ProductStatus = 'IN_STOCK'; if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; else if (currentSold > 0) productStatus = 'PARTIAL'; const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0 }; Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); try { if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); setIsModalOpen(false); } catch (err) { alert('Erro ao guardar.'); } };
+  // --- NOVA FUNÇÃO: Verificar e Processar Alertas de Stock Automaticamente ---
+  const checkAndProcessStockAlerts = async (publicProductId: number | null, productName: string, newStock: number) => {
+      if (!publicProductId || newStock <= 0) return;
+
+      try {
+          // 1. Procurar alertas pendentes para este produto
+          const snapshot = await db.collection('stock_alerts')
+              .where('productId', '==', publicProductId)
+              .get();
+
+          if (snapshot.empty) return;
+
+          const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const emails = alerts.map((a: any) => a.email);
+          const uniqueEmails = [...new Set(emails)];
+
+          // 2. Verificar quais destes utilizadores têm Token Push
+          const usersSnap = await db.collection('users').where('email', 'in', uniqueEmails.slice(0, 10)).get(); // Limitado a 10 no 'in' query por segurança
+          const tokens: string[] = [];
+          
+          usersSnap.forEach(doc => {
+              const data = doc.data() as UserType;
+              if (data.fcmToken) tokens.push(data.fcmToken);
+          });
+
+          // 3. Se houver tokens, perguntar ao Admin
+          if (tokens.length > 0) {
+              if (window.confirm(`📢 STOCK ALERT: Existem ${alerts.length} pedidos de aviso para este produto.\nEncontrados ${tokens.length} utilizadores com notificações ativas.\n\nDeseja enviar uma notificação Push agora?`)) {
+                  
+                  // Criar campanha direcionada
+                  await db.collection('push_campaigns').add({
+                      title: 'Reposição de Stock! 📦',
+                      body: `Boas notícias! O produto ${productName} já está disponível. Garanta o seu antes que esgote!`,
+                      target: 'specific_tokens',
+                      tokens: tokens,
+                      status: 'pending',
+                      createdAt: new Date().toISOString()
+                  });
+
+                  // Limpar os alertas atendidos
+                  const batch = db.batch();
+                  alerts.forEach((a: any) => {
+                      batch.delete(db.collection('stock_alerts').doc(a.id));
+                  });
+                  await batch.commit();
+
+                  alert("✅ Notificações enviadas e lista de espera limpa!");
+              }
+          } else {
+              // Se não houver tokens mas houver emails, abrir modal de email manual (já existente)
+              const bccString = uniqueEmails.join(', ');
+              setNotificationModalData({
+                  productName: productName,
+                  subject: `Chegou: ${productName} já disponível na All-Shop!`,
+                  body: `Olá,\n\nO produto que aguardava (${productName}) acabou de chegar ao nosso stock!\n\nPode comprar agora em: https://www.all-shop.net/#product/${publicProductId}\n\nObrigado,\nEquipa All-Shop`,
+                  bcc: bccString,
+                  alertsToDelete: alerts
+              });
+          }
+
+      } catch (error) {
+          console.error("Erro ao processar alertas de stock:", error);
+      }
+  };
+
+  const handleProductSubmit = async (e: React.FormEvent) => { 
+      e.preventDefault(); 
+      if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); 
+      
+      const qBought = Number(formData.quantityBought) || 0; 
+      const existingProduct = products.find(p => p.id === editingId); 
+      const currentSold = existingProduct ? existingProduct.quantitySold : 0; 
+      
+      // Cálculo do stock disponível neste lote
+      const availableStock = Math.max(0, qBought - currentSold);
+
+      const currentSalePrice = formData.salePrice ? Number(formData.salePrice) : 0; 
+      let productStatus: ProductStatus = 'IN_STOCK'; 
+      if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; 
+      else if (currentSold > 0) productStatus = 'PARTIAL'; 
+      
+      const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0 }; 
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
+      
+      try { 
+          if (editingId) await updateProduct(editingId, payload); 
+          else await addProduct(payload); 
+          
+          setIsModalOpen(false); 
+
+          // --- TRIGGER AUTOMÁTICO DE NOTIFICAÇÃO ---
+          // Se adicionámos stock disponível a um produto público, verifica alertas
+          if (payload.publicProductId && availableStock > 0 && !payload.comingSoon) {
+              await checkAndProcessStockAlerts(payload.publicProductId, payload.name, availableStock);
+          }
+
+      } catch (err) { 
+          alert('Erro ao guardar.'); 
+      } 
+  };
   
   // Generic Helpers
   const toggleBadge = (badge: string) => { setFormData(prev => { const badges = prev.badges || []; if (badges.includes(badge)) return { ...prev, badges: badges.filter(b => b !== badge) }; else return { ...prev, badges: [...badges, badge] }; }); };
