@@ -21,10 +21,11 @@ interface ProductDetailsProps {
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
   isProcessing?: boolean;
+  onUpdateUser?: (user: Partial<User>) => void; // Nova Prop
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
-  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist, isProcessing = false
+  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist, isProcessing = false, onUpdateUser
 }) => {
   const [selectedImage, setSelectedImage] = useState<string>(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
@@ -97,16 +98,26 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
 
       try {
           const points = 5;
-          const newHistory: PointHistory = {
+          const newHistoryItem: PointHistory = {
               id: `share-${Date.now()}`,
               date: new Date().toISOString(),
               amount: points,
               reason: 'Partilha de Produto Diária'
           };
 
+          // 1. Atualizar UI imediatamente (Optimistic Update)
+          if (onUpdateUser) {
+              onUpdateUser({
+                  loyaltyPoints: (currentUser.loyaltyPoints || 0) + points,
+                  lastShareDate: new Date().toISOString(),
+                  pointsHistory: [...(currentUser.pointsHistory || []), newHistoryItem]
+              });
+          }
+
+          // 2. Gravar no Firebase
           await db.collection('users').doc(currentUser.uid).update({
               loyaltyPoints: firebase.firestore.FieldValue.increment(points),
-              pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory),
+              pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistoryItem),
               lastShareDate: new Date().toISOString()
           });
           
