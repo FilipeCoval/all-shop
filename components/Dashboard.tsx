@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Megaphone
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket } from '../types';
@@ -112,11 +112,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const [inventorySearchTerm, setInventorySearchTerm] = useState('');
 
-  // Marketing State (NOVO)
-  const [pushTitle, setPushTitle] = useState('');
-  const [pushBody, setPushBody] = useState('');
-  const [isSendingPush, setIsSendingPush] = useState(false);
-
   // Coupon Calculator State
   const [couponCalcOriginal, setCouponCalcOriginal] = useState('');
   const [couponCalcTarget, setCouponCalcTarget] = useState('');
@@ -160,20 +155,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       return groups;
   }, [products, cashbackManagerFilter]);
 
-  const subscribersCount = useMemo(() => allUsers.filter(u => u.fcmToken).length, [allUsers]);
-
   // EFFECTS
   useEffect(() => { if (activeTab === 'support' && isAdmin) { setIsTicketsLoading(true); const unsubscribe = db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot(snapshot => { setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket))); setIsTicketsLoading(false); }); return () => unsubscribe(); } }, [activeTab, isAdmin]);
+  
   useEffect(() => { if (linkedOrderId) { const order = allOrders.find(o => o.id === linkedOrderId); setSelectedOrderForSaleDetails(order || null); if (selectedProductForSale && order) { const safeItems = getSafeItems(order.items); const isCompatible = safeItems.some(item => { if (typeof item === 'string') return false; const idMatch = item.productId === selectedProductForSale.publicProductId; if (!idMatch) return false; const inventoryHasVariant = !!selectedProductForSale.variant; const orderHasVariant = !!item.selectedVariant; if (inventoryHasVariant && orderHasVariant) return item.selectedVariant === selectedProductForSale.variant; if (!inventoryHasVariant && !orderHasVariant) return true; if (!inventoryHasVariant && orderHasVariant) return false; if (inventoryHasVariant && !orderHasVariant) return true; return false; }); if (!isCompatible) setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!"); else setOrderMismatchWarning(null); if (order) { const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined; if (item) { setSaleForm(prev => ({ ...prev, unitPrice: item.price.toString(), shippingCost: (order.total - (item.price * item.quantity)).toFixed(2) })); } } } } else { setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); } }, [linkedOrderId, allOrders, selectedProductForSale]);
   useEffect(() => { if(!isAdmin) return; audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'); const mountTime = Date.now(); const unsubscribe = db.collection('orders').orderBy('date', 'desc').limit(10).onSnapshot(snapshot => { snapshot.docChanges().forEach(change => { if (change.type === 'added') { const order = change.doc.data() as Order; if (new Date(order.date).getTime() > (mountTime - 2000)) { setNotifications(prev => [order, ...prev]); setShowToast(order); if (audioRef.current) audioRef.current.play().catch(() => {}); setTimeout(() => setShowToast(null), 5000); } } }); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('products_public').onSnapshot(snap => { const loadedProducts: Product[] = []; snap.forEach(doc => { const id = parseInt(doc.id, 10); const data = doc.data(); if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product); }); setPublicProductsList(loadedProducts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('online_users').onSnapshot(snapshot => { const now = Date.now(); const activeUsers: any[] = []; snapshot.forEach(doc => { const data = doc.data(); if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) { activeUsers.push({ id: doc.id, ...data }); } }); setOnlineUsers(activeUsers); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
   
-  // ALTERADO: Carregar utilizadores também na aba 'marketing'
   useEffect(() => { 
-      if (activeTab === 'coupons' && isAdmin) { setIsCouponsLoading(true); const unsubscribe = db.collection('coupons').onSnapshot(snapshot => { setCoupons(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[]); setIsCouponsLoading(false); }); return () => unsubscribe(); } 
-      if ((activeTab === 'clients' || activeTab === 'marketing') && isAdmin) { setIsUsersLoading(true); const unsubscribe = db.collection('users').onSnapshot(snapshot => { setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserType))); setIsUsersLoading(false); }); return () => unsubscribe(); } 
+      if ((activeTab === 'coupons' || activeTab === 'clients' || activeTab === 'marketing') && isAdmin) { 
+          setIsUsersLoading(true); 
+          const unsubscribeUsers = db.collection('users').onSnapshot(snapshot => { 
+              setAllUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserType))); 
+              setIsUsersLoading(false); 
+          }); 
+          
+          let unsubscribeCoupons = () => {};
+          if(activeTab === 'coupons') {
+              setIsCouponsLoading(true);
+              unsubscribeCoupons = db.collection('coupons').onSnapshot(snapshot => { 
+                  setCoupons(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[]); 
+                  setIsCouponsLoading(false); 
+              });
+          }
+          
+          return () => { unsubscribeUsers(); unsubscribeCoupons(); };
+      } 
   }, [activeTab, isAdmin]);
   
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('stock_alerts').onSnapshot(snapshot => { const alerts: any[] = []; snapshot.forEach(doc => alerts.push({ id: doc.id, ...doc.data() })); setStockAlerts(alerts); }); return () => unsubscribe(); }, [isAdmin]);
@@ -183,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); return true; };
   const handleCopy = (text: string) => { if (copyToClipboard(text)) { setCopySuccess('Copied'); setTimeout(() => setCopySuccess(''), 2000); } else alert("Não foi possível copiar."); };
   const handleCopyToClipboard = (text: string, type: string) => { if (copyToClipboard(text)) { setCopySuccess(type); setTimeout(() => setCopySuccess(''), 2000); } else alert("Não foi possível copiar."); };
-  
+
   // --- FUNÇÃO PARA CONFIRMAR ENCOMENDA MANUAL ---
   const handleManualOrderConfirm = async (order: Order, deductions: { batchId: string, quantity: number, saleRecord: SaleRecord }[]) => {
       try {
@@ -228,49 +237,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           const emails = alerts.map((a: any) => a.email);
           const uniqueEmails = [...new Set(emails)];
 
-          // 2. Verificar quais destes utilizadores têm Token Push
-          const usersSnap = await db.collection('users').where('email', 'in', uniqueEmails.slice(0, 10)).get(); // Limitado a 10 no 'in' query por segurança
-          const tokens: string[] = [];
-          
-          usersSnap.forEach(doc => {
-              const data = doc.data() as UserType;
-              if (data.fcmToken) tokens.push(data.fcmToken);
+          // 2. Preparar modal de email manual (Fallback seguro)
+          const bccString = uniqueEmails.join(', ');
+          setNotificationModalData({
+              productName: productName,
+              subject: `Chegou: ${productName} já disponível na All-Shop!`,
+              body: `Olá,\n\nO produto que aguardava (${productName}) acabou de chegar ao nosso stock!\n\nPode comprar agora em: https://www.all-shop.net/#product/${publicProductId}\n\nObrigado,\nEquipa All-Shop`,
+              bcc: bccString,
+              alertsToDelete: alerts
           });
-
-          // 3. Se houver tokens, perguntar ao Admin
-          if (tokens.length > 0) {
-              if (window.confirm(`📢 STOCK ALERT: Existem ${alerts.length} pedidos de aviso para este produto.\nEncontrados ${tokens.length} utilizadores com notificações ativas.\n\nDeseja enviar uma notificação Push agora?`)) {
-                  
-                  // Criar campanha direcionada
-                  await db.collection('push_campaigns').add({
-                      title: 'Reposição de Stock! 📦',
-                      body: `Boas notícias! O produto ${productName} já está disponível. Garanta o seu antes que esgote!`,
-                      target: 'specific_tokens',
-                      tokens: tokens,
-                      status: 'pending',
-                      createdAt: new Date().toISOString()
-                  });
-
-                  // Limpar os alertas atendidos
-                  const batch = db.batch();
-                  alerts.forEach((a: any) => {
-                      batch.delete(db.collection('stock_alerts').doc(a.id));
-                  });
-                  await batch.commit();
-
-                  alert("✅ Notificações enviadas e lista de espera limpa!");
-              }
-          } else {
-              // Se não houver tokens mas houver emails, abrir modal de email manual (já existente)
-              const bccString = uniqueEmails.join(', ');
-              setNotificationModalData({
-                  productName: productName,
-                  subject: `Chegou: ${productName} já disponível na All-Shop!`,
-                  body: `Olá,\n\nO produto que aguardava (${productName}) acabou de chegar ao nosso stock!\n\nPode comprar agora em: https://www.all-shop.net/#product/${publicProductId}\n\nObrigado,\nEquipa All-Shop`,
-                  bcc: bccString,
-                  alertsToDelete: alerts
-              });
-          }
 
       } catch (error) {
           console.error("Erro ao processar alertas de stock:", error);
@@ -462,33 +437,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleUpdateTicketStatus = async (ticketId: string, newStatus: string) => { try { await db.collection('support_tickets').doc(ticketId).update({ status: newStatus }); if(selectedTicket) setSelectedTicket({...selectedTicket, status: newStatus} as any); } catch (error) { alert("Erro ao atualizar ticket."); } };
   const handleDeleteTicket = async (ticketId: string) => { if(!window.confirm("Apagar ticket permanentemente?")) return; try { await db.collection('support_tickets').doc(ticketId).delete(); setSelectedTicket(null); } catch (error) { alert("Erro ao apagar."); } };
 
-  // New Marketing Handler
-  const handleSendPush = async () => {
-      if(!pushTitle || !pushBody) return alert("Preencha título e mensagem.");
-      if(!window.confirm("Confirmar envio para TODOS os subscritores?")) return;
-      
-      setIsSendingPush(true);
-      try {
-          // Guarda pedido na base de dados (que poderia disparar uma Cloud Function)
-          await db.collection('push_campaigns').add({
-              title: pushTitle,
-              body: pushBody,
-              target: 'all',
-              createdAt: new Date().toISOString(),
-              status: 'pending' // ou 'scheduled'
-          });
-          
-          setPushTitle('');
-          setPushBody('');
-          alert("Campanha agendada/enviada com sucesso!");
-      } catch(e) {
-          console.error(e);
-          alert("Erro ao criar campanha.");
-      } finally {
-          setIsSendingPush(false);
-      }
-  };
-
   const filteredClients = useMemo(() => { if (!clientsSearchTerm) return allUsers; return allUsers.filter(u => u.name.toLowerCase().includes(clientsSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(clientsSearchTerm.toLowerCase()) ); }, [allUsers, clientsSearchTerm]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   const calculatedTotalSpent = useMemo(() => { if (!selectedUserDetails) return 0; return clientOrders.filter(o => o.status !== 'Cancelado').reduce((sum, order) => sum + (order.total || 0), 0); }, [clientOrders, selectedUserDetails]);
@@ -514,9 +462,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
                 <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
                 <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Users size={16} /> Clientes</button>
-                <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
                 <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Headphones size={16} /> Suporte</button>
                 <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
+                <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
             </div>
             <div className="hidden md:flex items-center gap-3">
                 <div className="relative"><button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button>{isNotifDropdownOpen && <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50"><div className="p-3 border-b border-gray-100 bg-gray-50"><h4 className="text-sm font-bold text-gray-700">Notificações</h4></div><div className="max-h-64 overflow-y-auto">{notifications.map((n, idx) => <div key={idx} className="p-3 border-b border-gray-100 hover:bg-gray-50 last:border-0"><div className="flex justify-between items-start"><span className="font-bold text-xs text-indigo-600">{n.id.startsWith('#') ? '' : '#'}{n.id.toUpperCase()}</span></div><p className="text-sm font-medium mt-1">Venda: {formatCurrency(n.total)}</p></div>)}</div></div>}</div>
@@ -593,61 +541,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                             ))}
                         </tbody>
                     </table>
-                </div>
-            </div>
-        )}
-
-        {/* Marketing Tab (Push Notifications) */}
-        {activeTab === 'marketing' && (
-            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="bg-purple-100 p-3 rounded-xl text-purple-600"><Megaphone size={32} /></div>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900">Campanha Push Notification</h2>
-                            <p className="text-gray-500">Envie notificações para {subscribersCount} clientes subscritos.</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Título</label>
-                            <input 
-                                type="text" 
-                                value={pushTitle} 
-                                onChange={e => setPushTitle(e.target.value)} 
-                                placeholder="Ex: Promoção Relâmpago ⚡" 
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" 
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Mensagem</label>
-                            <textarea 
-                                value={pushBody} 
-                                onChange={e => setPushBody(e.target.value)} 
-                                rows={3}
-                                placeholder="Ex: Aproveite 20% de desconto em todas as TV Boxes hoje!" 
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none" 
-                            />
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <p className="text-xs text-gray-500 mb-2">Destinatários</p>
-                            <div className="flex items-center gap-2">
-                                <Users size={16} className="text-gray-400" />
-                                <span className="font-bold text-gray-700">{subscribersCount} utilizadores ativos</span>
-                            </div>
-                        </div>
-                        <div className="flex justify-end pt-2">
-                            <button 
-                                onClick={handleSendPush} 
-                                disabled={isSendingPush || subscribersCount === 0}
-                                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg disabled:opacity-50 transition-colors"
-                            >
-                                {isSendingPush ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-                                Enviar Notificação
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         )}
@@ -741,6 +634,64 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         );
                     })}
                     {coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}
+                </div>
+            </div>
+        )}
+
+        {/* MARKETING TAB (NOVO) */}
+        {activeTab === 'marketing' && (
+            <div className="animate-fade-in space-y-8">
+                {/* Stats Card */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+                    <div className="space-y-2">
+                        <h2 className="text-3xl font-bold flex items-center gap-3"><Megaphone size={32}/> Central de Campanhas</h2>
+                        <p className="text-blue-100 max-w-lg">Envie notificações push para todos os seus clientes em segundos. Anuncie promoções, novidades e liquidações diretamente no telemóvel.</p>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border border-white/20 text-center min-w-[200px]">
+                        <p className="text-xs font-bold uppercase tracking-wider text-blue-200 mb-1">Alcance Total</p>
+                        <div className="text-4xl font-black">{allUsers.filter(u => !!u.fcmToken).length}</div>
+                        <p className="text-xs text-blue-200 mt-1">Utilizadores ativos</p>
+                    </div>
+                </div>
+
+                {/* Main Action Area */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-center items-center text-center space-y-6 hover:border-blue-300 transition-all group">
+                        <div className="bg-blue-50 p-6 rounded-full group-hover:bg-blue-100 transition-colors">
+                            <Send size={48} className="text-blue-600"/>
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Criar Nova Campanha</h3>
+                            <p className="text-gray-500 max-w-xs mx-auto">Use a consola oficial do Firebase para enviar mensagens seguras e sem erros.</p>
+                        </div>
+                        <a 
+                            href="https://console.firebase.google.com/project/allshop-store-70851/notification/compose" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex items-center gap-2"
+                        >
+                            Abrir Consola de Envio <ExternalLink size={20}/>
+                        </a>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="bg-white p-6 rounded-xl border border-gray-200">
+                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Info size={18} className="text-blue-500"/> Dicas para converter mais</h4>
+                            <ul className="space-y-3 text-sm text-gray-600">
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Seja breve:</strong> Títulos curtos como "Promoção Relâmpago ⚡️" funcionam melhor.</li>
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Use Emojis:</strong> Aumentam a taxa de abertura em 20%.</li>
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Hora Certa:</strong> Envie entre as 18h e as 21h nos dias de semana.</li>
+                            </ul>
+                        </div>
+
+                        <div className="bg-orange-50 p-6 rounded-xl border border-orange-100">
+                            <h4 className="font-bold text-orange-900 mb-2 flex items-center gap-2"><AlertTriangle size={18}/> Nota Importante</h4>
+                            <p className="text-sm text-orange-800 leading-relaxed">
+                                Devido a novas regras de segurança da Google, o envio automático pelo site foi desativado. 
+                                O envio pela consola oficial (botão ao lado) é a única forma 100% garantida e gratuita de atingir todos os seus clientes.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
