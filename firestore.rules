@@ -10,72 +10,60 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email in [
-        "filipe_coval_90@hotmail.com", 
-        "mcpoleca@gmail.com", 
-        "filipe@teste.com"
-      ];
+      return isSignedIn() && (
+        request.auth.token.email == "filipe_coval_90@hotmail.com" || 
+        request.auth.token.email == "mcpoleca@gmail.com" || 
+        request.auth.token.email == "filipe@teste.com"
+      );
     }
 
-    // --- REGRAS DAS COLEÇÕES ---
+    // --- REGRAS PÚBLICAS E DE UTILIZADOR ---
 
+    // Produtos: Qualquer pessoa lê, só Admin escreve
     match /products_inventory/{docId} { allow read, write: if isAdmin(); }
     match /products_public/{docId} { allow read: if true; allow write: if isAdmin(); }
-    match /reviews/{docId} { allow get, list, create: if true; allow update, delete: if isAdmin(); }
-    match /newsletter_subscriptions/{docId} { allow create: if true; allow read, write, delete: if isAdmin(); }
-    match /stock_alerts/{alertId} { allow create: if true; allow read, delete: if isAdmin(); }
-    match /online_users/{sessionId} { allow write: if true; allow read: if isAdmin(); }
-    match /stock_reservations/{docId} { allow read, write: if true; }
-
-    // NOVA REGRA: Permitir criação de tickets pela IA (qualquer utilizador)
-    match /support_tickets/{ticketId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+    
+    // Utilizadores: O próprio pode ler/escrever o seu perfil
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
     }
 
+    // Encomendas: Criar é público (para permitir checkout), Ler só o dono
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read, update: if isAdmin() || (isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.shippingInfo.email == request.auth.token.email
+      ));
+    }
+
+    // --- REGRAS DE SUPORTE E FUNCIONALIDADES ---
+
+    // Reviews, Newsletter, Alertas de Stock: Criação aberta
+    match /reviews/{docId} { allow read, create: if true; allow update, delete: if isAdmin(); }
+    match /newsletter_subscriptions/{docId} { allow create: if true; allow read, write: if isAdmin(); }
+    match /stock_alerts/{alertId} { allow create: if true; allow read, delete: if isAdmin(); }
+    
+    // Tickets de Suporte: 
+    // - Criação: Aberta (via site ou IA)
+    // - Leitura: Admin OU o próprio dono do email (para ver na Área de Cliente)
+    match /support_tickets/{ticketId} { 
+      allow create: if true; 
+      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.customerEmail == request.auth.token.email); 
+    }
+
+    // Sistema de Reservas e Online: Aberto para garantir funcionamento do stock em tempo real
+    match /online_users/{sessionId} { allow read, write: if true; }
+    match /stock_reservations/{docId} { allow read, write: if true; }
+
+    // Campanhas de Notificação (Push): Apenas Admin (ESTA É A REGRA QUE FALTAVA)
+    match /push_campaigns/{campaignId} { allow read, write: if isAdmin(); }
+
+    // Cupões
     match /coupons/{docId} {
-      allow get, list: if true;
+      allow read: if true;
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
       allow update, delete: if isAdmin();
     }
-
-    match /users/{userId} {
-      allow create: if (request.auth.uid == userId && request.resource.data.uid == userId) || isAdmin();
-      allow read, update, delete: if request.auth.uid == userId || isAdmin();
-    }
-
-    match /orders/{orderId} {
-      allow create: if true;
-
-      // GET (Ler um doc): Utilizador pode ler a sua própria encomenda.
-      allow get: if isAdmin() || (isSignedIn() && (
-          resource.data.userId == request.auth.uid ||
-          (resource.data.userId == null && resource.data.shippingInfo.email == request.auth.token.email)
-      ));
-      
-      // LIST (Fazer query): Permite que um utilizador procure as suas encomendas ou as que fez como convidado.
-      allow list: if isAdmin() || 
-                   (isSignedIn() && request.query.where.get('userId')[2] == request.auth.uid) ||
-                   (isSignedIn() && request.query.where.get('shippingInfo.email')[2] == request.auth.token.email);
-
-      // UPDATE: Permite a um utilizador cancelar a sua encomenda ou reclamar uma de convidado.
-      allow update: if isAdmin() || (isSignedIn() && (
-          (
-            resource.data.userId == request.auth.uid &&
-            request.resource.data.status == 'Cancelado' &&
-            resource.data.status in ['Processamento', 'Pago']
-          ) ||
-          (
-            resource.data.userId == null &&
-            resource.data.shippingInfo.email == request.auth.token.email &&
-            request.resource.data.userId == request.auth.uid &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId'])
-          )
-        )
-      );
-        
-      allow delete: if isAdmin();
-    }
   }
 }
-
