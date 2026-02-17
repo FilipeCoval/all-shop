@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon } from 'lucide-react';
+import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon, Bell, X } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
 import MobileMenu from './components/MobileMenu'; // Importado
@@ -21,7 +21,7 @@ import Dashboard from './components/Dashboard';
 import InstallPrompt from './components/InstallPrompt';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
-import { auth, db, firebase } from './services/firebaseConfig';
+import { auth, db, firebase, messaging } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
@@ -33,6 +33,9 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false); 
   
+  // Notification Foreground State
+  const [incomingNotification, setIncomingNotification] = useState<any>(null);
+
   // DARK MODE STATE
   const [isDarkMode, setIsDarkMode] = useState(() => {
       try {
@@ -151,6 +154,30 @@ const App: React.FC = () => {
         window.removeEventListener('blur', handleBlur);
         window.removeEventListener('focus', handleFocus);
     };
+  }, []);
+
+  // --- FOREGROUND NOTIFICATION LISTENER ---
+  useEffect(() => {
+      if (messaging) {
+          const unsubscribe = messaging.onMessage((payload) => {
+              console.log('Mensagem recebida em primeiro plano: ', payload);
+              setIncomingNotification({
+                  title: payload.notification?.title || 'Nova Mensagem',
+                  body: payload.notification?.body || '',
+                  image: payload.notification?.image || LOGO_URL
+              });
+              // Tocar som suave
+              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(() => {});
+
+              // Auto-fechar após 8 segundos
+              setTimeout(() => setIncomingNotification(null), 8000);
+          });
+          return () => {
+              // Unsubscribe function logic usually handled by Firebase internal cleanup
+          };
+      }
   }, []);
 
   useEffect(() => {
@@ -582,6 +609,22 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* NOTIFICATION TOAST (FOREGROUND) */}
+      {incomingNotification && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-blue-100 dark:border-gray-700 animate-slide-in p-4 flex gap-4 cursor-pointer" onClick={() => setIncomingNotification(null)}>
+              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+                  <Bell className="text-primary dark:text-blue-300" size={24} />
+              </div>
+              <div className="flex-1">
+                  <h4 className="font-bold text-gray-900 dark:text-white text-sm">{incomingNotification.title}</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">{incomingNotification.body}</p>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setIncomingNotification(null); }} className="text-gray-400 hover:text-gray-600">
+                  <X size={18} />
+              </button>
+          </div>
+      )}
+
       <Header 
         cartCount={cartCount} 
         onOpenCart={() => setIsCartOpen(true)} 
@@ -659,4 +702,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
 
