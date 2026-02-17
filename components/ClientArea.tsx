@@ -15,7 +15,7 @@ interface ClientAreaProps {
   user: User;
   orders: Order[];
   onLogout: () => void;
-  onUpdateUser: (user: User) => void;
+  onUpdateUser: (user: Partial<User>) => void;
   wishlist: number[];
   onToggleWishlist: (id: number) => void;
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
@@ -135,7 +135,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   const handleProfileSubmit = (e: React.FormEvent) => { 
     e.preventDefault(); 
-    onUpdateUser({ ...user, ...profileForm }); 
+    // Enviar apenas os campos do formulário para evitar erros de undefined
+    onUpdateUser({ ...profileForm }); 
     setProfileSaved(true); 
     setTimeout(() => setProfileSaved(false), 3000); 
   };
@@ -149,8 +150,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               setLocalToken(token);
               
               // 2. Atualização no Backend (Sincroniza com Firebase)
-              // Removemos o db.update direto para evitar escrita dupla, usamos apenas a prop onUpdateUser
-              onUpdateUser({ ...user, fcmToken: token });
+              // FIX: Enviar APENAS o token. Se enviarmos '...user', campos undefined (ex: nif, phone vazios)
+              // irão quebrar a atualização no Firestore.
+              onUpdateUser({ fcmToken: token });
               
               alert("Notificações ativadas com sucesso!");
           } else {
@@ -173,14 +175,14 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     e.preventDefault(); 
     const addressToAdd = { ...newAddress, id: Date.now().toString() }; 
     const updatedAddresses = [...(user.addresses || []), addressToAdd]; 
-    onUpdateUser({ ...user, addresses: updatedAddresses }); 
+    onUpdateUser({ addresses: updatedAddresses }); 
     setIsAddingAddress(false); 
     setNewAddress({ id: '', alias: '', street: '', city: '', zip: '' }); 
   };
 
   const handleDeleteAddress = (id: string) => { 
     const updatedAddresses = (user.addresses || []).filter(a => a.id !== id); 
-    onUpdateUser({ ...user, addresses: updatedAddresses }); 
+    onUpdateUser({ addresses: updatedAddresses }); 
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,7 +197,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         (error) => { console.error(error); alert("Erro ao carregar a imagem."); setIsUploading(false); }, 
         async () => { 
             const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); 
-            onUpdateUser({ ...user, photoURL: downloadURL }); 
+            onUpdateUser({ photoURL: downloadURL }); 
             setIsUploading(false); 
         }
     );
@@ -243,7 +245,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           const updatedPoints = currentPoints - reward.cost;
           const updatedHistory = [newHistoryItem, ...(user.pointsHistory || [])];
           await db.collection('users').doc(user.uid).update({ loyaltyPoints: updatedPoints, pointsHistory: updatedHistory });
-          onUpdateUser({ ...user, loyaltyPoints: updatedPoints, pointsHistory: updatedHistory });
+          onUpdateUser({ loyaltyPoints: updatedPoints, pointsHistory: updatedHistory });
           alert(`Parabéns! O seu código é: ${code}\n(Pode encontrá-lo no checkout)`);
       } catch (error) { 
           console.error(error); 
