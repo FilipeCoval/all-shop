@@ -25,7 +25,7 @@ import { auth, db, firebase } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
-import { notifyNewOrder } from './services/telegramNotifier';
+import { notifyNewOrder } from './services/telegramNotifier.ts';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -463,8 +463,18 @@ const App: React.FC = () => {
 
   const handleUpdateUser = (updatedData: Partial<User>) => {
     if (user?.uid) {
-        db.collection("users").doc(user.uid).update(updatedData)
-            .catch(err => console.error("Update failed:", err));
+        // FIX 1: OPTIMISTIC UI UPDATE
+        // Atualiza o estado local IMEDIATAMENTE para a interface reagir
+        setUser(prev => prev ? { ...prev, ...updatedData } : null);
+
+        // FIX 2: Sanitizar dados antes de enviar ao Firebase
+        const cleanData = JSON.parse(JSON.stringify(updatedData));
+        
+        db.collection("users").doc(user.uid).update(cleanData)
+            .catch(err => {
+                console.error("Update failed, rolling back UI:", err);
+                // Opcional: Reverter estado em caso de erro, mas para user data não costuma ser crítico
+            });
     }
   };
 
@@ -546,7 +556,8 @@ const App: React.FC = () => {
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
         const product = dbProducts.find(p => p.id === id);
-        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} />;
+        // Passar onUpdateUser para ProductDetails para atualizar pontos de partilha
+        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} onUpdateUser={handleUpdateUser} />;
     }
     switch (route) {
         case '#about': return <About />;
