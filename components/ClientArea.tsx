@@ -90,12 +90,21 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   // Notifications State
   const [notifLoading, setNotifLoading] = useState(false);
+  // FIX: Estado local para visualização imediata do token (Optimistic UI)
+  const [localToken, setLocalToken] = useState<string | undefined>(user.fcmToken);
 
   const tierMap: Record<UserTier, keyof typeof LOYALTY_TIERS> = {
     'Bronze': 'BRONZE',
     'Prata': 'SILVER',
     'Ouro': 'GOLD'
   };
+
+  // Sincronizar estado local quando o Firebase finalmente atualizar o prop 'user'
+  useEffect(() => {
+      if (user.fcmToken) {
+          setLocalToken(user.fcmToken);
+      }
+  }, [user.fcmToken]);
 
   useEffect(() => {
       if (activeTab === 'support' && user.email) {
@@ -136,16 +145,20 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
       try {
           const token = await requestPushPermission();
           if (token) {
-              await db.collection('users').doc(user.uid).update({ fcmToken: token });
+              // 1. Atualização Visual Imediata (Aparece logo a verde)
+              setLocalToken(token);
+              
+              // 2. Atualização no Backend (Sincroniza com Firebase)
+              // Removemos o db.update direto para evitar escrita dupla, usamos apenas a prop onUpdateUser
               onUpdateUser({ ...user, fcmToken: token });
+              
               alert("Notificações ativadas com sucesso!");
           } else {
-              // Se requestPushPermission retorna null, geralmente logámos o erro na consola.
-              // Pode ser permissão do browser OU erro de API.
               if (Notification.permission === 'denied') {
                   alert("As notificações estão bloqueadas no seu navegador. Clique no cadeado na barra de endereço para desbloquear.");
               } else {
-                  alert("Erro ao ativar: Verifique a consola. Provavelmente a 'Browser Key' na Google Cloud Console está a bloquear a API de Cloud Messaging.");
+                  // Erro silencioso ou de API Key, mas não limpamos o token se já existia
+                  console.warn("Não foi possível obter o token.");
               }
           }
       } catch (e) {
@@ -749,10 +762,10 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           </div>
                           <button 
                             onClick={handleEnableNotifications} 
-                            disabled={!!user.fcmToken || notifLoading}
-                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${user.fcmToken ? 'bg-green-100 text-green-700 cursor-default' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                            disabled={!!localToken || notifLoading}
+                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${localToken ? 'bg-green-100 text-green-700 cursor-default' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                           >
-                              {notifLoading ? <Loader2 size={16} className="animate-spin"/> : user.fcmToken ? <><CheckCircle size={16}/> Ativado</> : <><Bell size={16}/> Ativar Push</>}
+                              {notifLoading ? <Loader2 size={16} className="animate-spin"/> : localToken ? <><CheckCircle size={16}/> Ativado</> : <><Bell size={16}/> Ativar Push</>}
                           </button>
                       </div>
                   </div>
