@@ -12,6 +12,15 @@ interface AIChatProps {
   userOrders?: Order[]; // Nova Prop para saber o histórico
 }
 
+const GREETINGS = [
+  "Posso ajudar? 👋",
+  "Olá! Alguma dúvida? 🤔",
+  "Temos novidades! ✨",
+  "Estou aqui! 🤖",
+  "Stock nacional! 🇵🇹",
+  "Fale comigo! 💬"
+];
+
 const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders = [] }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -23,6 +32,7 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [greeting, setGreeting] = useState(GREETINGS[0]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -31,6 +41,10 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
 
   useEffect(() => {
     if (isOpen) scrollToBottom();
+    // Mudar a saudação aleatoriamente quando o chat fecha/abre
+    if (!isOpen) {
+        setGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+    }
   }, [messages, isOpen]);
 
   // Efeito para resetar a sessão se o utilizador fizer login/logout (número de encomendas muda)
@@ -76,19 +90,32 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
 
   return (
     <>
-      {/* Botão Flutuante (Silhueta Grande) */}
+      {/* Botão Flutuante (Silhueta Grande) com Container para Hover */}
       {!isOpen && (
-        <button
-          onClick={() => onToggle(true)}
-          className="fixed bottom-4 right-4 z-40 w-36 h-36 hover:scale-110 transition-all duration-300 animate-bounce-slow flex items-center justify-center bg-transparent border-none outline-none focus:outline-none"
-          aria-label="Abrir chat"
-        >
-          <img 
-            src={BOT_AVATAR_URL} 
-            alt={BOT_NAME} 
-            className="w-full h-full object-contain drop-shadow-2xl filter" 
-          />
-        </button>
+        <div className="fixed bottom-4 right-4 z-40 group flex flex-col items-end">
+            
+            {/* Balão de Fala (Aparece no Hover) */}
+            <div className="mr-8 mb-2 bg-white px-4 py-2 rounded-2xl rounded-br-none shadow-xl border border-gray-100 text-sm font-bold text-gray-700 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 pointer-events-none relative max-w-[150px] text-center">
+                {greeting}
+                {/* Triângulo do balão */}
+                <div className="absolute -bottom-1.5 right-0 w-3 h-3 bg-white transform rotate-45 border-b border-r border-gray-100"></div>
+            </div>
+
+            <button
+              onClick={() => onToggle(true)}
+              className="w-36 h-36 hover:scale-110 transition-all duration-300 flex items-center justify-center bg-transparent border-none outline-none focus:outline-none relative"
+              aria-label="Abrir chat"
+            >
+              {/* Efeito de Aura/Glow atrás */}
+              <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-xl scale-75 group-hover:scale-100 transition-transform duration-500 animate-pulse"></div>
+              
+              <img 
+                src={BOT_AVATAR_URL} 
+                alt={BOT_NAME} 
+                className="w-full h-full object-contain drop-shadow-2xl filter relative z-10" 
+              />
+            </button>
+        </div>
       )}
 
       {/* Janela do Chat */}
