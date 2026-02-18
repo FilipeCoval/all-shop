@@ -70,7 +70,7 @@ export interface UserCheckoutInfo {
   phone: string;
   nif?: string;
   paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança';
-  deliveryMethod?: 'Shipping' | 'Pickup'; // Novo campo
+  deliveryMethod?: 'Shipping' | 'Pickup';
 }
 
 export interface CartItem {
@@ -232,4 +232,3 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
-
