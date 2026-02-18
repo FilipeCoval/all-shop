@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2 } from 'lucide-react';
@@ -63,6 +64,8 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const filteredAndSortedProducts = useMemo(() => {
       if (!products) return [];
+      
+      // 1. Filtragem
       let result = products.filter(product => {
         const name = product.name || '';
         const description = product.description || '';
@@ -74,13 +77,44 @@ const ProductList: React.FC<ProductListProps> = ({
         return matchesSearch && matchesCategory;
       });
 
-      if (sortOption === 'price-asc') {
-          result.sort((a, b) => (a.variants && a.variants.length > 0 ? Math.min(...a.variants.map(v => v.price)) : a.price) - (b.variants && b.variants.length > 0 ? Math.min(...b.variants.map(v => v.price)) : b.price));
-      } else if (sortOption === 'price-desc') {
-          result.sort((a, b) => (b.variants && b.variants.length > 0 ? Math.min(...b.variants.map(v => v.price)) : b.price) - (a.variants && a.variants.length > 0 ? Math.min(...a.variants.map(v => v.price)) : a.price));
-      }
+      // 2. Ordenação
+      result.sort((a, b) => {
+          // Helper para obter o menor preço (se tiver variantes)
+          const getPrice = (p: Product) => p.variants && p.variants.length > 0 ? Math.min(...p.variants.map(v => v.price)) : p.price;
+
+          if (sortOption === 'price-asc') {
+              return getPrice(a) - getPrice(b);
+          } else if (sortOption === 'price-desc') {
+              return getPrice(b) - getPrice(a);
+          } else {
+              // --- ORDENAÇÃO PADRÃO (Stock > Novidade Tag > Recentes) ---
+              
+              const stockA = getStock(a.id);
+              const stockB = getStock(b.id);
+              
+              // Define o que é "Visível/Prioritário": Tem Stock OU é infinito (999) OU está marcado como "Em Breve"
+              const isAvailableA = stockA > 0 || stockA === 999 || a.comingSoon;
+              const isAvailableB = stockB > 0 || stockB === 999 || b.comingSoon;
+
+              // 1º Critério: Disponibilidade (Stock aparece antes de Esgotado)
+              if (isAvailableA && !isAvailableB) return -1; // A sobe
+              if (!isAvailableA && isAvailableB) return 1;  // B sobe
+
+              // 2º Critério: Tag "NOVIDADE"
+              // Se ambos têm a mesma disponibilidade, verifica a tag
+              const isNovidadeA = a.badges?.includes('NOVIDADE');
+              const isNovidadeB = b.badges?.includes('NOVIDADE');
+
+              if (isNovidadeA && !isNovidadeB) return -1; // A (Novidade) sobe
+              if (!isNovidadeA && isNovidadeB) return 1;  // B (Novidade) sobe
+
+              // 3º Critério: ID Decrescente (Mais recentes/adicionados por último aparecem primeiro)
+              return b.id - a.id;
+          }
+      });
+
       return result;
-  }, [products, searchTerm, selectedCategory, sortOption]);
+  }, [products, searchTerm, selectedCategory, sortOption, getStock]); // getStock é dependência para reagir a mudanças de inventário
 
   const totalPages = Math.ceil(filteredAndSortedProducts.length / itemsPerPage);
   const paginatedProducts = filteredAndSortedProducts.slice(
@@ -146,7 +180,7 @@ const ProductList: React.FC<ProductListProps> = ({
                             onChange={(e) => setSortOption(e.target.value as any)}
                             className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary outline-none cursor-pointer text-gray-700 dark:text-gray-200 font-medium"
                         >
-                            <option value="default" className="dark:bg-gray-700">Relevância</option>
+                            <option value="default" className="dark:bg-gray-700">Relevância (Novidades)</option>
                             <option value="price-asc" className="dark:bg-gray-700">Preço: Menor para Maior</option>
                             <option value="price-desc" className="dark:bg-gray-700">Preço: Maior para Menor</option>
                         </select>
