@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon, Bell, X } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
-import MobileMenu from './components/MobileMenu'; // Importado
+import MobileMenu from './components/MobileMenu'; 
 import AIChat from './components/AIChat';
 import Home from './components/Home';
 import ProductDetails from './components/ProductDetails';
@@ -13,11 +13,10 @@ import Terms from './components/Terms';
 import Privacy from './components/Privacy';
 import FAQ from './components/FAQ';
 import Returns from './components/Returns';
-import OrderTracker from './components/OrderTracker'; // NOVO COMPONENTE
+import OrderTracker from './components/OrderTracker'; 
 import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
-import Dashboard from './components/Dashboard'; 
 import InstallPrompt from './components/InstallPrompt';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
@@ -26,6 +25,10 @@ import { useStock } from './hooks/useStock';
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
 import { notifyNewOrder } from './services/telegramNotifier.ts';
+
+// LAZY LOADING DO DASHBOARD
+// O código do Dashboard (gráficos, tabelas grandes, scanners) só é baixado se o utilizador for admin e clicar na rota.
+const Dashboard = lazy(() => import('./components/Dashboard'));
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -108,16 +111,6 @@ const App: React.FC = () => {
 
     availableStock -= reservedQuantity;
     return Math.max(0, availableStock);
-  };
-
-  const getMyReservedQuantity = (productId: number, variantName?: string): number => {
-      return reservations
-        .filter(r => 
-            (r.sessionId === sessionId || (user?.uid && r['userId'] === user.uid)) && 
-            r.productId === productId && 
-            (!variantName || r.variantName === variantName)
-        )
-        .reduce((sum, r) => sum + r.quantity, 0);
   };
 
   // --- REDIRECT LOGIC FOR SHARED LINKS ---
@@ -500,7 +493,6 @@ const App: React.FC = () => {
         db.collection("users").doc(user.uid).update(cleanData)
             .catch(err => {
                 console.error("Update failed, rolling back UI:", err);
-                // Opcional: Reverter estado em caso de erro, mas para user data não costuma ser crítico
             });
     }
   };
@@ -566,14 +558,23 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    // --- PROTEÇÃO DO DASHBOARD ---
+    // --- PROTEÇÃO DO DASHBOARD (Lazy Loaded) ---
     if (route === '#dashboard') {
         if (!isAdmin && !authLoading) {
             // Se não for admin e já carregou, redireciona.
             window.location.hash = '/';
             return null;
         }
-        return <Dashboard user={user} isAdmin={isAdmin} />;
+        return (
+            <Suspense fallback={
+                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+                    <Loader2 size={48} className="animate-spin text-primary"/>
+                    <p className="text-gray-500 font-medium">A carregar Painel de Administração...</p>
+                </div>
+            }>
+                <Dashboard user={user} isAdmin={isAdmin} />
+            </Suspense>
+        );
     }
     
     if (route === '#account') {
@@ -702,5 +703,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
-
