@@ -298,8 +298,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   };
 
+  // MODIFICADO: Função genérica para abrir modal com ou sem stock novo
   const checkAndProcessStockAlerts = async (publicProductId: number | null, productName: string, newStock: number) => {
-      if (!publicProductId || newStock <= 0) return;
+      if (!publicProductId) return;
 
       try {
           // 1. Procurar alertas pendentes para este produto
@@ -307,15 +308,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               .where('productId', '==', publicProductId)
               .get();
 
-          if (snapshot.empty) return;
+          if (snapshot.empty) {
+              // Se for chamado manualmente, avisar que não há ninguém
+              if (newStock === 999) alert("Não existem clientes na lista de espera para este produto.");
+              return;
+          }
 
           const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           const emails = alerts.map((a: any) => a.email);
           const uniqueEmails = [...new Set(emails)];
 
           // 2. Cruzar emails com utilizadores registados para obter UIDs (para Push)
-          // Nota: Firestore não tem "IN" para array de emails grande, então fazemos match em memória.
-          // Como allUsers já está carregado (ou quase), usamos isso.
           let targetUserIds: string[] = [];
           
           if (allUsers.length > 0) {
@@ -323,7 +326,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   .filter(u => uniqueEmails.includes(u.email))
                   .map(u => u.uid);
           } else {
-              // Fallback se allUsers não estiver carregado: Query manual (limitada a 10)
               const limitEmails = uniqueEmails.slice(0, 10);
               if (limitEmails.length > 0) {
                   const usersQuery = await db.collection('users').where('email', 'in', limitEmails).get();
@@ -331,7 +333,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               }
           }
 
-          // 3. Preparar modal de notificação (Híbrido: Email + Push)
+          // 3. Preparar modal de notificação
           const bccString = uniqueEmails.join(', ');
           setNotificationModalData({
               productName: productName,
@@ -348,9 +350,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   };
 
-  // ... (rest of the component logic remains the same, only updated notification modal UI below)
-
-  // ... [omitted identical handlers for brevity until the modal render] ...
+  // ... [Handlers omitidos para brevidade] ...
+  // [Os handlers existentes mantêm-se iguais, exceto o handleProductSubmit que chama checkAndProcessStockAlerts]
+  
   const handleProductSubmit = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); 
@@ -358,10 +360,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       const qBought = Number(formData.quantityBought) || 0; 
       const existingProduct = products.find(p => p.id === editingId); 
       const currentSold = existingProduct ? existingProduct.quantitySold : 0; 
-      
-      // Cálculo do stock disponível neste lote
       const availableStock = Math.max(0, qBought - currentSold);
-
       const currentSalePrice = formData.salePrice ? Number(formData.salePrice) : 0; 
       let productStatus: ProductStatus = 'IN_STOCK'; 
       if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; 
@@ -376,8 +375,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           
           setIsModalOpen(false); 
 
-          // --- TRIGGER AUTOMÁTICO DE NOTIFICAÇÃO ---
-          // Se adicionámos stock disponível a um produto público, verifica alertas
           if (payload.publicProductId && availableStock > 0 && !payload.comingSoon) {
               await checkAndProcessStockAlerts(payload.publicProductId, payload.name, availableStock);
           }
@@ -575,7 +572,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {/* ... Tab Contents ... */}
         {activeTab === 'inventory' && (
             <InventoryTab 
-                products={products} stats={stats} onlineUsersCount={onlineUsers.length} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onSale={openSaleModal} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
+                products={products} stats={stats} onlineUsersCount={onlineUsers.length} stockAlerts={stockAlerts} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onSale={openSaleModal} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId, p.name, 999)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
             />
         )}
         
