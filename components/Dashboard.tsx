@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer, Volume2, VolumeX, BellRing
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket } from '../types';
@@ -14,9 +14,10 @@ import ProfitCalculatorModal from './ProfitCalculatorModal';
 import BarcodeScanner from './BarcodeScanner';
 import OrderDetailsModal from './OrderDetailsModal';
 import KpiCard from './KpiCard';
-import InventoryTab from './InventoryTab';
+import { InventoryTab } from './InventoryTab';
 import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
+import OrderFulfillmentModal from './OrderFulfillmentModal';
 
 // --- HELPERS ---
 const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -43,12 +44,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
-  const [selectedProductForSale, setSelectedProductForSale] = useState<InventoryProduct | null>(null);
+  
   const [notifications, setNotifications] = useState<Order[]>([]);
   const [showToast, setShowToast] = useState<Order | null>(null);
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [isOnlineDetailsOpen, setIsOnlineDetailsOpen] = useState(false);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -59,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0, validProductId: undefined });
   const [publicProductsList, setPublicProductsList] = useState<Product[]>([]);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'sell_unit' | 'tracking' | 'verify_product'>('search');
+  const [scannerMode, setScannerMode] = useState<'search' | 'add_unit' | 'tracking' | 'verify_product'>('search');
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
   const [stockAlerts, setStockAlerts] = useState<any[]>([]);
@@ -67,6 +66,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Sound State
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   
   // Notification Modal Data Updated Type
   const [notificationModalData, setNotificationModalData] = useState<{
@@ -80,21 +82,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   } | null>(null);
 
   const [copySuccess, setCopySuccess] = useState('');
-  const [linkedOrderId, setLinkedOrderId] = useState<string>('');
-  const [selectedOrderForSaleDetails, setSelectedOrderForSaleDetails] = useState<Order | null>(null);
-  const [selectedUnitsForSale, setSelectedUnitsForSale] = useState<string[]>([]);
-  const [manualUnitSelect, setManualUnitSelect] = useState('');
-  const [orderMismatchWarning, setOrderMismatchWarning] = useState<string | null>(null);
-  const [securityCheckPassed, setSecurityCheckPassed] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
   
   // Marketing / Push Form State
   const [pushForm, setPushForm] = useState({ title: '', body: '', target: 'all', image: '' });
   const [isSendingPush, setIsSendingPush] = useState(false);
   const [pushResult, setPushResult] = useState<{ success: boolean; msg: string } | null>(null);
 
-  // Manual Order Modal State
+  // Manual Order & Fulfillment Modal State
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
+  const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState(false);
   
   const [salesSearchTerm, setSalesSearchTerm] = useState('');
   const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
@@ -153,7 +149,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   });
 
   const selectedPublicProductVariants = useMemo(() => { if (!formData.publicProductId) return []; const prod = publicProductsList.find(p => p.id === Number(formData.publicProductId)); return prod?.variants || []; }, [formData.publicProductId, publicProductsList]);
-  const [saleForm, setSaleForm] = useState({ quantity: '1', unitPrice: '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: '', supplierOrderId: '' });
   const pendingOrders = useMemo(() => allOrders.filter(o => ['Processamento', 'Pago'].includes(o.status)), [allOrders]);
   
   const groupedCashback = useMemo(() => {
@@ -174,8 +169,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   // EFFECTS
   useEffect(() => { if (activeTab === 'support' && isAdmin) { setIsTicketsLoading(true); const unsubscribe = db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot(snapshot => { setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket))); setIsTicketsLoading(false); }); return () => unsubscribe(); } }, [activeTab, isAdmin]);
   
-  useEffect(() => { if (linkedOrderId) { const order = allOrders.find(o => o.id === linkedOrderId); setSelectedOrderForSaleDetails(order || null); if (selectedProductForSale && order) { const safeItems = getSafeItems(order.items); const isCompatible = safeItems.some(item => { if (typeof item === 'string') return false; const idMatch = item.productId === selectedProductForSale.publicProductId; if (!idMatch) return false; const inventoryHasVariant = !!selectedProductForSale.variant; const orderHasVariant = !!item.selectedVariant; if (inventoryHasVariant && orderHasVariant) return item.selectedVariant === selectedProductForSale.variant; if (!inventoryHasVariant && !orderHasVariant) return true; if (!inventoryHasVariant && orderHasVariant) return false; if (inventoryHasVariant && !orderHasVariant) return true; return false; }); if (!isCompatible) setOrderMismatchWarning("ATENÇÃO: Este produto NÃO consta na encomenda selecionada!"); else setOrderMismatchWarning(null); if (order) { const item = safeItems.find(i => typeof i !== 'string' && i.productId === selectedProductForSale.publicProductId) as OrderItem | undefined; if (item) { setSaleForm(prev => ({ ...prev, unitPrice: item.price.toString(), shippingCost: (order.total - (item.price * item.quantity)).toFixed(2) })); } } } } else { setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); } }, [linkedOrderId, allOrders, selectedProductForSale]);
-  useEffect(() => { if(!isAdmin) return; audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'); const mountTime = Date.now(); const unsubscribe = db.collection('orders').orderBy('date', 'desc').limit(10).onSnapshot(snapshot => { snapshot.docChanges().forEach(change => { if (change.type === 'added') { const order = change.doc.data() as Order; if (new Date(order.date).getTime() > (mountTime - 2000)) { setNotifications(prev => [order, ...prev]); setShowToast(order); if (audioRef.current) audioRef.current.play().catch(() => {}); setTimeout(() => setShowToast(null), 5000); } } }); }); return () => unsubscribe(); }, [isAdmin]);
+  // --- ORDER NOTIFICATION LISTENER (UPDATED) ---
+  useEffect(() => { 
+      if(!isAdmin) return; 
+      
+      const mountTime = Date.now(); 
+      const unsubscribe = db.collection('orders').orderBy('date', 'desc').limit(10).onSnapshot(snapshot => { 
+          snapshot.docChanges().forEach(change => { 
+              if (change.type === 'added') { 
+                  const order = change.doc.data() as Order; 
+                  // Só notifica encomendas criadas depois de abrir o dashboard (margem de 2s)
+                  if (new Date(order.date).getTime() > (mountTime - 2000)) { 
+                      setNotifications(prev => [order, ...prev]); 
+                      setShowToast(order); 
+                      
+                      // Tocar som se ativado
+                      if (isSoundEnabled) {
+                          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                          audio.volume = 1.0;
+                          audio.play().catch(e => console.warn("Audio play blocked (user needs to interact first):", e));
+                      }
+
+                      setTimeout(() => setShowToast(null), 8000); 
+                  } 
+              } 
+          }); 
+      }); 
+      return () => unsubscribe(); 
+  }, [isAdmin, isSoundEnabled]); // Re-run listener if sound toggle changes
+
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('products_public').onSnapshot(snap => { const loadedProducts: Product[] = []; snap.forEach(doc => { const id = parseInt(doc.id, 10); const data = doc.data(); if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product); }); setPublicProductsList(loadedProducts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('online_users').onSnapshot(snapshot => { const now = Date.now(); const activeUsers: any[] = []; snapshot.forEach(doc => { const data = doc.data(); if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) { activeUsers.push({ id: doc.id, ...data }); } }); setOnlineUsers(activeUsers); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
@@ -210,153 +232,73 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleCopy = (text: string) => { if (copyToClipboard(text)) { setCopySuccess('Copied'); setTimeout(() => setCopySuccess(''), 2000); } else alert("Não foi possível copiar."); };
   const handleCopyToClipboard = (text: string, type: string) => { if (copyToClipboard(text)) { setCopySuccess(type); setTimeout(() => setCopySuccess(''), 2000); } else alert("Não foi possível copiar."); };
 
-  // --- FUNÇÃO PARA CONFIRMAR ENCOMENDA MANUAL ---
+  // ... (Manual Order & Push Functions remain the same) ...
   const handleManualOrderConfirm = async (order: Order, deductions: { batchId: string, quantity: number, saleRecord: SaleRecord }[]) => {
       try {
         await db.collection('orders').doc(order.id).set(order);
-
-        // Deduzir do Stock
         for (const ded of deductions) {
             const product = products.find(p => p.id === ded.batchId);
             if (product) {
                 const newSold = (product.quantitySold || 0) + ded.quantity;
                 const status: ProductStatus = newSold >= product.quantityBought ? 'SOLD' : 'PARTIAL';
-                
-                await updateProduct(product.id, {
-                    quantitySold: newSold,
-                    status: status,
-                    salesHistory: [...(product.salesHistory || []), ded.saleRecord]
-                });
+                await updateProduct(product.id, { quantitySold: newSold, status: status, salesHistory: [...(product.salesHistory || []), ded.saleRecord] });
             }
         }
-        
         setIsManualOrderModalOpen(false);
         alert("Encomenda manual registada com sucesso!");
-      } catch (error) {
-          console.error("Erro ao criar encomenda manual:", error);
-          alert("Erro ao processar a encomenda.");
-      }
+      } catch (error) { console.error("Erro ao criar encomenda manual:", error); alert("Erro ao processar a encomenda."); }
   };
 
-  // --- NOVA FUNÇÃO: Enviar Push Notification (Via API Vercel) ---
   const handleSendPush = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!pushForm.title || !pushForm.body) return alert("Preencha título e mensagem.");
-      
-      setIsSendingPush(true);
-      setPushResult(null);
-
+      setIsSendingPush(true); setPushResult(null);
       try {
-          const response = await fetch('/api/send-push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(pushForm)
-          });
-
+          const response = await fetch('/api/send-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pushForm) });
           const data = await response.json();
-
-          if (response.ok && data.success) {
-              setPushResult({ success: true, msg: `Sucesso! Enviado para ${data.sentCount} dispositivos. (${data.failureCount} falhas)` });
-              setPushForm({ title: '', body: '', target: 'all', image: '' });
-          } else {
-              setPushResult({ success: false, msg: data.error || data.details || 'Erro desconhecido ao enviar.' });
-          }
-      } catch (err) {
-          console.error(err);
-          setPushResult({ success: false, msg: 'Erro de comunicação com o servidor.' });
-      } finally {
-          setIsSendingPush(false);
-      }
+          if (response.ok && data.success) { setPushResult({ success: true, msg: `Sucesso! Enviado para ${data.sentCount} dispositivos. (${data.failureCount} falhas)` }); setPushForm({ title: '', body: '', target: 'all', image: '' }); } else { setPushResult({ success: false, msg: data.error || data.details || 'Erro desconhecido ao enviar.' }); }
+      } catch (err) { console.error(err); setPushResult({ success: false, msg: 'Erro de comunicação com o servidor.' }); } finally { setIsSendingPush(false); }
   };
 
   const handleSendPushToWaitingList = async () => {
       if (!notificationModalData || notificationModalData.targetUserIds.length === 0) return;
-      
       setIsSendingPush(true);
       try {
-          const response = await fetch('/api/send-push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  title: 'Produto Disponível! 📦',
-                  body: `${notificationModalData.productName} acabou de chegar ao stock! Compre antes que esgote.`,
-                  target: 'segment',
-                  userIds: notificationModalData.targetUserIds,
-                  link: `https://www.all-shop.net/#product/${notificationModalData.productId}`
-              })
-          });
+          const response = await fetch('/api/send-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Produto Disponível! 📦', body: `${notificationModalData.productName} acabou de chegar ao stock! Compre antes que esgote.`, target: 'segment', userIds: notificationModalData.targetUserIds, link: `https://www.all-shop.net/#product/${notificationModalData.productId}` }) });
           const data = await response.json();
-          if(data.success) {
-              alert(`Enviado para ${data.sentCount} utilizadores interessados!`);
-          } else {
-              alert("Erro ao enviar: " + (data.error || 'Desconhecido'));
-          }
-      } catch (e) {
-          alert("Erro de comunicação.");
-      } finally {
-          setIsSendingPush(false);
+          if(data.success) { alert(`Enviado para ${data.sentCount} utilizadores interessados!`); } else { alert("Erro ao enviar: " + (data.error || 'Desconhecido')); }
+      } catch (e) { alert("Erro de comunicação."); } finally { setIsSendingPush(false); }
+  };
+
+  const handleVerifyProduct = (code: string) => {
+      setInventorySearchTerm(code);
+      const product = products.find(p => p.id === code || (p.units && p.units.some(u => u.id === code)));
+      if (product) {
+          alert(`Produto encontrado: ${product.name}`);
+      } else {
+          alert(`Nenhum produto encontrado com o código: ${code}`);
       }
   };
 
-  // MODIFICADO: Função genérica para abrir modal com ou sem stock novo
+  // ... (Other handlers like stock alerts and product submit remain the same) ...
   const checkAndProcessStockAlerts = async (publicProductId: number | null, productName: string, newStock: number) => {
       if (!publicProductId) return;
-
       try {
-          // 1. Procurar alertas pendentes para este produto
-          const snapshot = await db.collection('stock_alerts')
-              .where('productId', '==', publicProductId)
-              .get();
-
-          if (snapshot.empty) {
-              // Se for chamado manualmente, avisar que não há ninguém
-              if (newStock === 999) alert("Não existem clientes na lista de espera para este produto.");
-              return;
-          }
-
+          const snapshot = await db.collection('stock_alerts').where('productId', '==', publicProductId).get();
+          if (snapshot.empty) { if (newStock === 999) alert("Não existem clientes na lista de espera para este produto."); return; }
           const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           const emails = alerts.map((a: any) => a.email);
           const uniqueEmails = [...new Set(emails)];
-
-          // 2. Cruzar emails com utilizadores registados para obter UIDs (para Push)
           let targetUserIds: string[] = [];
-          
-          if (allUsers.length > 0) {
-              targetUserIds = allUsers
-                  .filter(u => uniqueEmails.includes(u.email))
-                  .map(u => u.uid);
-          } else {
-              const limitEmails = uniqueEmails.slice(0, 10);
-              if (limitEmails.length > 0) {
-                  const usersQuery = await db.collection('users').where('email', 'in', limitEmails).get();
-                  usersQuery.forEach(doc => targetUserIds.push(doc.id));
-              }
-          }
-
-          // 3. Preparar modal de notificação
+          if (allUsers.length > 0) { targetUserIds = allUsers.filter(u => uniqueEmails.includes(u.email)).map(u => u.uid); } else { const limitEmails = uniqueEmails.slice(0, 10); if (limitEmails.length > 0) { const usersQuery = await db.collection('users').where('email', 'in', limitEmails).get(); usersQuery.forEach(doc => targetUserIds.push(doc.id)); } }
           const bccString = uniqueEmails.join(', ');
-          setNotificationModalData({
-              productName: productName,
-              productId: publicProductId,
-              subject: `Chegou: ${productName} já disponível na All-Shop!`,
-              body: `Olá,\n\nO produto que aguardava (${productName}) acabou de chegar ao nosso stock!\n\nPode comprar agora em: https://www.all-shop.net/#product/${publicProductId}\n\nObrigado,\nEquipa All-Shop`,
-              bcc: bccString,
-              alertsToDelete: alerts,
-              targetUserIds: targetUserIds
-          });
-
-      } catch (error) {
-          console.error("Erro ao processar alertas de stock:", error);
-      }
+          setNotificationModalData({ productName: productName, productId: publicProductId, subject: `Chegou: ${productName} já disponível na All-Shop!`, body: `Olá,\n\nO produto que aguardava (${productName}) acabou de chegar ao nosso stock!\n\nPode comprar agora em: https://www.all-shop.net/#product/${publicProductId}\n\nObrigado,\nEquipa All-Shop`, bcc: bccString, alertsToDelete: alerts, targetUserIds: targetUserIds });
+      } catch (error) { console.error("Erro ao processar alertas de stock:", error); }
   };
 
-  // ... [Handlers omitidos para brevidade] ...
-  // [Os handlers existentes mantêm-se iguais, exceto o handleProductSubmit que chama checkAndProcessStockAlerts]
-  
   const handleProductSubmit = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); 
-      
       const qBought = Number(formData.quantityBought) || 0; 
       const existingProduct = products.find(p => p.id === editingId); 
       const currentSold = existingProduct ? existingProduct.quantitySold : 0; 
@@ -366,65 +308,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; 
       else if (currentSold > 0) productStatus = 'PARTIAL'; 
       
-      const payload: any = { 
-          name: formData.name, 
-          description: formData.description, 
-          category: formData.category, 
-          publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, 
-          variant: formData.variant || null, 
-          purchaseDate: formData.purchaseDate, 
-          supplierName: formData.supplierName, 
-          supplierOrderId: formData.supplierOrderId, 
-          quantityBought: qBought, 
-          quantitySold: currentSold, 
-          salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], 
-          purchasePrice: Number(formData.purchasePrice) || 0, 
-          targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, 
-          salePrice: currentSalePrice,
-          originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null, // NOVO
-          promoEndsAt: formData.promoEndsAt || null, // NOVO
-          cashbackValue: Number(formData.cashbackValue) || 0, 
-          cashbackStatus: formData.cashbackStatus, 
-          cashbackPlatform: formData.cashbackPlatform, 
-          cashbackAccount: formData.cashbackAccount, 
-          cashbackExpectedDate: formData.cashbackExpectedDate, 
-          units: modalUnits, 
-          status: productStatus, 
-          badges: formData.badges, 
-          images: formData.images, 
-          features: formData.features, 
-          comingSoon: formData.comingSoon, 
-          weight: formData.weight ? parseFloat(formData.weight) : 0 
-      }; 
+      const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null, promoEndsAt: formData.promoEndsAt || null, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0 }; 
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
       
       try { 
-          if (editingId) await updateProduct(editingId, payload); 
-          else await addProduct(payload); 
-          
+          if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); 
           setIsModalOpen(false); 
-
-          if (payload.publicProductId && availableStock > 0 && !payload.comingSoon) {
-              await checkAndProcessStockAlerts(payload.publicProductId, payload.name, availableStock);
-          }
-
-      } catch (err) { 
-          alert('Erro ao guardar.'); 
-      } 
+          if (payload.publicProductId && availableStock > 0 && !payload.comingSoon) { await checkAndProcessStockAlerts(payload.publicProductId, payload.name, availableStock); }
+      } catch (err) { alert('Erro ao guardar.'); } 
   };
   
-  // Generic Helpers (Keep existing implementation)
+  // Generic Helpers
   const toggleBadge = (badge: string) => { setFormData(prev => { const badges = prev.badges || []; if (badges.includes(badge)) return { ...prev, badges: badges.filter(b => b !== badge) }; else return { ...prev, badges: [...badges, badge] }; }); };
   const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, description: product.description || '', category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice ? product.salePrice.toString() : '', targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', originalPrice: product.originalPrice ? product.originalPrice.toString() : '', promoEndsAt: product.promoEndsAt || '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, cashbackPlatform: product.cashbackPlatform || '', cashbackAccount: product.cashbackAccount || '', cashbackExpectedDate: product.cashbackExpectedDate || '', badges: product.badges || [], images: product.images || [], newImageUrl: '', features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false, weight: product.weight ? product.weight.toString() : '' }); setModalUnits(product.units || []); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', originalPrice: '', promoEndsAt: '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false, weight: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', originalPrice: parentProduct.originalPrice ? parentProduct.originalPrice.toString() : '', promoEndsAt: parentProduct.promoEndsAt || '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
   const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
-  const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
-  const handleDeleteSale = async (saleId: string) => { if(!editingId || !window.confirm("Anular venda e repor stock?")) return; const product = products.find(p => p.id === editingId); if(!product) return; const sale = product.salesHistory?.find(s => s.id === saleId); if(!sale) return; const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity); const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || []; const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; try { await updateProduct(editingId, { quantitySold: newSold, salesHistory: newHistory, status: newStatus as ProductStatus }); } catch(e) { alert("Erro ao anular venda."); } };
-  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes }; try { const currentSold = (selectedProductForSale.quantitySold || 0) + qty; const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL'; let updatedUnits = selectedProductForSale.units || []; if (selectedUnitsForSale.length > 0) { updatedUnits = updatedUnits.map(u => selectedUnitsForSale.includes(u.id) ? { ...u, status: 'SOLD' as const } : u); } await updateProduct(selectedProductForSale.id, { quantitySold: currentSold, salesHistory: [...(selectedProductForSale.salesHistory || []), newSale], status: status as ProductStatus, units: updatedUnits }); if (linkedOrderId && selectedUnitsForSale.length > 0) { const orderRef = db.collection('orders').doc(linkedOrderId); const orderDoc = await orderRef.get(); if (orderDoc.exists) { const orderData = orderDoc.data() as Order; const updatedItems = orderData.items.map((item: any) => { const isMatch = item.productId === selectedProductForSale.publicProductId && ((!item.selectedVariant && !selectedProductForSale.variant) || (item.selectedVariant === selectedProductForSale.variant)); if (isMatch) { const currentSn = item.serialNumbers || []; return { ...item, serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] }; } return item; }); await orderRef.update({ items: updatedItems }); } } setIsSaleModalOpen(false); } catch(e) { console.error(e); alert("Erro ao registar venda."); } };
   
-  // Other small handlers
+  const handleDeleteSale = async (saleId: string) => { if(!editingId || !window.confirm("Anular venda e repor stock?")) return; const product = products.find(p => p.id === editingId); if(!product) return; const sale = product.salesHistory?.find(s => s.id === saleId); if(!sale) return; const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity); const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || []; const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; try { await updateProduct(editingId, { quantitySold: newSold, salesHistory: newHistory, status: newStatus as ProductStatus }); } catch(e) { alert("Erro ao anular venda."); } };
+  
+  // Other small handlers (rest of file remains)
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
   const handleAddImage = () => { if (formData.newImageUrl && formData.newImageUrl.trim()) { setFormData(prev => ({ ...prev, images: [...prev.images, prev.newImageUrl.trim()], newImageUrl: '' })); } };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploading(true); setUploadProgress(0); const storageRef = storage.ref(`products/${Date.now()}_${file.name}`); const uploadTask = storageRef.put(file); uploadTask.on('state_changed', (snapshot) => { const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; setUploadProgress(progress); }, (error) => { console.error("Upload error:", error); alert("Erro ao fazer upload da imagem."); setIsUploading(false); setUploadProgress(null); }, async () => { const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); setIsUploading(false); setUploadProgress(null); if (fileInputRef.current) fileInputRef.current.value = ''; }); };
@@ -439,8 +343,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAddUnit = (code: string) => { if (modalUnits.some(u => u.id === code)) return alert("Este código já foi adicionado."); setModalUnits(prev => [...prev, { id: code, status: 'AVAILABLE', addedAt: new Date().toISOString() }]); };
   const handleRemoveUnit = (id: string) => setModalUnits(prev => prev.filter(u => u.id !== id));
   const handleGenerateCodes = () => { const newCodes: string[] = []; for(let i=0; i < generateQty; i++) { const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase(); newCodes.push(`INT-${randomPart}`); } setGeneratedCodes(prev => [...prev, ...newCodes]); if (isModalOpen) { const newUnits = newCodes.map(code => ({ id: code, status: 'AVAILABLE' as const, addedAt: new Date().toISOString() })); setModalUnits(prev => [...prev, ...newUnits]); } };
-  const handleSelectUnitForSale = (code: string) => { if (!selectedProductForSale) return; const unit = selectedProductForSale.units?.find(u => u.id === code); if (!unit) return alert("Erro: Este S/N não pertence a este lote de produto."); if (unit.status !== 'AVAILABLE') return alert("Erro: Este S/N já foi vendido ou está reservado."); if (selectedUnitsForSale.includes(code)) return alert("Aviso: Este S/N já foi adicionado a esta venda."); setSelectedUnitsForSale(prev => [...prev, code]); setSecurityCheckPassed(true); };
-  const handleVerifyProduct = (code: string) => { if (!selectedProductForSale) return; const cleanCode = code.trim().toUpperCase(); if (cleanCode === selectedProductForSale.publicProductId?.toString() || selectedProductForSale.units?.some(u => u.id.toUpperCase() === cleanCode)) { setSecurityCheckPassed(true); setVerificationCode(code); } else { alert(`Código ${code} NÃO corresponde a este produto! Verifique se pegou na caixa correta.`); setSecurityCheckPassed(false); } };
   
   const handleNotifySubscribers = (productId: number, productName: string, variantName?: string) => { /* ... */ };
   const handleClearSentAlerts = async () => { if (!notificationModalData) return; if (!window.confirm("Isto irá apagar os alertas da base de dados. Confirma que já enviou o email?")) return; try { const batch = db.batch(); notificationModalData.alertsToDelete.forEach(alert => { batch.delete(db.collection('stock_alerts').doc(alert.id)); }); await batch.commit(); setNotificationModalData(null); alert("Lista de espera limpa com sucesso!"); } catch(e) { alert("Erro ao limpar alertas."); } };
@@ -546,9 +448,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           <script>
             // Inicializar todos os códigos de barras
             JsBarcode(".barcode").init();
-            
-            // Auto-print (opcional)
-            // window.onload = function() { window.print(); }
           </script>
         </body>
       </html>
@@ -568,7 +467,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
-      {/* ... (Previous code remains unchanged until notificationModalData render) ... */}
+      {/* Toast Notification */}
+      {showToast && (
+          <div className="fixed top-24 right-4 bg-white shadow-xl rounded-xl border border-blue-100 p-4 z-[60] max-w-sm animate-slide-in-right flex items-start gap-4">
+              <div className="bg-green-100 p-2 rounded-full text-green-600"><CheckCircle size={24} /></div>
+              <div>
+                  <h4 className="font-bold text-gray-900">Nova Encomenda!</h4>
+                  <p className="text-sm text-gray-600">{showToast.shippingInfo?.name} acabou de comprar.</p>
+                  <p className="text-sm font-bold text-indigo-600 mt-1">{formatCurrency(showToast.total)}</p>
+              </div>
+              <button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+          </div>
+      )}
+
       {/* Header, Tabs, etc are same as previous Dashboard.tsx */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         {/* ... (Header content) ... */}
@@ -578,12 +489,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <div className="bg-indigo-600 p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
                 <h1 className="text-xl font-bold text-gray-900">Backoffice</h1>
               </div>
-              <div className="flex items-center gap-2 md:hidden">
-                <div className="relative"><button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button></div>
-                 <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full" title="Voltar à Loja"><Home size={20} /></button>
+              
+              {/* TOGGLE SOUND & MOBILE MENU */}
+              <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
+                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    title={isSoundEnabled ? "Silenciar notificações" : "Ativar som de encomendas"}
+                >
+                    {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                </button>
+
+                <div className="md:hidden relative">
+                    <button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button>
+                </div>
+                 <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full md:hidden" title="Voltar à Loja"><Home size={20} /></button>
               </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            {/* TABS E RESTO DO HEADER MANTIDOS */}
             <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 p-1 rounded-lg gap-1 md:gap-0 overflow-x-auto">
                 <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
                 <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
@@ -592,7 +516,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
                 <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
             </div>
-            {/* ... Rest of header ... */}
+            
+            {/* DESKTOP SOUND TOGGLE (Visible on Desktop) */}
+            <div className="hidden md:flex items-center gap-2">
+                <button 
+                    onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
+                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    title={isSoundEnabled ? "Silenciar Campainha" : "Ativar Campainha de Encomendas"}
+                >
+                    {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                </button>
+                
+                <div className="relative"><button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button></div>
+                <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full" title="Voltar à Loja"><Home size={20} /></button>
+            </div>
           </div>
         </div>
       </div>
@@ -601,7 +538,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {/* ... Tab Contents ... */}
         {activeTab === 'inventory' && (
             <InventoryTab 
-                products={products} stats={stats} onlineUsersCount={onlineUsers.length} stockAlerts={stockAlerts} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onSale={openSaleModal} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId, p.name, 999)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
+                products={products} stats={stats} onlineUsersCount={onlineUsers.length} stockAlerts={stockAlerts} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId, p.name, 999)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
+                onOpenFulfillment={() => setIsFulfillmentModalOpen(true)}
+                onOpenManualOrder={() => setIsManualOrderModalOpen(true)}
             />
         )}
         
@@ -609,6 +548,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             <OrdersTab orders={allOrders} inventoryProducts={products} isAdmin={isAdmin} onStatusChange={handleOrderStatusChange} onDeleteOrder={handleDeleteOrder} onViewDetails={setSelectedOrderDetails} onOpenManualOrder={() => setIsManualOrderModalOpen(true)} />
         )}
         
+        {/* Other tabs remain the same... */}
         {activeTab === 'clients' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center"><h3 className="font-bold text-gray-800">Gestão de Clientes ({allUsers.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-gray-900">{client.name}</td><td className="px-6 py-4 text-gray-600">{client.email}</td><td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
@@ -872,8 +812,56 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         )}
       </div>
       
+      {/* MODALS */}
       <ProfitCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
       <ManualOrderModal isOpen={isManualOrderModalOpen} onClose={() => setIsManualOrderModalOpen(false)} publicProducts={publicProductsList} inventoryProducts={products} onConfirm={async (order, deductions) => { try { await db.collection('orders').doc(order.id).set(order); for (const ded of deductions) { const product = products.find(p => p.id === ded.batchId); if (product) { const newSold = (product.quantitySold || 0) + ded.quantity; const status: ProductStatus = newSold >= product.quantityBought ? 'SOLD' : 'PARTIAL'; await updateProduct(product.id, { quantitySold: newSold, status: status, salesHistory: [...(product.salesHistory || []), ded.saleRecord] }); } } setIsManualOrderModalOpen(false); alert("Encomenda manual registada com sucesso!"); } catch (error) { console.error("Erro ao criar encomenda manual:", error); alert("Erro ao processar a encomenda."); } }} />
+      
+      {/* NOVO MODAL DE FULFILLMENT */}
+      <OrderFulfillmentModal isOpen={isFulfillmentModalOpen} onClose={() => setIsFulfillmentModalOpen(false)} orders={pendingOrders} inventory={products} onConfirmFulfillment={async (orderId, deductions) => {
+          try {
+              // 1. Atualizar Inventário (Stock e Histórico)
+              for (const ded of deductions) {
+                  const product = products.find(p => p.id === ded.batchId);
+                  if (product) {
+                      const newSold = (product.quantitySold || 0) + ded.quantity;
+                      const status: ProductStatus = newSold >= product.quantityBought ? 'SOLD' : 'PARTIAL';
+                      
+                      // Atualizar status das unidades específicas (se serialNumbers existir)
+                      let updatedUnits = product.units;
+                      if (ded.serialNumbers && product.units) {
+                          updatedUnits = product.units.map(u => 
+                              ded.serialNumbers!.includes(u.id) ? { ...u, status: 'SOLD' } : u
+                          );
+                      }
+
+                      await updateProduct(product.id, { 
+                          quantitySold: newSold, 
+                          status: status, 
+                          salesHistory: [...(product.salesHistory || []), ded.saleRecord],
+                          units: updatedUnits
+                      });
+                  }
+              }
+
+              // 2. Atualizar Encomenda (Status e S/N nos itens se aplicável)
+              // (Simplificação: assume que os serialNumbers vão para a encomenda se implementado no tipo OrderItem, senão apenas muda estado)
+              await db.collection('orders').doc(orderId).update({
+                  status: 'Enviado', // Passa automaticamente para Enviado
+                  statusHistory: firebase.firestore.FieldValue.arrayUnion({
+                      status: 'Enviado',
+                      date: new Date().toISOString(),
+                      notes: 'Processado via Backoffice (Stock Validado)'
+                  })
+              });
+
+              setIsFulfillmentModalOpen(false);
+              alert("Encomenda processada e stock atualizado com sucesso!");
+          } catch (e) {
+              console.error(e);
+              alert("Erro ao processar a encomenda.");
+          }
+      }} />
+
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
       
       {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}/><div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4><textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}<div className="flex gap-2"><div className="relative flex-1"><input type="url" placeholder="Cole o link da imagem (ex: imgur.com/...)" className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" value={formData.newImageUrl} onChange={e => setFormData({...formData, newImageUrl: e.target.value})} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" title="Upload do PC">{isUploading && uploadProgress === null ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}</button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/></div><button type="button" onClick={handleAddImage} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors">Adicionar</button></div>{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div> <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div> <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm flex items-center gap-2"><Wallet size={16}/> Detalhes do Cashback</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plataforma</label><input placeholder="Ex: Temu" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackPlatform} onChange={e => setFormData({...formData, cashbackPlatform: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conta Usada</label><input placeholder="email@exemplo.com" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackAccount} onChange={e => setFormData({...formData, cashbackAccount: e.target.value})} /></div></div><div className="mt-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Prevista (Opcional)</label><input type="date" className="w-full md:w-1/2 p-2 border border-yellow-200 rounded" value={formData.cashbackExpectedDate} onChange={e => setFormData({...formData, cashbackExpectedDate: e.target.value})} /></div></div> <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm"><div><h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4><p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p></div><button type="button" onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} /></button></div> <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6"><h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4><div className="flex flex-wrap gap-2">{['NOVIDADE', 'MAIS VENDIDO', 'PROMOÇÃO', 'ESSENCIAL'].map(badge => (<button key={badge} type="button" onClick={() => toggleBadge(badge)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${formData.badges.includes(badge) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{badge} {formData.badges.includes(badge) && <CheckCircle size={10} className="inline ml-1" />}</button>))}</div><p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p></div> <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div> <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div><div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div> <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4"><h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4><p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p><div className="flex gap-2"><input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button></div>{generatedCodes.length > 0 && (<div className="mt-4 pt-4 border-t border-gray-200"><div className="flex justify-between items-center mb-2"><h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5><button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button></div><div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">{generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}</div><button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button></div>)}</div> 
@@ -897,10 +885,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       </div>
       {/* (Fim Seção Promoções) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div> <div className="border-t pt-4 border-gray-100"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Scale size={16} /> Logística & Peso</h4><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Peso Unitário (kg)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400 text-xs font-bold">KG</span><input type="number" step="0.001" className="w-full pl-10 p-3 border border-gray-300 rounded-lg" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} placeholder="Ex: 0.350" /></div><p className="text-[10px] text-gray-500 mt-1">Essencial para calcular portes de envio automáticos no futuro.</p></div></div> {editingId && (<div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? (<div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => (<tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>))}</tbody></table></div>) : (<p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>)}</div>)} <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>)}
-      {/* Sale Modal */}
-      {isSaleModalOpen && selectedProductForSale && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0"><h3 className="font-bold text-gray-900 flex items-center gap-2"><DollarSign size={20} className="text-green-600"/> Registar Venda / Baixa</h3><button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button></div><form onSubmit={handleSaleSubmit} className="p-6 space-y-6"><div className="bg-gray-50 p-4 rounded-xl border border-gray-200"><p className="text-xs font-bold text-gray-500 uppercase">Produto</p><p className="font-bold text-gray-900">{selectedProductForSale.name}</p><p className="text-xs text-blue-600">{selectedProductForSale.variant}</p></div><div><label className="block text-sm font-bold text-gray-700 mb-1">Passo 1: Encomenda Online (Obrigatório)</label><select required value={linkedOrderId} onChange={(e) => setLinkedOrderId(e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 outline-none transition-colors ${orderMismatchWarning ? 'border-red-300 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-green-500'}`}><option value="">-- Selecione uma encomenda --</option>{pendingOrders.map(o => (<option key={o.id} value={o.id}>{o.id} - {o.shippingInfo?.name} ({formatCurrency(o.total)})</option>))}</select></div>{orderMismatchWarning && (<div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded animate-shake flex items-start gap-2"><ShieldAlert size={20} className="shrink-0 mt-0.5" /><div><p className="font-bold text-sm">PRODUTO ERRADO!</p><p className="text-xs">{orderMismatchWarning}</p></div></div>)}{linkedOrderId && !orderMismatchWarning && (<div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4 animate-fade-in-down space-y-4"><h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 border-b border-blue-200 pb-2"><FileText size={14}/> Conferência de Valores</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-600 mb-1">Preço Venda (Real)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold text-gray-800" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})}/></div><div><label className="block text-xs font-bold text-gray-600 mb-1">Portes Envio (Cliente)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 rounded bg-white text-sm text-gray-800" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})}/></div></div><div className="border-t border-blue-200 pt-4"><h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 mb-3"><ShieldCheck size={14}/> Verificação de Segurança</h4><div className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${securityCheckPassed ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-200'}`}>{securityCheckPassed ? (<><CheckCircle size={32} className="text-green-600"/><div className="text-center"><p className="font-bold text-green-800">Produto Confirmado!</p><p className="text-xs text-green-700">Pode finalizar a venda.</p></div></>) : (<><div className="w-full flex gap-2"><button type="button" onClick={() => { setScannerMode('verify_product'); setIsScannerOpen(true); }} className="bg-gray-800 text-white p-2 rounded-lg hover:bg-black transition-colors"><Camera size={20}/></button><input type="text" placeholder="Escanear produto para libertar..." className="flex-1 p-2 border border-gray-300 rounded-lg text-sm text-center font-mono uppercase focus:ring-2 focus:ring-red-500 outline-none" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleVerifyProduct((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}/></div><p className="text-xs text-red-600 font-bold flex items-center gap-1"><Lock size={12}/> Venda Bloqueada: Confirme o produto físico.</p></>)}</div></div></div>)}{selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (<div><label className="block text-sm font-bold text-gray-700 mb-2">Selecionar Unidades (S/N) a vender</label><div className="flex gap-2 mb-2"><button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="bg-gray-200 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-300"><Camera size={14}/> Escanear S/N</button><select value={manualUnitSelect} onChange={(e) => { if(e.target.value) handleSelectUnitForSale(e.target.value); setManualUnitSelect(''); }} className="flex-1 p-2 border border-gray-300 rounded-lg text-xs"><option value="">-- Selecionar Manualmente --</option>{selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (<option key={u.id} value={u.id}>{u.id}</option>))}</select></div><div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-50 rounded-lg border border-gray-200">{selectedUnitsForSale.map(sn => (<div key={sn} className="bg-white border border-green-200 text-green-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-1 shadow-sm">{sn} <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(s => s !== sn))} className="text-red-400 hover:text-red-600"><X size={12}/></button></div>))}{selectedUnitsForSale.length === 0 && <span className="text-gray-400 text-xs italic">Nenhuma unidade selecionada.</span>}</div><p className="text-xs text-gray-500 mt-1">Quantidade será calculada com base nas unidades selecionadas.</p></div>) : (<div><label className="block text-sm font-bold text-gray-700 mb-1">Quantidade</label><input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required value={saleForm.quantity} onChange={(e) => setSaleForm({...saleForm, quantity: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" /></div>)}<button type="submit" disabled={!!orderMismatchWarning || !securityCheckPassed} className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning || !securityCheckPassed ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-green-600 hover:bg-green-700 text-white'}`}>{!securityCheckPassed ? <Lock size={18}/> : <CheckCircle size={18}/>} {orderMismatchWarning ? 'Bloqueado: Produto Errado' : !securityCheckPassed ? 'Bloqueado: Verificação Pendente' : 'Confirmar Venda'}</button></form></div></div>)}
       {detailsModalData && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center"><h3 className="text-xl font-bold text-gray-900">{detailsModalData.title}</h3><button onClick={() => setDetailsModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-0"><table className="w-full text-left text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500 sticky top-0"><tr>{detailsModalData.columns.map((col, idx) => <th key={idx} className="px-6 py-3">{col.header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{detailsModalData.data.map((item, rowIdx) => (<tr key={rowIdx} className="hover:bg-gray-50">{detailsModalData.columns.map((col, colIdx) => (<td key={colIdx} className="px-6 py-3">{typeof col.accessor === 'function' ? col.accessor(item) : item[col.accessor]}</td>))}</tr>))}</tbody></table></div><div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-between items-center"><span className="font-bold text-gray-500">TOTAL</span><span className="text-xl font-bold text-gray-900">{formatCurrency(detailsModalData.total)}</span></div></div></div>)}
-      {isScannerOpen && (<BarcodeScanner mode={(scannerMode === 'add_unit' || scannerMode === 'sell_unit' || scannerMode === 'verify_product') ? 'serial' : 'product'} onClose={() => setIsScannerOpen(false)} onCodeSubmit={(code) => { if (scannerMode === 'add_unit') { handleAddUnit(code); setIsScannerOpen(false); } else if (scannerMode === 'sell_unit') { handleSelectUnitForSale(code); setIsScannerOpen(false); } else if (scannerMode === 'search') { setInventorySearchTerm(code); setIsScannerOpen(false); } else if (scannerMode === 'verify_product') { handleVerifyProduct(code); setIsScannerOpen(false); }}} />)}
+      {isScannerOpen && (<BarcodeScanner mode={(scannerMode === 'add_unit' || scannerMode === 'verify_product') ? 'serial' : 'product'} onClose={() => setIsScannerOpen(false)} onCodeSubmit={(code) => { if (scannerMode === 'add_unit') { handleAddUnit(code); setIsScannerOpen(false); } else if (scannerMode === 'search') { setInventorySearchTerm(code); setIsScannerOpen(false); } else if (scannerMode === 'verify_product') { handleVerifyProduct(code); setIsScannerOpen(false); }}} />)}
       
       {/* NOTIFICATION MODAL UPDATED */}
       {notificationModalData && (
