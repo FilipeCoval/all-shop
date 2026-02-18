@@ -3,17 +3,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
 // INICIALIZAÇÃO DO SDK ADMIN (SINGLETON)
-// Nota: Isto requer que as variáveis de ambiente estejam configuradas no Vercel.
-// FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 if (!admin.apps.length) {
     try {
-        // Tenta usar as variáveis de ambiente se existirem
         if (process.env.FIREBASE_PRIVATE_KEY) {
             admin.initializeApp({
                 credential: admin.credential.cert({
                     projectId: process.env.FIREBASE_PROJECT_ID,
                     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                    // Corrige formatação da chave privada (quebras de linha)
                     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
                 }),
             });
@@ -26,13 +22,10 @@ if (!admin.apps.length) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // 1. Verificação de Segurança Básica
-    // Em produção, deve verificar o token de autenticação do utilizador (req.headers.authorization)
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Se o Admin não iniciou (falta de chaves), retorna erro explicativo
     if (!admin.apps.length) {
         return res.status(500).json({ 
             error: 'Configuração de Servidor Incompleta', 
@@ -41,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { title, body, image, target, specificUserId } = req.body;
+        const { title, body, image, target, specificUserId, userIds, link } = req.body;
 
         if (!title || !body) {
             return res.status(400).json({ error: 'Título e mensagem são obrigatórios.' });
@@ -50,33 +43,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const db = admin.firestore();
         let tokens: string[] = [];
 
-        // 2. Recolher Tokens (Lógica Robusta Multi-Device)
+        // 2. Recolher Tokens (Lógica Robusta Multi-Device & Segmentação)
         if (target === 'specific' && specificUserId) {
-            // Enviar para um utilizador específico (todos os seus dispositivos)
+            // Caso A: Um único utilizador
             const userDoc = await db.collection('users').doc(specificUserId).get();
             if (userDoc.exists) {
                 const userData = userDoc.data();
-                if (userData?.deviceTokens && Array.isArray(userData.deviceTokens)) {
-                    tokens = userData.deviceTokens;
-                } else if (userData?.fcmToken) {
-                    // Fallback para sistema antigo
-                    tokens = [userData.fcmToken];
-                }
+                if (userData?.deviceTokens && Array.isArray(userData.deviceTokens)) tokens = userData.deviceTokens;
+                else if (userData?.fcmToken) tokens = [userData.fcmToken];
             }
-        } else {
-            // Enviar para TODOS (Marketing)
-            // Lógica: Vai buscar todos os utilizadores que têm tokens
-            // Nota: Em escala massiva, isto deve ser feito em batches ou tópicos.
-            const usersSnap = await db.collection('users').get();
+        } 
+        else if (target === 'segment' && Array.isArray(userIds) && userIds.length > 0) {
+            // Caso B: Lista de utilizadores (Ex: Lista de Espera de Stock)
+            // Limitado a lotes razoáveis. Para milhares, seria ideal dividir.
+            const refs = userIds.map(id => db.collection('users').doc(id));
+            const docs = await db.getAll(...refs);
             
+            docs.forEach(doc => {
+                if (doc.exists) {
+                    const userData = doc.data();
+                    if (userData?.deviceTokens && Array.isArray(userData.deviceTokens)) {
+                        tokens.push(...userData.deviceTokens);
+                    } else if (userData?.fcmToken) {
+                        tokens.push(userData.fcmToken);
+                    }
+                }
+            });
+        }
+        else {
+            // Caso C: Enviar para TODOS (Marketing Massivo)
+            const usersSnap = await db.collection('users').get();
             usersSnap.forEach(doc => {
                 const userData = doc.data();
-                // Adiciona a lista de tokens deste user
                 if (userData.deviceTokens && Array.isArray(userData.deviceTokens)) {
                     tokens.push(...userData.deviceTokens);
-                } 
-                // Suporte legacy
-                else if (userData.fcmToken) {
+                } else if (userData.fcmToken) {
                     tokens.push(userData.fcmToken);
                 }
             });
@@ -90,7 +91,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 3. Enviar Mensagens (Multicast)
-        // O Firebase envia para até 500 tokens de cada vez automaticamente com este método
         const messagePayload = {
             notification: {
                 title: title,
@@ -100,23 +100,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             tokens: tokens,
             webpush: {
                 fcmOptions: {
-                    link: 'https://www.all-shop.net' // Abre a loja ao clicar
+                    link: link || 'https://www.all-shop.net' // Abre a loja ou produto específico
                 }
             }
         };
 
         const response = await admin.messaging().sendEachForMulticast(messagePayload);
 
-        // 4. Limpeza de Tokens Inválidos (Manutenção Automática)
+        // 4. Limpeza de Tokens Inválidos (Log)
         if (response.failureCount > 0) {
-            const failedTokens: string[] = [];
-            response.responses.forEach((resp, idx) => {
-                if (!resp.success) {
-                    failedTokens.push(tokens[idx]);
-                }
-            });
-            console.log(`Falha no envio para ${failedTokens.length} tokens. (Provavelmente inativos)`);
-            // Aqui poderíamos remover estes tokens da base de dados futuramente
+            console.log(`Falha no envio para ${response.failureCount} tokens.`);
         }
 
         return res.status(200).json({ 
