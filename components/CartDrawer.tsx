@@ -248,8 +248,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     const finalUserInfo = { ...userInfo, deliveryMethod };
     if (deliveryMethod === 'Pickup') {
         finalUserInfo.street = "Levantamento na Loja (All-Shop)";
-        finalUserInfo.city = "Lisboa";
-        finalUserInfo.zip = "1000-000";
+        finalUserInfo.city = "Leiria";
+        finalUserInfo.zip = "2400-135";
         finalUserInfo.doorNumber = "-";
     }
 
@@ -266,7 +266,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     const success = await onCheckout(newOrder);
     if (success) {
         let msg = `🛍️ Pedido ${currentOrderId}\n`;
-        msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja' : '🚚 Envio CTT'}\n`;
+        msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja (Leiria)' : '🚚 Envio CTT'}\n`;
         msg += `Cliente: ${userInfo.name} (${userInfo.phone})\n`;
         msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`).join('\n')}\n`;
         if (discountAmount > 0) msg += `Desconto (${appliedCoupon?.code}): -${formatCurrency(discountAmount)}\n`;
@@ -406,8 +406,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                   <h4 className="font-bold text-green-800 dark:text-green-300 text-sm">Ponto de Recolha</h4>
                                   <p className="text-green-700 dark:text-green-400 text-sm mt-1">
                                       All-Shop Store<br/>
-                                      Av. da Liberdade, 100<br/>
-                                      Lisboa, Portugal
+                                      Rua Dr. José Jardim, Lote 5<br/>
+                                      Leiria, Portugal
                                   </p>
                                   <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">Horário: Seg-Sex, 10h-19h</p>
                               </div>
