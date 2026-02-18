@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket } from '../types';
@@ -77,6 +77,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [securityCheckPassed, setSecurityCheckPassed] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   
+  // Marketing / Push Form State
+  const [pushForm, setPushForm] = useState({ title: '', body: '', target: 'all', image: '' });
+  const [isSendingPush, setIsSendingPush] = useState(false);
+  const [pushResult, setPushResult] = useState<{ success: boolean; msg: string } | null>(null);
+
   // Manual Order Modal State
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
   
@@ -221,7 +226,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       }
   };
 
-  // --- NOVA FUNÇÃO: Verificar e Processar Alertas de Stock Automaticamente ---
+  // --- NOVA FUNÇÃO: Enviar Push Notification (Via API Vercel) ---
+  const handleSendPush = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!pushForm.title || !pushForm.body) return alert("Preencha título e mensagem.");
+      
+      setIsSendingPush(true);
+      setPushResult(null);
+
+      try {
+          const response = await fetch('/api/send-push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(pushForm)
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.success) {
+              setPushResult({ success: true, msg: `Sucesso! Enviado para ${data.sentCount} dispositivos. (${data.failureCount} falhas)` });
+              setPushForm({ title: '', body: '', target: 'all', image: '' });
+          } else {
+              setPushResult({ success: false, msg: data.error || data.details || 'Erro desconhecido ao enviar.' });
+          }
+      } catch (err) {
+          console.error(err);
+          setPushResult({ success: false, msg: 'Erro de comunicação com o servidor.' });
+      } finally {
+          setIsSendingPush(false);
+      }
+  };
+
   const checkAndProcessStockAlerts = async (publicProductId: number | null, productName: string, newStock: number) => {
       if (!publicProductId || newStock <= 0) return;
 
@@ -477,70 +512,125 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       <div className="container mx-auto px-4 py-8">
         
+        {/* ... (Existing Tabs: inventory, orders, clients, coupons, support) ... */}
         {activeTab === 'inventory' && (
             <InventoryTab 
-                products={products}
-                stats={stats}
-                onlineUsersCount={onlineUsers.length}
-                onEdit={handleEdit}
-                onCreateVariant={handleCreateVariant}
-                onDeleteGroup={handleDeleteGroup}
-                onSale={openSaleModal}
-                onDelete={handleDelete}
-                onSyncStock={handleSyncPublicStock}
-                isSyncingStock={isSyncingStock}
-                onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }}
-                onOpenCalculator={() => setIsCalculatorOpen(true)}
-                onImport={() => {}}
-                isImporting={isImporting}
-                onRecalculate={() => {}}
-                isRecalculating={isRecalculating}
-                onAddNew={handleAddNew}
-                onOpenInvestedModal={handleOpenInvestedModal}
-                onOpenRevenueModal={handleOpenRevenueModal}
-                onOpenProfitModal={handleOpenProfitModal}
-                onOpenCashbackManager={handleOpenCashbackManager}
-                onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)}
-                copyToClipboard={copyToClipboard}
-                searchTerm={inventorySearchTerm}
-                onSearchChange={setInventorySearchTerm}
+                products={products} stats={stats} onlineUsersCount={onlineUsers.length} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onSale={openSaleModal} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
             />
         )}
         
         {activeTab === 'orders' && (
-            <OrdersTab 
-                orders={allOrders}
-                inventoryProducts={products}
-                isAdmin={isAdmin}
-                onStatusChange={handleOrderStatusChange}
-                onDeleteOrder={handleDeleteOrder}
-                onViewDetails={setSelectedOrderDetails}
-                onOpenManualOrder={() => setIsManualOrderModalOpen(true)}
-            />
+            <OrdersTab orders={allOrders} inventoryProducts={products} isAdmin={isAdmin} onStatusChange={handleOrderStatusChange} onDeleteOrder={handleDeleteOrder} onViewDetails={setSelectedOrderDetails} onOpenManualOrder={() => setIsManualOrderModalOpen(true)} />
         )}
         
         {activeTab === 'clients' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-800">Gestão de Clientes ({allUsers.length})</h3>
-                    <div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div>
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center"><h3 className="font-bold text-gray-800">Gestão de Clientes ({allUsers.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-gray-900">{client.name}</td><td className="px-6 py-4 text-gray-600">{client.email}</td><td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
+            </div>
+        )}
+
+        {/* MARKETING TAB (ATUALIZADA) */}
+        {activeTab === 'marketing' && (
+            <div className="animate-fade-in space-y-8">
+                {/* Stats Card */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+                    <div className="space-y-2">
+                        <h2 className="text-3xl font-bold flex items-center gap-3"><Megaphone size={32}/> Central de Campanhas</h2>
+                        <p className="text-blue-100 max-w-lg">Envie notificações push para todos os seus clientes em segundos. Alcance todos os dispositivos (PC, iPhone, Android) onde o cliente tenha a app instalada.</p>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border border-white/20 text-center min-w-[200px]">
+                        <p className="text-xs font-bold uppercase tracking-wider text-blue-200 mb-1">Alcance Potencial</p>
+                        <div className="text-4xl font-black">{allUsers.reduce((acc, u) => acc + (u.deviceTokens?.length || (u.fcmToken ? 1 : 0)), 0)}</div>
+                        <p className="text-xs text-blue-200 mt-1">Dispositivos registados</p>
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left whitespace-nowrap">
-                        <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {filteredClients.map(client => (
-                                <tr key={client.uid} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 font-bold text-gray-900">{client.name}</td>
-                                    <td className="px-6 py-4 text-gray-600">{client.email}</td>
-                                    <td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td>
-                                    <td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td>
-                                    <td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td>
-                                    <td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Formulário de Envio REAL */}
+                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Send size={20} className="text-blue-600"/> Enviar Nova Notificação</h3>
+                        
+                        <form onSubmit={handleSendPush} className="space-y-5">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Título da Notificação</label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    placeholder="Ex: Promoção Relâmpago ⚡️" 
+                                    value={pushForm.title}
+                                    onChange={e => setPushForm({...pushForm, title: e.target.value})}
+                                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Mensagem</label>
+                                <textarea 
+                                    required 
+                                    rows={3}
+                                    placeholder="Ex: Descontos até 50% em TV Boxes só hoje!" 
+                                    value={pushForm.body}
+                                    onChange={e => setPushForm({...pushForm, body: e.target.value})}
+                                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                />
+                            </div>
+
+                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        name="target" 
+                                        value="all" 
+                                        checked={pushForm.target === 'all'} 
+                                        onChange={() => setPushForm({...pushForm, target: 'all'})}
+                                        className="w-5 h-5 text-blue-600"
+                                    />
+                                    <div>
+                                        <span className="font-bold text-gray-900 block">Enviar para TODOS</span>
+                                        <span className="text-xs text-gray-500">Alcança todos os utilizadores com notificações ativas.</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            {pushResult && (
+                                <div className={`p-4 rounded-xl flex items-start gap-3 ${pushResult.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                    {pushResult.success ? <CheckCircle size={20} className="mt-0.5"/> : <AlertCircle size={20} className="mt-0.5"/>}
+                                    <p className="text-sm font-medium">{pushResult.msg}</p>
+                                </div>
+                            )}
+
+                            <button 
+                                type="submit" 
+                                disabled={isSendingPush || !pushForm.title || !pushForm.body}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isSendingPush ? <Loader2 className="animate-spin" size={20} /> : <><Smartphone size={20}/> Enviar Agora</>}
+                            </button>
+                        </form>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100">
+                            <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><Info size={18}/> Como funciona?</h4>
+                            <p className="text-sm text-indigo-800 leading-relaxed mb-4">
+                                Esta funcionalidade usa uma API segura para comunicar com o Firebase. Quando clica em enviar:
+                            </p>
+                            <ol className="list-decimal pl-5 space-y-2 text-sm text-indigo-800">
+                                <li>O sistema recolhe todos os tokens de todos os utilizadores (PC, Android, iPhone).</li>
+                                <li>Remove duplicados para não enviar 2x para o mesmo aparelho.</li>
+                                <li>Envia a mensagem instantaneamente.</li>
+                            </ol>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl border border-gray-200">
+                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Sparkles size={18} className="text-yellow-500"/> Dicas de Conversão</h4>
+                            <ul className="space-y-3 text-sm text-gray-600">
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Seja breve:</strong> Títulos curtos funcionam melhor.</li>
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Use Emojis:</strong> Aumentam a taxa de abertura. 🚀</li>
+                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Call to Action:</strong> Diga o que fazer (ex: "Toque para ver").</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
@@ -634,64 +724,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         );
                     })}
                     {coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}
-                </div>
-            </div>
-        )}
-
-        {/* MARKETING TAB (NOVO) */}
-        {activeTab === 'marketing' && (
-            <div className="animate-fade-in space-y-8">
-                {/* Stats Card */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
-                    <div className="space-y-2">
-                        <h2 className="text-3xl font-bold flex items-center gap-3"><Megaphone size={32}/> Central de Campanhas</h2>
-                        <p className="text-blue-100 max-w-lg">Envie notificações push para todos os seus clientes em segundos. Anuncie promoções, novidades e liquidações diretamente no telemóvel.</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl border border-white/20 text-center min-w-[200px]">
-                        <p className="text-xs font-bold uppercase tracking-wider text-blue-200 mb-1">Alcance Total</p>
-                        <div className="text-4xl font-black">{allUsers.filter(u => !!u.fcmToken).length}</div>
-                        <p className="text-xs text-blue-200 mt-1">Utilizadores ativos</p>
-                    </div>
-                </div>
-
-                {/* Main Action Area */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-center items-center text-center space-y-6 hover:border-blue-300 transition-all group">
-                        <div className="bg-blue-50 p-6 rounded-full group-hover:bg-blue-100 transition-colors">
-                            <Send size={48} className="text-blue-600"/>
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Criar Nova Campanha</h3>
-                            <p className="text-gray-500 max-w-xs mx-auto">Use a consola oficial do Firebase para enviar mensagens seguras e sem erros.</p>
-                        </div>
-                        <a 
-                            href="https://console.firebase.google.com/project/allshop-store-70851/notification/compose" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex items-center gap-2"
-                        >
-                            Abrir Consola de Envio <ExternalLink size={20}/>
-                        </a>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="bg-white p-6 rounded-xl border border-gray-200">
-                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Info size={18} className="text-blue-500"/> Dicas para converter mais</h4>
-                            <ul className="space-y-3 text-sm text-gray-600">
-                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Seja breve:</strong> Títulos curtos como "Promoção Relâmpago ⚡️" funcionam melhor.</li>
-                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Use Emojis:</strong> Aumentam a taxa de abertura em 20%.</li>
-                                <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Hora Certa:</strong> Envie entre as 18h e as 21h nos dias de semana.</li>
-                            </ul>
-                        </div>
-
-                        <div className="bg-orange-50 p-6 rounded-xl border border-orange-100">
-                            <h4 className="font-bold text-orange-900 mb-2 flex items-center gap-2"><AlertTriangle size={18}/> Nota Importante</h4>
-                            <p className="text-sm text-orange-800 leading-relaxed">
-                                Devido a novas regras de segurança da Google, o envio automático pelo site foi desativado. 
-                                O envio pela consola oficial (botão ao lado) é a única forma 100% garantida e gratuita de atingir todos os seus clientes.
-                            </p>
-                        </div>
-                    </div>
                 </div>
             </div>
         )}
@@ -795,6 +827,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 </div>
                 <div className="p-6">
                     <form onSubmit={handleProductSubmit} className="space-y-6">
+                        {/* ... (Keep existing product form content) ... */}
                         <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
                             <h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1165,7 +1198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         <div>
                             <h4 className="font-bold text-xl">{selectedUserDetails.name}</h4>
                             <p className="text-sm text-gray-500">{selectedUserDetails.email}</p>
-                            <p className="text-xs text-gray-400 mt-1">Push Token: {selectedUserDetails.fcmToken ? 'Sim' : 'Não'}</p>
+                            <p className="text-xs text-gray-400 mt-1">Push Tokens: {selectedUserDetails.deviceTokens?.length || (selectedUserDetails.fcmToken ? 1 : 0)}</p>
                         </div>
                     </div>
                     {/* ... (Rest of user details modal) ... */}
