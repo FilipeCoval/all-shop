@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin } from 'lucide-react';
+import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -203,11 +203,24 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       return Math.min(amount, total); 
   }, [appliedCoupon, total, cartItems]);
 
-  // Cálculo Portes (0 se Levantamento em Loja)
+  // Cálculo Portes (Atualizado para Cobrança)
   const shippingCost = useMemo(() => {
       if (deliveryMethod === 'Pickup') return 0;
-      return (total - discountAmount) >= 50 ? 0 : 4.99;
-  }, [total, discountAmount, deliveryMethod]);
+      
+      const payableTotal = total - discountAmount;
+      
+      // Lógica específica para Pagamento à Cobrança
+      if (userInfo.paymentMethod === 'Cobrança') {
+          // Se < 50€: Custo 12€
+          // Se >= 50€: Custo 7€ (Custo extra aplicado sobre o "grátis")
+          return payableTotal < 50 ? 12 : 7;
+      }
+
+      // Lógica Normal (Outros métodos)
+      // < 50€: 4.99€
+      // >= 50€: Grátis
+      return payableTotal >= 50 ? 0 : 4.99;
+  }, [total, discountAmount, deliveryMethod, userInfo.paymentMethod]);
 
   const finalTotal = Math.max(0, total - discountAmount + shippingCost);
 
@@ -244,7 +257,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     // Preparar dados finais 
-    // (Se for Pickup, preenchemos a morada com dados fictícios ou da loja para manter o tipo Order consistente)
     const finalUserInfo = { ...userInfo, deliveryMethod };
     if (deliveryMethod === 'Pickup') {
         finalUserInfo.street = "Levantamento na Loja (All-Shop)";
@@ -267,6 +279,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     if (success) {
         let msg = `🛍️ Pedido ${currentOrderId}\n`;
         msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja (Leiria)' : '🚚 Envio CTT'}\n`;
+        msg += `Pagamento: ${userInfo.paymentMethod}\n`;
         msg += `Cliente: ${userInfo.name} (${userInfo.phone})\n`;
         msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`).join('\n')}\n`;
         if (discountAmount > 0) msg += `Desconto (${appliedCoupon?.code}): -${formatCurrency(discountAmount)}\n`;
@@ -382,6 +395,40 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
 
               <div className="space-y-4">
+                  {/* SELETOR DE PAGAMENTO ADICIONADO AQUI */}
+                  <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Método de Pagamento</label>
+                      <div className="grid grid-cols-3 gap-2">
+                          <button
+                              onClick={() => setUserInfo({...userInfo, paymentMethod: 'MB Way'})}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'MB Way' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                          >
+                              <Smartphone size={18} />
+                              MB Way
+                          </button>
+                          <button
+                              onClick={() => setUserInfo({...userInfo, paymentMethod: 'Transferência'})}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Transferência' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                          >
+                              <Landmark size={18} />
+                              Transf.
+                          </button>
+                          <button
+                              onClick={() => setUserInfo({...userInfo, paymentMethod: 'Cobrança'})}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Cobrança' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                          >
+                              <Banknote size={18} />
+                              Cobrança
+                          </button>
+                      </div>
+                      {userInfo.paymentMethod === 'Cobrança' && deliveryMethod !== 'Pickup' && (
+                          <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-[10px] text-yellow-700 dark:text-yellow-400 flex items-start gap-1">
+                              <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                              <span>Taxa adicional: +12€ (pedidos &lt;50€) ou +7€ (pedidos &ge;50€).</span>
+                          </div>
+                      )}
+                  </div>
+
                   <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Dados Pessoais</label>
                       <input type="text" placeholder="Nome Completo" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
