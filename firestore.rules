@@ -29,12 +29,14 @@ service cloud.firestore {
     }
 
     // Encomendas: Criar é público (para permitir checkout), Ler só o dono
+    // CORREÇÃO: Adicionada permissão 'delete' para administradores
     match /orders/{orderId} {
       allow create: if true;
       allow read, update: if isAdmin() || (isSignedIn() && (
           resource.data.userId == request.auth.uid ||
           resource.data.shippingInfo.email == request.auth.token.email
       ));
+      allow delete: if isAdmin();
     }
 
     // --- REGRAS DE SUPORTE E FUNCIONALIDADES ---
