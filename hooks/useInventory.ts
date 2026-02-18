@@ -104,6 +104,8 @@ export const useInventory = (isAdmin: boolean = false) => {
         name: inv.name,
         category: inv.category,
         price: inv.salePrice || 0, 
+        originalPrice: inv.originalPrice, // Mapeado
+        promoEndsAt: inv.promoEndsAt,     // Mapeado
         image: mainImage, 
         description: inv.description || `Produto ${inv.name}`,
         stock: 0, // Será calculado pelo refreshPublicProductStock
@@ -219,4 +221,3 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
-
