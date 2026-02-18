@@ -18,6 +18,7 @@
     "lucide-react": "^0.454.0",
     "@google/genai": "latest",
     "firebase": "^10.13.1",
+    "firebase-admin": "^12.0.0",
     "@zxing/library": "^0.21.0",
     "react-barcode": "^1.5.1",
     "@vercel/node": "^3.2.0"
