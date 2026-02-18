@@ -83,8 +83,8 @@ const Contact: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-gray-900 mb-1">Escritório</h3>
-                    <p className="text-gray-600 mb-1">Av. da Liberdade, 100</p>
-                    <p className="text-gray-600">Lisboa, Portugal</p>
+                    <p className="text-gray-600 mb-1">Rua Dr. José Jardim, Lote 5</p>
+                    <p className="text-gray-600">Leiria, Portugal</p>
                 </div>
             </div>
         </div>
