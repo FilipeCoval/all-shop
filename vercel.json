@@ -1,3 +1,4 @@
+
 {
   "rewrites": [
     {
@@ -7,6 +8,10 @@
     {
       "source": "/p/(.*)",
       "destination": "/api/og?id=$1"
+    },
+    {
+      "source": "/home",
+      "destination": "/api/og?id=home"
     },
     {
       "source": "/(.*)",
