@@ -4,11 +4,54 @@ import { Product, Review, User, ProductVariant, PointHistory } from '../types';
 import { 
     ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
     Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
-    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle, Coins
+    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle, Coins, Timer
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
 import { STORE_NAME, PUBLIC_URL, SHARE_URL } from '../constants';
 import { db, firebase } from '../services/firebaseConfig';
+
+const CountdownTimer: React.FC<{ targetDate: string }> = ({ targetDate }) => {
+    const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
+    const [isExpired, setIsExpired] = useState(false);
+
+    useEffect(() => {
+        const calculateTimeLeft = () => {
+            const difference = +new Date(targetDate) - +new Date();
+            
+            if (difference > 0) {
+                setTimeLeft({
+                    hours: Math.floor((difference / (1000 * 60 * 60))),
+                    minutes: Math.floor((difference / 1000 / 60) % 60),
+                    seconds: Math.floor((difference / 1000) % 60),
+                });
+                setIsExpired(false);
+            } else {
+                setIsExpired(true);
+            }
+        };
+
+        calculateTimeLeft();
+        const timer = setInterval(calculateTimeLeft, 1000);
+        return () => clearInterval(timer);
+    }, [targetDate]);
+
+    if (isExpired) return null;
+
+    return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between text-red-700 animate-fade-in my-4">
+            <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider">
+                <Timer size={18} className="animate-pulse"/> A Promoção termina em:
+            </div>
+            <div className="flex gap-2 font-mono font-bold text-lg">
+                <div className="bg-white px-2 rounded border border-red-100 shadow-sm">{String(timeLeft.hours).padStart(2, '0')}h</div>
+                <span>:</span>
+                <div className="bg-white px-2 rounded border border-red-100 shadow-sm">{String(timeLeft.minutes).padStart(2, '0')}m</div>
+                <span>:</span>
+                <div className="bg-white px-2 rounded border border-red-100 shadow-sm">{String(timeLeft.seconds).padStart(2, '0')}s</div>
+            </div>
+        </div>
+    );
+};
 
 interface ProductDetailsProps {
   product: Product;
@@ -71,6 +114,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const isUnavailable = isOutOfStock || !!product.comingSoon;
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
+  const showPromo = product.originalPrice && product.originalPrice > currentPrice;
 
   const relatedProducts = (allProducts || [])
     .filter(p => p.category === product.category && p.id !== product.id)
@@ -241,8 +285,13 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                 </div>
            </div>
 
+           {product.promoEndsAt && <CountdownTimer targetDate={product.promoEndsAt} />}
+
            <div className="flex items-end gap-3 mb-6">
-               <span className="text-4xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}</span>
+               <span className={`text-4xl font-bold ${showPromo ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}</span>
+               {showPromo && (
+                   <span className="text-xl text-gray-400 line-through mb-1.5">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.originalPrice!)}</span>
+               )}
                {isOutOfStock && !product.comingSoon && <span className="text-red-500 font-bold mb-2">Indisponível</span>}
                {product.comingSoon && <span className="text-purple-600 dark:text-purple-400 font-bold mb-2 uppercase tracking-wide">Pré-Lançamento</span>}
            </div>
