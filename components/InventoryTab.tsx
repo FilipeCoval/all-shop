@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, Edit2, Trash2, RefreshCw, Camera, BrainCircuit, UploadCloud, Plus, 
-  ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Bot, Sparkles, Loader2, Layers 
+  ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Bot, Sparkles, Loader2, Layers, BellRing
 } from 'lucide-react';
 import { InventoryProduct, Product } from '../types';
 import { getInventoryAnalysis } from '../services/geminiService';
@@ -18,6 +18,7 @@ interface InventoryTabProps {
     potentialProfit: number;
   };
   onlineUsersCount: number;
+  stockAlerts: any[]; // NOVO
   onEdit: (product: InventoryProduct) => void;
   onCreateVariant: (product: InventoryProduct) => void;
   onDeleteGroup: (groupId: string, items: InventoryProduct[]) => void;
@@ -37,6 +38,7 @@ interface InventoryTabProps {
   onOpenProfitModal: () => void;
   onOpenCashbackManager: () => void;
   onOpenOnlineDetails: () => void;
+  onOpenStockAlerts: (product: InventoryProduct) => void; // NOVO
   copyToClipboard: (text: string) => boolean;
   searchTerm: string;
   onSearchChange: (term: string) => void;
@@ -46,7 +48,7 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
 const InventoryTab: React.FC<InventoryTabProps> = ({
-  products, stats, onlineUsersCount,
+  products, stats, onlineUsersCount, stockAlerts,
   onEdit, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
@@ -54,6 +56,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
   onRecalculate, isRecalculating,
   onAddNew,
   onOpenInvestedModal, onOpenRevenueModal, onOpenProfitModal, onOpenCashbackManager, onOpenOnlineDetails,
+  onOpenStockAlerts,
   copyToClipboard,
   searchTerm, onSearchChange
 }) => {
@@ -136,6 +139,12 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
               {groupedInventory.map(([groupId, items]) => {
                 const mainItem = items[0]; const isExpanded = expandedGroups.includes(groupId);
                 const totalStock = items.reduce((acc, i) => acc + Math.max(0, (i.quantityBought || 0) - (i.quantitySold || 0)), 0);
+                
+                // --- NOVA LÓGICA: Contar alertas pendentes para este grupo ---
+                const alertsCount = mainItem.publicProductId 
+                    ? stockAlerts.filter(a => a.productId === mainItem.publicProductId).length
+                    : 0;
+
                 return (
                   <React.Fragment key={groupId}>
                     <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''}`}>
@@ -144,7 +153,24 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                       <td className="px-4 py-4 text-center"><span className={`font-bold px-2 py-1 rounded ${totalStock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{totalStock} un.</span></td>
                       <td className="px-4 py-4 text-center">{mainItem.comingSoon ? (<span className="text-purple-600 font-bold text-xs uppercase bg-purple-100 px-2 py-1 rounded">Em Breve</span>) : (<span className={`text-xs font-bold uppercase ${totalStock > 0 ? 'text-green-600' : 'text-red-500'}`}>{totalStock > 0 ? 'Disponível' : 'Esgotado'}</span>)}</td>
                       <td className="px-4 py-4 text-right font-medium">{formatCurrency(mainItem.salePrice || mainItem.targetSalePrice || 0)}</td>
-                      <td className="px-4 py-4 text-right"><div className="flex justify-end gap-1"><button onClick={() => onEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Edit2 size={14} /> Editar Loja</button><button onClick={() => onCreateVariant(mainItem)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><Layers size={16} /></button><button onClick={() => onDeleteGroup(groupId, items)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={16} /></button></div></td>
+                      <td className="px-4 py-4 text-right">
+                          <div className="flex justify-end gap-1">
+                              {/* NOVO BOTÃO: ALERTAS */}
+                              {alertsCount > 0 && (
+                                  <button 
+                                    onClick={() => onOpenStockAlerts(mainItem)} 
+                                    className="flex items-center gap-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors animate-pulse"
+                                    title="Notificar Clientes"
+                                  >
+                                      <BellRing size={14} /> {alertsCount}
+                                  </button>
+                              )}
+                              
+                              <button onClick={() => onEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Edit2 size={14} /> Editar Loja</button>
+                              <button onClick={() => onCreateVariant(mainItem)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><Layers size={16} /></button>
+                              <button onClick={() => onDeleteGroup(groupId, items)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
+                          </div>
+                      </td>
                     </tr>
                     {isExpanded && (
                         <tr className="bg-gray-50/50 border-b border-gray-200"><td colSpan={6} className="px-4 py-4"><div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm ml-10"><table className="w-full text-xs"><thead className="bg-gray-100 text-gray-500 uppercase"><tr><th className="px-4 py-2 text-left">Lote / Variante</th><th className="px-4 py-2 text-left">Origem</th><th className="px-4 py-2 text-center">Stock</th><th className="px-4 py-2 text-right">Compra</th><th className="px-4 py-2 text-right">Venda (Estimada)</th><th className="px-4 py-2 text-center">Lucro Unitário</th><th className="px-4 py-2 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{items.map(p => { const batchStock = (p.quantityBought || 0) - (p.quantitySold || 0); const salePrice = p.salePrice || p.targetSalePrice || 0; const purchasePrice = p.purchasePrice || 0; const cashbackValue = p.cashbackValue || 0; const finalProfit = salePrice - purchasePrice + cashbackValue; const hasLossBeforeCashback = salePrice < purchasePrice; const profitColor = finalProfit > 0 ? 'text-green-600' : finalProfit < 0 ? 'text-red-600' : 'text-gray-500'; return ( <tr key={p.id} className="hover:bg-blue-50 transition-colors"><td className="px-4 py-3"><div className="font-bold whitespace-normal">{new Date(p.purchaseDate).toLocaleDateString()}</div>{p.variant && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-1 rounded">{p.variant}</span>}<div className="text-[10px] text-gray-400 mt-0.5">{p.description?.substring(0, 30)}...</div></td>
