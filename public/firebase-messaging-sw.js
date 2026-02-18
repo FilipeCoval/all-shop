@@ -1,4 +1,3 @@
-
 // Scripts para background notifications
 // Atualizado para v10.14.1 para compatibilidade com a app principal
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
@@ -21,11 +20,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: 'https://i.imgur.com/nSiZKBf.png'
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // AVISO: Não chamamos self.registration.showNotification aqui.
+  // O navegador já mostra automaticamente a notificação quando o payload vem do servidor com a chave 'notification'.
+  // Se deixarmos o código antigo, aparecem duas notificações (uma do sistema, outra manual).
 });
