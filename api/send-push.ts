@@ -55,7 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } 
         else if (target === 'segment' && Array.isArray(userIds) && userIds.length > 0) {
             // Caso B: Lista de utilizadores (Ex: Lista de Espera de Stock)
-            // Limitado a lotes razoáveis. Para milhares, seria ideal dividir.
             const refs = userIds.map(id => db.collection('users').doc(id));
             const docs = await db.getAll(...refs);
             
@@ -90,20 +89,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json({ success: false, message: 'Nenhum dispositivo registado para envio.' });
         }
 
-        // 3. Enviar Mensagens (Multicast)
+        // 3. Enviar Mensagens (Multicast com Configuração WebPush correta)
+        // Icon: Logótipo pequeno da loja
+        // Image: Imagem grande do produto (se existir)
         const messagePayload = {
             notification: {
                 title: title,
                 body: body,
-                ...(image && { imageUrl: image })
             },
             tokens: tokens,
             webpush: {
+                notification: {
+                    icon: 'https://i.imgur.com/nSiZKBf.png', // Logótipo da Loja
+                    image: image || 'https://i.imgur.com/nSiZKBf.png', // Imagem do Produto ou Fallback
+                },
                 fcmOptions: {
-                    link: link || 'https://www.all-shop.net' // Abre a loja ou produto específico
+                    link: link || 'https://www.all-shop.net' // Link ao clicar
                 }
             }
         };
+
+        // Adiciona image ao payload base para compatibilidade Android Nativo (se existir app futura)
+        if (image) {
+            (messagePayload.notification as any).image = image;
+        }
 
         const response = await admin.messaging().sendEachForMulticast(messagePayload);
 
