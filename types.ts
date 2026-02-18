@@ -14,7 +14,8 @@ export interface User {
   tier?: UserTier;
   totalSpent?: number;
   wishlist?: number[];
-  fcmToken?: string; // Token para Push Notifications
+  fcmToken?: string; // Mantido para retrocompatibilidade
+  deviceTokens?: string[]; // NOVO: Lista de dispositivos ativos
   lastShareDate?: string; // Data da última partilha premiada (ISO Date string)
 }
 
