@@ -90,6 +90,8 @@ export interface Product {
   name: string;
   category: string;
   price: number;
+  originalPrice?: number; // NOVO: Preço riscado (antes do desconto)
+  promoEndsAt?: string;   // NOVO: Data fim da promoção (ISO String)
   image: string;
   description: string;
   stock: number;
@@ -123,6 +125,8 @@ export interface InventoryProduct {
   purchasePrice: number;
   targetSalePrice?: number;
   salePrice: number;
+  originalPrice?: number; // NOVO: Para edição no backoffice
+  promoEndsAt?: string;   // NOVO: Para edição no backoffice
   
   // Cashback Fields Expandidos
   cashbackValue: number;
@@ -228,3 +232,4 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
