@@ -9,7 +9,7 @@ import {
     History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale, Copy, ExternalLink, Bell, BellOff
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
-import { db, firebase, storage, requestPushPermission } from '../services/firebaseConfig';
+import { db, firebase, storage, requestPushPermission, messaging } from '../services/firebaseConfig';
 
 interface ClientAreaProps {
   user: User;
@@ -90,8 +90,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   // Notifications State
   const [notifLoading, setNotifLoading] = useState(false);
-  // FIX: Estado local para visualização imediata do token (Optimistic UI)
-  const [localToken, setLocalToken] = useState<string | undefined>(user.fcmToken);
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [currentToken, setCurrentToken] = useState<string | null>(null);
 
   const tierMap: Record<UserTier, keyof typeof LOYALTY_TIERS> = {
     'Bronze': 'BRONZE',
@@ -99,12 +99,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     'Ouro': 'GOLD'
   };
 
-  // Sincronizar estado local quando o Firebase finalmente atualizar o prop 'user'
+  // CHECK PERMISSION AND TOKEN ON MOUNT
   useEffect(() => {
-      if (user.fcmToken) {
-          setLocalToken(user.fcmToken);
-      }
-  }, [user.fcmToken]);
+      const checkStatus = async () => {
+          if (!messaging) return;
+          if (Notification.permission === 'granted') {
+              try {
+                  const token = await requestPushPermission();
+                  setCurrentToken(token);
+                  // Verifica se este token está na lista de tokens do utilizador
+                  if (token && user.deviceTokens && user.deviceTokens.includes(token)) {
+                      setIsPushEnabled(true);
+                  } else {
+                      setIsPushEnabled(false);
+                  }
+              } catch (e) { console.error("Error fetching token status", e); }
+          }
+      };
+      checkStatus();
+  }, [user.deviceTokens]); // Re-run if user data refreshes from Firebase
 
   useEffect(() => {
       if (activeTab === 'support' && user.email) {
@@ -141,31 +154,48 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     setTimeout(() => setProfileSaved(false), 3000); 
   };
 
-  const handleEnableNotifications = async () => {
+  const handleToggleNotifications = async () => {
       setNotifLoading(true);
       try {
-          const token = await requestPushPermission();
-          if (token) {
-              // 1. Atualização Visual Imediata (Aparece logo a verde)
-              setLocalToken(token);
-              
-              // 2. Atualização no Backend (Sincroniza com Firebase)
-              // FIX: Enviar APENAS o token. Se enviarmos '...user', campos undefined (ex: nif, phone vazios)
-              // irão quebrar a atualização no Firestore.
-              onUpdateUser({ fcmToken: token });
-              
-              alert("Notificações ativadas com sucesso!");
+          if (isPushEnabled) {
+              // --- DESATIVAR (Remover Token deste dispositivo) ---
+              if (currentToken) {
+                  // Remover da base de dados usando arrayRemove (atómico)
+                  await db.collection('users').doc(user.uid).update({
+                      deviceTokens: firebase.firestore.FieldValue.arrayRemove(currentToken)
+                  });
+                  
+                  // Remover também do campo legacy 'fcmToken' se for igual
+                  if (user.fcmToken === currentToken) {
+                      await db.collection('users').doc(user.uid).update({ fcmToken: firebase.firestore.FieldValue.delete() });
+                  }
+
+                  setIsPushEnabled(false);
+                  alert("Notificações desativadas neste dispositivo.");
+              }
           } else {
-              if (Notification.permission === 'denied') {
-                  alert("As notificações estão bloqueadas no seu navegador. Clique no cadeado na barra de endereço para desbloquear.");
+              // --- ATIVAR (Adicionar Token deste dispositivo) ---
+              const token = await requestPushPermission();
+              if (token) {
+                  setCurrentToken(token);
+                  // Adicionar à lista de tokens usando arrayUnion (atómico)
+                  // Isto garante que NÃO apaga os tokens de outros dispositivos (iPhone/PC)
+                  await db.collection('users').doc(user.uid).update({
+                      deviceTokens: firebase.firestore.FieldValue.arrayUnion(token),
+                      fcmToken: token // Atualiza legacy para o mais recente (opcional)
+                  });
+                  
+                  setIsPushEnabled(true);
+                  alert("Notificações ativadas com sucesso!");
               } else {
-                  // Erro silencioso ou de API Key, mas não limpamos o token se já existia
-                  console.warn("Não foi possível obter o token.");
+                  if (Notification.permission === 'denied') {
+                      alert("Bloqueado pelo navegador. Clique no cadeado na barra de endereço para permitir.");
+                  }
               }
           }
       } catch (e) {
-          console.error("Erro fatal ativação:", e);
-          alert("Ocorreu um erro inesperado ao ativar as notificações.");
+          console.error("Erro ao alterar notificações:", e);
+          alert("Ocorreu um erro. Tente novamente.");
       } finally {
           setNotifLoading(false);
       }
@@ -760,14 +790,23 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                       <div className="p-6 flex items-center justify-between">
                           <div>
                               <p className="font-bold text-gray-800">Alertas de Stock e Promoções</p>
-                              <p className="text-sm text-gray-500">Receba avisos instantâneos quando os seus produtos favoritos voltarem ao stock.</p>
+                              <p className="text-sm text-gray-500 mb-2">Receba avisos quando os seus produtos favoritos voltarem ao stock.</p>
+                              {isPushEnabled && (
+                                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-bold">
+                                      <CheckCircle size={12}/> Ativo neste dispositivo
+                                  </span>
+                              )}
                           </div>
                           <button 
-                            onClick={handleEnableNotifications} 
-                            disabled={!!localToken || notifLoading}
-                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${localToken ? 'bg-green-100 text-green-700 cursor-default' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                            onClick={handleToggleNotifications} 
+                            disabled={notifLoading}
+                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all 
+                                ${isPushEnabled 
+                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                                    : 'bg-green-600 text-white hover:bg-green-700 shadow-md'
+                                }`}
                           >
-                              {notifLoading ? <Loader2 size={16} className="animate-spin"/> : localToken ? <><CheckCircle size={16}/> Ativado</> : <><Bell size={16}/> Ativar Push</>}
+                              {notifLoading ? <Loader2 size={16} className="animate-spin"/> : isPushEnabled ? <><BellOff size={16}/> Desativar</> : <><Bell size={16}/> Ativar Agora</>}
                           </button>
                       </div>
                   </div>
