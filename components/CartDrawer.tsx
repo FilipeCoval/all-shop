@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote } from 'lucide-react';
+import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote, Sparkles, PartyPopper } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -298,13 +298,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
       <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 shrink-0">
-          <div className="flex items-center gap-2">
-              {checkoutStep !== 'cart' && checkoutStep !== 'success' && <button onClick={() => setCheckoutStep('cart')} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full dark:text-white"><ChevronLeft size={20}/></button>}
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Carrinho</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24} /></button>
-        </div>
+        {checkoutStep !== 'success' && (
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 shrink-0">
+            <div className="flex items-center gap-2">
+                {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep('cart')} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full dark:text-white"><ChevronLeft size={20}/></button>}
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Carrinho</h2>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24} /></button>
+            </div>
+        )}
 
         {/* --- TEMPORIZADOR --- */}
         {checkoutStep === 'cart' && <ReservationBanner items={cartItems} />}
@@ -477,11 +479,31 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           )}
 
           {checkoutStep === 'success' && (
-            <div className="text-center py-20 animate-fade-in">
-              <div className="bg-green-100 text-green-600 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6"><Check size={40} /></div>
-              <h3 className="text-2xl font-bold mb-2 dark:text-white">Pedido Registado!</h3>
-              <p className="text-gray-500 dark:text-gray-400">Obrigado pela sua compra. Entraremos em contacto brevemente.</p>
-              <button onClick={onClose} className="mt-8 bg-gray-900 dark:bg-gray-700 text-white px-8 py-3 rounded-xl font-bold">Voltar à Loja</button>
+            <div className="text-center py-10 animate-fade-in flex flex-col items-center justify-center h-full relative overflow-hidden">
+                {/* Efeito de Confetti (CSS Puro) */}
+                <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute top-0 left-1/4 w-2 h-2 bg-red-500 rounded-full animate-bounce delay-100"></div>
+                    <div className="absolute top-10 right-1/4 w-2 h-2 bg-blue-500 rounded-full animate-bounce delay-300"></div>
+                    <div className="absolute top-20 left-1/2 w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                </div>
+
+                <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-100 dark:shadow-none animate-bounce-slow">
+                    <PartyPopper size={48} className="text-green-600 dark:text-green-400" />
+                </div>
+                
+                <h3 className="text-3xl font-black mb-2 text-gray-900 dark:text-white">Pedido Registado!</h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto mb-8">
+                    Obrigado pela sua compra. A nossa equipa entrará em contacto brevemente.
+                </p>
+
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 w-full mb-8">
+                    <p className="text-xs text-gray-400 uppercase font-bold mb-1">Referência do Pedido</p>
+                    <p className="text-xl font-mono font-bold text-primary">{currentOrderId}</p>
+                </div>
+
+                <button onClick={onClose} className="bg-gray-900 dark:bg-gray-700 text-white px-8 py-4 rounded-xl font-bold w-full shadow-xl hover:scale-[1.02] transition-transform">
+                    Voltar à Loja
+                </button>
             </div>
           )}
         </div>
