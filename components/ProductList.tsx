@@ -131,6 +131,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const getProductBadge = (product: Product) => {
       if (product.comingSoon) return { text: 'EM BREVE', color: 'bg-purple-600', icon: <CalendarClock size={10} /> };
+      if (product.promoEndsAt && new Date(product.promoEndsAt) > new Date()) return { text: 'PROMOÇÃO', color: 'bg-red-600', icon: <Zap size={10} /> };
       if (product.badges) {
           if (product.badges.includes('NOVIDADE')) return { text: 'NOVIDADE', color: 'bg-indigo-600', icon: <Sparkles size={10} /> };
           if (product.badges.includes('MAIS VENDIDO')) return { text: 'MAIS VENDIDO', color: 'bg-orange-500', icon: <Flame size={10} /> };
@@ -154,6 +155,7 @@ const ProductList: React.FC<ProductListProps> = ({
       <div className="container mx-auto px-4">
         
         <div className="max-w-6xl mx-auto space-y-6 mb-8">
+            {/* ... (Keep existing category filter UI) ... */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 transition-colors">
                 <div className="flex flex-wrap justify-center md:justify-start gap-2">
                     {categories.map(cat => (
@@ -213,6 +215,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 const { price: displayPrice, prefix: pricePrefix } = getDisplayPrice(product);
                 const hasVariants = product.variants && product.variants.length > 0;
                 const isProcessing = processingProductIds.includes(product.id);
+                const showPromo = product.originalPrice && product.originalPrice > displayPrice;
 
                 if (viewMode === 'list') {
                     return (
@@ -238,7 +241,8 @@ const ProductList: React.FC<ProductListProps> = ({
                                 <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-4 min-w-[140px] sm:border-l border-gray-100 dark:border-gray-700 sm:pl-6">
                                     <div className="text-right">
                                         {pricePrefix && <div className="text-xs text-gray-500 dark:text-gray-400">{pricePrefix}</div>}
-                                        <div className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</div>
+                                        {showPromo && <div className="text-sm text-gray-400 line-through font-medium">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.originalPrice!)}</div>}
+                                        <div className={`text-2xl font-bold ${showPromo ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</div>
                                     </div>
                                     {hasVariants ? (
                                         <button onClick={handleProductClick(product.id)} className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 bg-secondary hover:bg-primary text-white"><Eye size={16} /> Ver Opções</button>
@@ -285,7 +289,8 @@ const ProductList: React.FC<ProductListProps> = ({
                         <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-700">
                             <div>
                                 {pricePrefix && <span className="text-xs text-gray-500 dark:text-gray-400 block">{pricePrefix}</span>}
-                                <span className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</span>
+                                {showPromo && <span className="text-xs text-gray-400 line-through font-medium block">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.originalPrice!)}</span>}
+                                <span className={`text-2xl font-bold ${showPromo ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</span>
                                 {product.comingSoon && <span className="text-xs text-purple-600 dark:text-purple-400 font-bold block uppercase">Em Breve</span>}
                             </div>
                             {hasVariants ? (
@@ -305,6 +310,7 @@ const ProductList: React.FC<ProductListProps> = ({
             </div>
         )}
 
+        {/* ... (Pagination controls remain the same) ... */}
         {filteredAndSortedProducts.length > itemsPerPage && (
             <div className="flex justify-center items-center gap-2 mt-16 animate-fade-in-up">
                 <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"><ChevronLeft size={20} /></button>
