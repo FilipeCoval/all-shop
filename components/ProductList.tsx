@@ -211,11 +211,26 @@ const ProductList: React.FC<ProductListProps> = ({
             {paginatedProducts.map((product) => {
                 const stock = getStock(product.id);
                 const isOutOfStock = stock <= 0 && stock !== 999 && !product.comingSoon;
-                const badge = getProductBadge(product);
-                const { price: displayPrice, prefix: pricePrefix } = getDisplayPrice(product);
+                
+                const promoEnded = product.promoEndsAt ? new Date(product.promoEndsAt) <= new Date() : false;
+                const badge = !promoEnded ? getProductBadge(product) : null; // Don't show promo badge if ended
+
+                // Calculate Display Price (Revert to original if promo ended)
+                let displayPrice = product.price;
+                let pricePrefix = null;
+                
                 const hasVariants = product.variants && product.variants.length > 0;
+                
+                if (promoEnded && product.originalPrice) {
+                    displayPrice = product.originalPrice;
+                } else if (hasVariants) {
+                    const minPrice = Math.min(...product.variants.map(v => v.price));
+                    displayPrice = minPrice;
+                    pricePrefix = "A partir de";
+                }
+
                 const isProcessing = processingProductIds.includes(product.id);
-                const showPromo = product.originalPrice && product.originalPrice > displayPrice;
+                const showPromo = !promoEnded && product.originalPrice && product.originalPrice > displayPrice;
 
                 if (viewMode === 'list') {
                     return (
