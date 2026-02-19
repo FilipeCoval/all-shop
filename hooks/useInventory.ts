@@ -40,8 +40,11 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   // --- FUNÇÃO DE SINCRONIZAÇÃO AUTOMÁTICA ---
   // Esta função garante que o stock público é sempre a soma de todos os lotes
-  const refreshPublicProductStock = async (publicId: number) => {
+  const refreshPublicProductStock = async (publicIdRaw: number | string) => {
       try {
+          const publicId = Number(publicIdRaw);
+          if (isNaN(publicId)) return;
+
           const idStr = publicId.toString();
           
           // 1. Buscar todos os lotes deste produto
@@ -51,8 +54,7 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           if (snapshot.empty) {
               // Se não houver lotes, coloca stock a 0 mas não apaga o produto (para manter SEO/Histórico)
-              // Se quiser apagar mesmo, seria .delete()
-              await db.collection('products_public').doc(idStr).update({ stock: 0, variants: [] }).catch(() => {});
+              await db.collection('products_public').doc(idStr).set({ stock: 0, variants: [] }, { merge: true }).catch(() => {});
               return;
           }
 
@@ -81,10 +83,10 @@ export const useInventory = (isAdmin: boolean = false) => {
           const variants = Array.from(variantsMap.values());
 
           // 2. Atualizar a Loja Pública com a SOMA TOTAL
-          await db.collection('products_public').doc(idStr).update({
+          await db.collection('products_public').doc(idStr).set({
               stock: totalStock,
               variants: variants
-          });
+          }, { merge: true });
           
           console.log(`Stock sincronizado para Produto ${publicId}: ${totalStock} unidades.`);
 
@@ -94,7 +96,8 @@ export const useInventory = (isAdmin: boolean = false) => {
   };
 
   // Função auxiliar para mapear Produto de Inventário -> Produto Público (Base)
-  const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicId: number): Product => {
+  const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicIdRaw: number | string): Product => {
+    const publicId = Number(publicIdRaw);
     const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) 
         ? inv.images[0] 
         : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23e2e8f0"/%3E%3C/svg%3E';
@@ -123,10 +126,12 @@ export const useInventory = (isAdmin: boolean = false) => {
       // 1. Adicionar ao Inventário (Privado)
       const docRef = await db.collection('products_inventory').add(product);
       
-      const publicId = product.publicProductId || Date.now();
+      const publicId = product.publicProductId !== undefined && product.publicProductId !== null 
+        ? Number(product.publicProductId) 
+        : Date.now();
       
       // 2. Atualizar ou Criar Produto Público
-      if (product.publicProductId) {
+      if (product.publicProductId !== undefined && product.publicProductId !== null) {
           // Se já existe ID público, atualizamos os dados gerais (Nome, Imagem, Descrição)
           // assumindo que o novo lote tem a info mais recente.
           const publicProduct = mapToPublicProduct(product, publicId);
@@ -135,6 +140,7 @@ export const useInventory = (isAdmin: boolean = false) => {
           // Removemos stock e variantes do update direto, deixamos o refresh calcular
           delete cleanPublicProduct.stock;
           delete cleanPublicProduct.variants;
+          delete cleanPublicProduct.id;
 
           await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
       } else {
@@ -146,12 +152,7 @@ export const useInventory = (isAdmin: boolean = false) => {
       }
 
       // 3. SINCRONIZAÇÃO AUTOMÁTICA DE STOCK
-      if (product.publicProductId) {
-          await refreshPublicProductStock(product.publicProductId);
-      } else {
-          // Se foi criado agora, o ID é novo
-          await refreshPublicProductStock(publicId);
-      }
+      await refreshPublicProductStock(publicId);
 
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
@@ -168,8 +169,8 @@ export const useInventory = (isAdmin: boolean = false) => {
       const docSnap = await db.collection('products_inventory').doc(id).get();
       const currentData = docSnap.data() as InventoryProduct;
       
-      if (currentData && currentData.publicProductId) {
-          const publicId = currentData.publicProductId;
+      if (currentData && currentData.publicProductId !== undefined && currentData.publicProductId !== null) {
+          const publicId = Number(currentData.publicProductId);
           
           // Atualiza metadados públicos (Nome, Preço, Imagens)
           const publicProduct = mapToPublicProduct(currentData, publicId);
@@ -178,6 +179,7 @@ export const useInventory = (isAdmin: boolean = false) => {
           // Removemos stock e variantes do update direto para não sobrescrever cálculo
           delete cleanPublicProduct.stock;
           delete cleanPublicProduct.variants;
+          delete cleanPublicProduct.id;
 
           await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
 
@@ -201,16 +203,17 @@ export const useInventory = (isAdmin: boolean = false) => {
       await db.collection('products_inventory').doc(id).delete();
 
       // 2. Se tinha ID público, recalcular stock (ou apagar se for o último)
-      if (data && data.publicProductId) {
+      if (data && data.publicProductId !== undefined && data.publicProductId !== null) {
+          const publicId = Number(data.publicProductId);
           const remainingInventory = await db.collection('products_inventory')
-              .where('publicProductId', '==', data.publicProductId)
+              .where('publicProductId', '==', publicId)
               .get();
               
           if (remainingInventory.empty) {
-              await db.collection('products_public').doc(data.publicProductId.toString()).delete();
+              await db.collection('products_public').doc(publicId.toString()).delete();
           } else {
               // Ainda existem outros lotes, recalcula o total
-              await refreshPublicProductStock(data.publicProductId);
+              await refreshPublicProductStock(publicId);
           }
       }
     } catch (error) {
