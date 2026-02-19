@@ -358,7 +358,54 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleMoveImage = (index: number, direction: 'left' | 'right') => { if ((direction === 'left' && index === 0) || (direction === 'right' && index === formData.images.length - 1)) return; const newImages = [...formData.images]; const targetIndex = direction === 'left' ? index - 1 : index + 1; [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setFormData(prev => ({ ...prev, images: newImages })); };
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
-  const handleSyncPublicStock = async () => { if (products.length === 0) { alert("O inventário parece estar vazio ou ainda a carregar."); return; } if (!window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return; setIsSyncingStock(true); try { const stockMap: Record<string, number> = {}; let linkedItemsCount = 0; products.forEach(p => { if (p.publicProductId) { const pid = p.publicProductId.toString(); const remaining = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0)); if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0; stockMap[pid] += remaining; linkedItemsCount++; } }); if (linkedItemsCount === 0) { alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos."); setIsSyncingStock(false); return; } const entries = Object.entries(stockMap); const batches = []; for (let i = 0; i < entries.length; i += 500) { const chunk = entries.slice(i, i + 500); const batch = db.batch(); chunk.forEach(([publicId, totalStock]) => { const ref = db.collection('products_public').doc(publicId); batch.update(ref, { stock: totalStock }); }); batches.push(batch); } await Promise.all(batches.map(b => b.commit())); alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`); } catch (error: any) { console.error("Erro ao sincronizar:", error); alert(`Ocorreu um erro ao sincronizar: ${error.message}`); } finally { setIsSyncingStock(false); } };
+  const handleSyncPublicStock = async () => {
+    if (products.length === 0) {
+      alert("O inventário parece estar vazio ou ainda a carregar.");
+      return;
+    }
+    if (!window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return;
+    
+    setIsSyncingStock(true);
+    try {
+      const stockMap: Record<string, number> = {};
+      let linkedItemsCount = 0;
+      
+      products.forEach(p => {
+        if (p.publicProductId !== undefined && p.publicProductId !== null) {
+          const pid = p.publicProductId.toString();
+          const remaining = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
+          if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0;
+          stockMap[pid] += remaining;
+          linkedItemsCount++;
+        }
+      });
+
+      if (linkedItemsCount === 0) {
+        alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos.");
+        setIsSyncingStock(false);
+        return;
+      }
+
+      const entries = Object.entries(stockMap);
+      const batches = [];
+      for (let i = 0; i < entries.length; i += 500) {
+        const chunk = entries.slice(i, i + 500);
+        const batch = db.batch();
+        chunk.forEach(([publicId, totalStock]) => {
+          const ref = db.collection('products_public').doc(publicId);
+          batch.set(ref, { stock: totalStock }, { merge: true });
+        });
+        batches.push(batch);
+      }
+      await Promise.all(batches.map(b => b.commit()));
+      alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
+    } catch (error: any) {
+      console.error("Erro ao sincronizar:", error);
+      alert(`Ocorreu um erro ao sincronizar: ${error.message}`);
+    } finally {
+      setIsSyncingStock(false);
+    }
+  };
   const handleOrderStatusChange = async (orderId: string, newStatus: string) => { try { const orderRef = db.collection('orders').doc(orderId); const orderDoc = await orderRef.get(); if(!orderDoc.exists) return; const currentOrder = orderDoc.data() as Order; const updates: any = { status: newStatus, statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: newStatus, date: new Date().toISOString(), notes: 'Estado alterado via Backoffice' }) }; if (newStatus === 'Entregue' && !currentOrder.pointsAwarded && currentOrder.userId) { const userRef = db.collection('users').doc(currentOrder.userId); await db.runTransaction(async (transaction) => { const userDoc = await transaction.get(userRef); if (!userDoc.exists) return; const userData = userDoc.data() as UserType; const tier = userData.tier || 'Bronze'; let multiplier = 1; if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier; if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier; const pointsToAward = Math.floor(currentOrder.total * multiplier); if (pointsToAward > 0) { const newHistory: PointHistory = { id: `earn-${orderId}`, date: new Date().toISOString(), amount: pointsToAward, reason: `Compra #${orderId} (Nível ${tier})`, orderId: orderId }; transaction.update(userRef, { loyaltyPoints: (userData.loyaltyPoints || 0) + pointsToAward, pointsHistory: [newHistory, ...(userData.pointsHistory || [])] }); updates.pointsAwarded = true; } }); } await orderRef.update(updates); setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o)); if (selectedOrderDetails?.id === orderId) { setSelectedOrderDetails(prev => prev ? { ...prev, ...updates } : null); } } catch (error) { console.error("Erro ao mudar estado:", error); alert("Erro ao atualizar estado da encomenda."); } };
   const handleDeleteOrder = async (orderId: string) => { if(!window.confirm("ATENÇÃO: Apagar a encomenda é irreversível. Deseja continuar?")) return; try { await db.collection('orders').doc(orderId).delete(); setAllOrders(prev => prev.filter(o => o.id !== orderId)); } catch(e) { alert("Erro ao apagar encomenda."); } };
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { alert("Erro ao gravar rastreio"); } };
