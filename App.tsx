@@ -24,6 +24,7 @@ import { auth, db, firebase, messaging } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
+import { usePendingOrders } from './hooks/usePendingOrders';
 import { notifyNewOrder } from './services/telegramNotifier.ts';
 
 // LAZY LOADING DO DASHBOARD
@@ -91,6 +92,7 @@ const App: React.FC = () => {
   const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
   const { reservations } = useStockReservations(); 
+  const { pendingOrders } = usePendingOrders(); 
 
   const sessionId = useMemo(() => {
     let id = sessionStorage.getItem('session_id');
@@ -105,11 +107,30 @@ const App: React.FC = () => {
     if (isAdmin) return getAdminStock(productId, variantName);
     const product = dbProducts.find(p => p.id === productId);
     let availableStock = product?.stock ?? 0;
+    
+    // 1. Subtrair Reservas Temporárias (Carrinhos ativos)
     const reservedQuantity = reservations
         .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
         .reduce((sum, r) => sum + r.quantity, 0);
 
-    availableStock -= reservedQuantity;
+    // 2. Subtrair Encomendas Pendentes (Ainda não processadas no inventário físico)
+    let pendingInOrders = 0;
+    pendingOrders.forEach(order => {
+        if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+                if (typeof item === 'object' && item !== null) {
+                    const orderItem = item as any; // Usar any para simplificar acesso ou cast para OrderItem
+                    if (orderItem.productId === productId) {
+                        if (!variantName || orderItem.selectedVariant === variantName) {
+                            pendingInOrders += (orderItem.quantity || 1);
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    availableStock = availableStock - reservedQuantity - pendingInOrders;
     return Math.max(0, availableStock);
   };
 
@@ -714,4 +735,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
