@@ -427,6 +427,15 @@ const App: React.FC = () => {
 
         const reservedUntil = !isAdmin ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : undefined;
 
+        // Check if promo ended
+        const promoEnded = product.promoEndsAt ? new Date(product.promoEndsAt) <= new Date() : false;
+        let finalPrice = variant?.price ?? product.price;
+        
+        // If promo ended and no variant selected (or variant price logic is handled elsewhere), revert to original
+        if (promoEnded && !variant && product.originalPrice) {
+            finalPrice = product.originalPrice;
+        }
+
         setCartItems(prev => {
           const existing = prev.find(item => item.cartItemId === cartItemId);
           if (existing) {
@@ -437,7 +446,7 @@ const App: React.FC = () => {
                 return item;
             });
           }
-          return [...prev, { ...product, price: variant?.price ?? product.price, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
+          return [...prev, { ...product, price: finalPrice, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
         });
         setIsCartOpen(true);
     } catch (err) {
@@ -705,3 +714,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
