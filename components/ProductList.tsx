@@ -143,7 +143,7 @@ const ProductList: React.FC<ProductListProps> = ({
   
   const getDisplayPrice = (product: Product) => {
       const hasVariants = product.variants && product.variants.length > 0;
-      if (hasVariants) {
+      if (hasVariants && product.variants) {
           const minPrice = Math.min(...product.variants.map(v => v.price));
           return { price: minPrice, prefix: "A partir de" };
       }
@@ -223,7 +223,7 @@ const ProductList: React.FC<ProductListProps> = ({
                 
                 if (promoEnded && product.originalPrice) {
                     displayPrice = product.originalPrice;
-                } else if (hasVariants) {
+                } else if (hasVariants && product.variants) {
                     const minPrice = Math.min(...product.variants.map(v => v.price));
                     displayPrice = minPrice;
                     pricePrefix = "A partir de";
