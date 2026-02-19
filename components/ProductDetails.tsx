@@ -307,7 +307,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                {product.comingSoon && <span className="text-purple-600 dark:text-purple-400 font-bold mb-2 uppercase tracking-wide">Pré-Lançamento</span>}
            </div>
 
-           {hasVariants && (
+           {hasVariants && product.variants && (
                <div className="mb-8">
                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">{product.variantLabel || 'Escolha uma opção:'}</label>
                    <div className="flex flex-wrap gap-3">
