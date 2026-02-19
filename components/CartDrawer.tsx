@@ -228,13 +228,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     if (checkoutStep === 'cart') setCheckoutStep('info');
     else if (checkoutStep === 'info') {
         // Validação
-        if (!userInfo.name || !userInfo.phone) {
-            alert("Por favor, preencha o Nome e Telemóvel.");
+        if (!userInfo.name || !userInfo.phone || !userInfo.email) {
+            alert("Por favor, preencha o Nome, Email e Telemóvel.");
             return;
         }
         // Se for envio, exige morada completa
-        if (deliveryMethod === 'Shipping' && (!userInfo.street || !userInfo.zip || !userInfo.city)) {
-            alert("Por favor, preencha a morada completa.");
+        if (deliveryMethod === 'Shipping' && (!userInfo.street || !userInfo.doorNumber || !userInfo.zip || !userInfo.city)) {
+            alert("Por favor, preencha a morada completa (incluindo Nº Porta).");
             return;
         }
 
@@ -433,18 +433,26 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
                   <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Dados Pessoais</label>
-                      <input type="text" placeholder="Nome Completo" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
-                      <input type="tel" placeholder="Telemóvel" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
+                      <input type="text" placeholder="Nome Completo *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
+                      <input type="email" placeholder="Email *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} />
+                      <input type="tel" placeholder="Telemóvel *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
                       <input type="text" placeholder="NIF (Opcional)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} />
                   </div>
 
                   {deliveryMethod === 'Shipping' ? (
                       <div className="animate-fade-in">
                           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Morada de Entrega</label>
-                          <input type="text" placeholder="Morada (Rua, Nº)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                              <div className="col-span-2">
+                                  <input type="text" placeholder="Rua *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
+                              </div>
+                              <div>
+                                  <input type="text" placeholder="Nº Porta *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} />
+                              </div>
+                          </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <input type="text" placeholder="Localidade" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
-                            <input type="text" placeholder="Cód. Postal" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
+                            <input type="text" placeholder="Localidade *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
+                            <input type="text" placeholder="Cód. Postal *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
                           </div>
                       </div>
                   ) : (
