@@ -104,7 +104,16 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   }, [product]);
 
   const selectedVariant = product.variants?.find(v => v.name === selectedVariantName);
-  const currentPrice = selectedVariant?.price || product.price;
+  
+  const promoEnded = product.promoEndsAt ? new Date(product.promoEndsAt) <= new Date() : false;
+
+  // Se a promoção acabou, reverte para o preço original (se existir e não for variante específica)
+  // Nota: Variantes não têm originalPrice no modelo atual, logo mantêm o preço da DB.
+  let currentPrice = selectedVariant?.price || product.price;
+  if (promoEnded && !selectedVariant && product.originalPrice) {
+      currentPrice = product.originalPrice;
+  }
+
   const currentStock = getStock(product.id, selectedVariantName);
   
   const hasVariants = product.variants && product.variants.length > 0;
@@ -114,7 +123,9 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const isUnavailable = isOutOfStock || !!product.comingSoon;
   const isLowStock = currentStock > 0 && currentStock <= 3 && currentStock !== 999 && !product.comingSoon;
   const isFavorite = wishlist.includes(product.id);
-  const showPromo = product.originalPrice && product.originalPrice > currentPrice;
+  
+  // Só mostra promoção se NÃO tiver acabado
+  const showPromo = !promoEnded && product.originalPrice && product.originalPrice > currentPrice;
 
   const relatedProducts = (allProducts || [])
     .filter(p => p.category === product.category && p.id !== product.id)
@@ -284,8 +295,8 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                     {shareFeedback === 'points_earned' && <span className="text-[10px] font-bold text-yellow-600 mt-1">+5 Pontos!</span>}
                 </div>
            </div>
-
-           {product.promoEndsAt && <CountdownTimer targetDate={product.promoEndsAt} />}
+           
+           {product.promoEndsAt && !promoEnded && <CountdownTimer targetDate={product.promoEndsAt} />}
 
            <div className="flex items-end gap-3 mb-6">
                <span className={`text-4xl font-bold ${showPromo ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(currentPrice)}</span>
