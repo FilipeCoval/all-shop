@@ -236,3 +236,41 @@ export const extractSerialNumberFromImage = async (base64Image: string): Promise
         throw error;
     }
 };
+
+// --- NOVA FUNÇÃO: Gerador de Conteúdo para Produtos ---
+export const generateProductContent = async (name: string, category: string): Promise<{ description: string, features: string[] } | null> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const prompt = `
+        Atue como um Copywriter Sénior de E-commerce especializado em tecnologia (gadgets, TV boxes, eletrónica).
+        
+        TAREFA: Criar conteúdo de venda persuasivo e optimizado para SEO para o seguinte produto:
+        - Nome: ${name}
+        - Categoria: ${category}
+        - Loja: All-Shop (Focada em Portugal, stock nacional, garantia 3 anos).
+
+        RETORNE APENAS UM JSON (sem markdown, sem backticks) com este formato exato:
+        {
+            "description": "Um parágrafo envolvente (max 300 caracteres) que destaque os benefícios, use emojis e crie desejo. Português de Portugal.",
+            "features": ["Feature Curta 1", "Feature Curta 2", "Feature Curta 3", "Feature Curta 4"]
+        }
+        
+        As features devem ser curtas (max 5 palavras cada) e destacar specs técnicas ou benefícios diretos.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+        });
+        
+        const jsonText = response.text;
+        if (!jsonText) return null;
+        
+        return JSON.parse(jsonText);
+    } catch (e) {
+        console.error("Gemini Content Gen Error:", e);
+        return null;
+    }
+};
