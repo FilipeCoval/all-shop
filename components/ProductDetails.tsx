@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, Review, User, ProductVariant, PointHistory } from '../types';
+import { Product, Review, User, ProductVariant, PointHistory, Order } from '../types';
 import { 
     ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
     Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
@@ -65,10 +65,11 @@ interface ProductDetailsProps {
   onToggleWishlist: (id: number) => void;
   isProcessing?: boolean;
   onUpdateUser?: (user: Partial<User>) => void; // Nova Prop
+  orders?: Order[]; // Nova Prop: Histórico de encomendas para validar compra
 }
 
 const ProductDetails: React.FC<ProductDetailsProps> = ({ 
-  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist, isProcessing = false, onUpdateUser
+  product, allProducts, onAddToCart, reviews, onAddReview, currentUser, getStock, wishlist, onToggleWishlist, isProcessing = false, onUpdateUser, orders = []
 }) => {
   const [selectedImage, setSelectedImage] = useState<string>(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
@@ -77,6 +78,17 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
   const [alertStatus, setAlertStatus] = useState<'idle' | 'loading' | 'success'>('idle');
 
+  // Verifica se o utilizador comprou este produto
+  const hasPurchased = useMemo(() => {
+      if (!currentUser) return false;
+      return orders.some(order => 
+          (order.status === 'Entregue' || order.status === 'Enviado' || order.status === 'Levantamento em Loja') &&
+          order.items.some(item => {
+              if (typeof item === 'string') return false; // Ignora itens antigos (strings)
+              return item.productId === product.id;
+          })
+      );
+  }, [orders, product.id, currentUser]);
 
   useEffect(() => {
     // Não seleciona nenhuma variante por defeito, forçando o utilizador a escolher.
@@ -424,7 +436,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
         </div>
       </div>
 
-      <ReviewSection productId={product.id} reviews={reviews} onAddReview={onAddReview} currentUser={currentUser} />
+      <ReviewSection productId={product.id} reviews={reviews} onAddReview={onAddReview} currentUser={currentUser} hasPurchased={hasPurchased} />
 
       {product.category === 'TV & Streaming' && (
           <div className="mt-20 border-t border-gray-100 dark:border-gray-700 pt-16">
