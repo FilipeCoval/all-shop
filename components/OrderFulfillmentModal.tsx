@@ -162,7 +162,61 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
             const adminId = auth.currentUser?.uid || 'admin';
             const adminEmail = auth.currentUser?.email || 'admin';
 
-            // ... (rest of the logic)
+            // 1. Atualizar Inventário (Lotes)
+            const scansByBatch: Record<string, string[]> = {};
+            scannedItems.forEach(item => {
+                if (!scansByBatch[item.inventoryProductId]) scansByBatch[item.inventoryProductId] = [];
+                scansByBatch[item.inventoryProductId].push(item.serialNumber);
+            });
+
+            for (const [batchId, serials] of Object.entries(scansByBatch)) {
+                const batchRef = db.collection('products_inventory').doc(batchId);
+                const batchDoc = inventoryProducts.find(p => p.id === batchId);
+                
+                if (!batchDoc) throw new Error(`Lote ${batchId} não encontrado.`);
+
+                const newSold = (batchDoc.quantitySold || 0) + serials.length;
+                const newStatus: ProductStatus = newSold >= batchDoc.quantityBought ? 'SOLD' : 'PARTIAL';
+                
+                const updatedUnits = (batchDoc.units || []).map(u => {
+                    if (serials.includes(u.id)) {
+                        return { ...u, status: 'SOLD' as const, soldAt: timestamp, soldToOrder: order.id };
+                    }
+                    return u;
+                });
+
+                const saleRecord: SaleRecord = {
+                    id: `FULFILL-${order.id}-${Date.now()}`,
+                    date: timestamp,
+                    quantity: serials.length,
+                    unitPrice: batchDoc.salePrice || 0,
+                    notes: `Expedição Encomenda #${order.id}`
+                };
+
+                batch.update(batchRef, {
+                    quantitySold: newSold,
+                    status: newStatus,
+                    units: updatedUnits,
+                    salesHistory: firebase.firestore.FieldValue.arrayUnion(saleRecord)
+                });
+            }
+
+            // 2. Criar Stock Movement
+            const movementRef = db.collection('stock_movements').doc();
+            const movementData: StockMovement = {
+                id: movementRef.id,
+                type: 'SALE',
+                orderId: order.id,
+                items: orderItems.map(item => ({
+                    productId: item.productId.toString(),
+                    quantity: item.quantity,
+                    serialNumbers: scannedItems.filter(s => s.orderItemId === item.uniqueId).map(s => s.serialNumber)
+                })),
+                totalValue: order.total,
+                createdAt: timestamp,
+                createdBy: adminEmail
+            };
+            batch.set(movementRef, movementData);
 
             // 3. Atualizar Encomenda
             const orderRef = db.collection('orders').doc(order.id);
