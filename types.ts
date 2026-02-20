@@ -223,6 +223,7 @@ export interface PointHistory {
 export interface Review {
     id: string;
     productId: number;
+    userId?: string; // ID do utilizador que fez a review
     userName: string;
     rating: number;
     comment: string;
