@@ -31,12 +31,13 @@ export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Reclamação' | 'Devolvido';
+  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Reclamação' | 'Devolvido' | 'Levantamento em Loja';
   items: (OrderItem | string)[];
   userId?: string | null;
   shippingInfo: UserCheckoutInfo;
   trackingNumber?: string;
   pointsAwarded?: boolean;
+  stockDeducted?: boolean;
   cancellationReason?: string;
   statusHistory?: StatusHistory[];
   returnRequest?: {
@@ -44,6 +45,25 @@ export interface Order {
       reason: string;
       status: 'Pendente' | 'Aprovado' | 'Rejeitado';
   };
+  // Fulfillment Fields
+  fulfilledAt?: string | null;
+  fulfilledBy?: string | null;
+  serialNumbersUsed?: string[];
+  fulfillmentStatus?: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+}
+
+export interface StockMovement {
+  id: string;
+  type: "SALE" | "PURCHASE" | "ADJUSTMENT" | "RETURN";
+  orderId: string | null;
+  items: {
+    productId: string;
+    serialNumbers: string[];
+    quantity: number;
+  }[];
+  totalValue: number;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface OrderItem {
