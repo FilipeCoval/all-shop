@@ -19,7 +19,7 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import ClientArea from './components/ClientArea';
 import InstallPrompt from './components/InstallPrompt';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
-import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory } from './types';
+import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, OrderItem } from './types';
 import { auth, db, firebase, messaging } from './services/firebaseConfig';
 import { useStock } from './hooks/useStock'; 
 import { usePublicProducts } from './hooks/usePublicProducts';
@@ -534,16 +534,35 @@ const App: React.FC = () => {
 
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
-          await db.collection("orders").doc(newOrder.id).set(newOrder);
+          const batch = db.batch();
+          
+          // 1. Guardar a encomenda
+          const orderRef = db.collection("orders").doc(newOrder.id);
+          batch.set(orderRef, newOrder);
+
+          // 2. Limpar reservas do carrinho
           const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
           if (!reservationQuery.empty) {
-            const batch = db.batch();
             reservationQuery.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
           }
+
+          // 3. Decrementar stock público imediatamente para outros utilizadores verem
+          for (const item of newOrder.items) {
+              if (typeof item === 'object' && item !== null) {
+                  const orderItem = item as OrderItem;
+                  const pRef = db.collection('products_public').doc(orderItem.productId.toString());
+                  batch.update(pRef, {
+                      stock: firebase.firestore.FieldValue.increment(-(orderItem.quantity || 1))
+                  });
+              }
+          }
+
+          await batch.commit();
+
           setOrders(prev => [newOrder, ...prev]);
           setCartItems([]);
           notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
+          
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
@@ -615,7 +634,7 @@ const App: React.FC = () => {
         const id = parseInt(route.split('/')[1]);
         const product = dbProducts.find(p => p.id === id);
         // Passar onUpdateUser para ProductDetails para atualizar pontos de partilha
-        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} onUpdateUser={handleUpdateUser} />;
+        if (product) return <ProductDetails product={product} allProducts={dbProducts} onAddToCart={addToCart} reviews={reviews} onAddReview={handleAddReview} currentUser={user} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} isProcessing={processingProductIds.includes(product.id)} onUpdateUser={handleUpdateUser} orders={orders} />;
     }
     switch (route) {
         case '#about': return <About />;
