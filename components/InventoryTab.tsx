@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, Edit2, Trash2, RefreshCw, Camera, BrainCircuit, UploadCloud, Plus, 
-  ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Bot, Sparkles, Loader2, Layers, BellRing
+  ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Loader2, Layers, BellRing, Info, X
 } from 'lucide-react';
-import { InventoryProduct } from '../types';
-import { getInventoryAnalysis } from '../services/geminiService';
+import { InventoryProduct, Order } from '../types';
 import KpiCard from './KpiCard';
 
 interface InventoryTabProps {
   products: InventoryProduct[];
+  pendingOrders: Order[];
   stats: {
     totalInvested: number;
     realizedRevenue: number;
@@ -47,7 +47,7 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
 const InventoryTab: React.FC<InventoryTabProps> = ({
-  products, stats, onlineUsersCount, stockAlerts,
+  products, pendingOrders, stats, onlineUsersCount, stockAlerts,
   onEdit, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
@@ -62,10 +62,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'SOLD'>('ALL');
   const [cashbackFilter, setCashbackFilter] = useState<'ALL' | 'PENDING' | 'RECEIVED' | 'NONE'>('ALL');
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
-  
-  const [aiQuery, setAiQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [selectedReservationProduct, setSelectedReservationProduct] = useState<{ name: string, orders: { id: string, customer: string, qty: number }[] } | null>(null);
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -89,19 +86,6 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => prev.includes(groupId) ? prev.filter(id => id !== groupId) : [...prev, groupId]);
-  };
-
-  const handleAskAi = async () => {
-    if (!aiQuery.trim()) return;
-    setIsAiLoading(true);
-    setAiResponse(null);
-    try {
-      setAiResponse(await getInventoryAnalysis(products, aiQuery));
-    } catch (e) {
-      setAiResponse("Não foi possível processar o pedido.");
-    } finally {
-      setIsAiLoading(false);
-    }
   };
 
   const handleCopy = (text: string) => {
@@ -128,38 +112,6 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                     <span className="text-xs text-gray-400 font-normal mb-1">visitantes</span>
                 </div>
             </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 mb-8 animate-fade-in">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bot size={20} /></div>
-                <div>
-                    <h3 className="font-bold text-gray-900">Consultor Estratégico IA</h3>
-                    <p className="text-xs text-gray-500">Pergunte sobre promoções, bundles ou como vender stock parado.</p>
-                </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-                <input 
-                    type="text" 
-                    value={aiQuery} 
-                    onChange={(e) => setAiQuery(e.target.value)} 
-                    placeholder="Ex: Como posso vender as TV Boxes H96 mais rápido sem perder dinheiro? Sugere bundles." 
-                    className="flex-1 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
-                    onKeyDown={(e) => e.key === 'Enter' && handleAskAi()} 
-                />
-                <button 
-                    onClick={handleAskAi} 
-                    disabled={isAiLoading || !aiQuery.trim()} 
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                    {isAiLoading ? 'A pensar...' : <><Sparkles size={18} /> Gerar</>}
-                </button>
-            </div>
-            {aiResponse && (
-                <div className="mt-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-gray-700 text-sm leading-relaxed whitespace-pre-line animate-fade-in-down">
-                    {aiResponse}
-                </div>
-            )}
         </div>
         
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -232,7 +184,30 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                         {groupedInventory.map(([groupId, items]) => {
                             const mainItem = items[0]; 
                             const isExpanded = expandedGroups.includes(groupId);
-                            const totalStock = items.reduce((acc, i) => acc + Math.max(0, (i.quantityBought || 0) - (i.quantitySold || 0)), 0);
+                            const totalPhysicalStock = items.reduce((acc, i) => acc + Math.max(0, (i.quantityBought || 0) - (i.quantitySold || 0)), 0);
+                            
+                            // Calcular stock pendente em encomendas para este grupo
+                            let pendingInOrders = 0;
+                            pendingOrders.forEach(order => {
+                                if (order.items && Array.isArray(order.items)) {
+                                    order.items.forEach(item => {
+                                        if (typeof item === 'object' && item !== null) {
+                                            const orderItem = item as any;
+                                            if (orderItem.productId === mainItem.publicProductId) {
+                                                // Se o lote tem variante, só descontamos se a encomenda for para essa variante
+                                                // Se o lote não tem variante (genérico), descontamos tudo
+                                                const itemVariant = (orderItem.selectedVariant || '').trim().toLowerCase();
+                                                const batchVariant = (mainItem.variant || '').trim().toLowerCase();
+                                                if (batchVariant === '' || itemVariant === batchVariant) {
+                                                    pendingInOrders += (orderItem.quantity || 1);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+
+                            const availableStock = Math.max(0, totalPhysicalStock - pendingInOrders);
                             
                             const alertsCount = mainItem.publicProductId 
                                 ? stockAlerts.filter(a => a.productId === mainItem.publicProductId).length
@@ -258,16 +233,41 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-4 py-4 text-center">
-                                            <span className={`font-bold px-2 py-1 rounded ${totalStock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {totalStock} un.
-                                            </span>
+                                            <div className="flex flex-col items-center">
+                                                <span className={`font-bold px-2 py-1 rounded text-sm ${availableStock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {availableStock} un.
+                                                </span>
+                                                {pendingInOrders > 0 && (
+                                                    <button 
+                                                       onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           const ordersReserving: any[] = [];
+                                                           pendingOrders.forEach(o => {
+                                                               const item = o.items.find((i: any) => i.productId === mainItem.publicProductId);
+                                                               if (item && typeof item === 'object') {
+                                                                   ordersReserving.push({
+                                                                       id: o.id,
+                                                                       customer: o.shippingInfo?.name || 'N/A',
+                                                                       qty: (item as any).quantity || 1
+                                                                   });
+                                                               }
+                                                           });
+                                                           setSelectedReservationProduct({ name: mainItem.name, orders: ordersReserving });
+                                                       }}
+                                                       className="text-[10px] text-orange-600 font-bold mt-1 hover:underline flex items-center gap-0.5"
+                                                    >
+                                                        ({totalPhysicalStock} físico - {pendingInOrders} reserv.)
+                                                        <Info size={10} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-4 text-center">
                                             {mainItem.comingSoon ? (
                                                 <span className="text-purple-600 font-bold text-xs uppercase bg-purple-100 px-2 py-1 rounded">Em Breve</span>
                                             ) : (
-                                                <span className={`text-xs font-bold uppercase ${totalStock > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                    {totalStock > 0 ? 'Disponível' : 'Esgotado'}
+                                                <span className={`text-xs font-bold uppercase ${availableStock > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                    {availableStock > 0 ? 'Disponível' : 'Esgotado'}
                                                 </span>
                                             )}
                                         </td>
@@ -409,11 +409,6 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                                                             )}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-right flex justify-end gap-1">
-                                                                            {batchStock > 0 && (
-                                                                                <button onClick={() => onSale(p)} className="text-green-600 hover:bg-green-50 p-1.5 rounded bg-white border border-green-200 shadow-sm" title="Vender deste lote">
-                                                                                    <DollarSign size={14}/>
-                                                                                </button>
-                                                                            )}
                                                                             <button onClick={() => onEdit(p)} className="text-gray-500 hover:bg-gray-100 p-1.5 rounded bg-white border border-gray-200 shadow-sm" title="Editar este lote">
                                                                                 <Edit2 size={14}/>
                                                                             </button>
@@ -437,6 +432,45 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                 </table>
             </div>
         </div>
+        {/* Modal de Detalhes de Reservas */}
+        {selectedReservationProduct && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-orange-50">
+                        <h3 className="font-bold text-orange-900 flex items-center gap-2">
+                            <Package size={18} /> Reservas: {selectedReservationProduct.name}
+                        </h3>
+                        <button onClick={() => setSelectedReservationProduct(null)} className="text-gray-400 hover:text-gray-600">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="p-4 max-h-[60vh] overflow-y-auto">
+                        <p className="text-xs text-gray-500 mb-4">Estas encomendas têm este produto mas o stock ainda não foi descontado oficialmente no inventário físico.</p>
+                        <div className="space-y-2">
+                            {selectedReservationProduct.orders.map((order, idx) => (
+                                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                    <div>
+                                        <div className="text-sm font-bold text-gray-900">#{order.id}</div>
+                                        <div className="text-xs text-gray-500">{order.customer}</div>
+                                    </div>
+                                    <div className="bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold text-xs">
+                                        {order.qty} un.
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                        <button 
+                            onClick={() => setSelectedReservationProduct(null)}
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-100"
+                        >
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
