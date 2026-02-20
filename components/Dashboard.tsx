@@ -17,6 +17,7 @@ import KpiCard from './KpiCard';
 import InventoryTab from './InventoryTab';
 import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
+import OrderFulfillmentModal from './OrderFulfillmentModal';
 
 // --- HELPERS ---
 const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -53,6 +54,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
+  const [isFulfillmentModalOpen, setIsFulfillmentModalOpen] = useState(false);
+  const [selectedOrderForFulfillment, setSelectedOrderForFulfillment] = useState<Order | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [isCouponsLoading, setIsCouponsLoading] = useState(false);
   const [newCoupon, setNewCoupon] = useState<Coupon>({ code: '', type: 'PERCENTAGE', value: 10, minPurchase: 0, isActive: true, usageCount: 0, validProductId: undefined });
@@ -159,7 +162,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const selectedPublicProductVariants = useMemo(() => { if (!formData.publicProductId) return []; const prod = publicProductsList.find(p => p.id === Number(formData.publicProductId)); return prod?.variants || []; }, [formData.publicProductId, publicProductsList]);
   const [saleForm, setSaleForm] = useState({ quantity: '1', unitPrice: '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: '', supplierOrderId: '' });
-  const pendingOrders = useMemo(() => allOrders.filter(o => ['Processamento', 'Pago'].includes(o.status)), [allOrders]);
+  const pendingOrders = useMemo(() => allOrders.filter(o => {
+    const orderDate = new Date(o.date);
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+
+    const isExplicitlyPending = o.stockDeducted === false;
+    const isOldButStuck = o.stockDeducted === undefined && 
+                         ['Processamento', 'Pago'].includes(o.status) && 
+                         orderDate > thirtyDaysAgo;
+    
+    return isExplicitlyPending || isOldButStuck;
+  }), [allOrders]);
   
   const groupedCashback = useMemo(() => {
       const pendingItems = products.filter(p => p.cashbackValue > 0 && (cashbackManagerFilter === 'ALL' || p.cashbackStatus === cashbackManagerFilter));
@@ -348,7 +362,38 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
   const handleDeleteSale = async (saleId: string) => { if(!editingId || !window.confirm("Anular venda e repor stock?")) return; const product = products.find(p => p.id === editingId); if(!product) return; const sale = product.salesHistory?.find(s => s.id === saleId); if(!sale) return; const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity); const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || []; const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; try { await updateProduct(editingId, { quantitySold: newSold, salesHistory: newHistory, status: newStatus as ProductStatus }); } catch(e) { alert("Erro ao anular venda."); } };
-  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes }; try { const currentSold = (selectedProductForSale.quantitySold || 0) + qty; const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL'; let updatedUnits = selectedProductForSale.units || []; if (selectedUnitsForSale.length > 0) { updatedUnits = updatedUnits.map(u => selectedUnitsForSale.includes(u.id) ? { ...u, status: 'SOLD' as const } : u); } await updateProduct(selectedProductForSale.id, { quantitySold: currentSold, salesHistory: [...(selectedProductForSale.salesHistory || []), newSale], status: status as ProductStatus, units: updatedUnits }); if (linkedOrderId && selectedUnitsForSale.length > 0) { const orderRef = db.collection('orders').doc(linkedOrderId); const orderDoc = await orderRef.get(); if (orderDoc.exists) { const orderData = orderDoc.data() as Order; const updatedItems = orderData.items.map((item: any) => { const isMatch = item.productId === selectedProductForSale.publicProductId && ((!item.selectedVariant && !selectedProductForSale.variant) || (item.selectedVariant === selectedProductForSale.variant)); if (isMatch) { const currentSn = item.serialNumbers || []; return { ...item, serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] }; } return item; }); await orderRef.update({ items: updatedItems }); } } setIsSaleModalOpen(false); } catch(e) { console.error(e); alert("Erro ao registar venda."); } };
+  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes };    try { 
+        const currentSold = (selectedProductForSale.quantitySold || 0) + qty; 
+        const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL'; 
+        let updatedUnits = selectedProductForSale.units || []; 
+        if (selectedUnitsForSale.length > 0) { 
+            updatedUnits = updatedUnits.map(u => selectedUnitsForSale.includes(u.id) ? { ...u, status: 'SOLD' as const } : u); 
+        } 
+        await updateProduct(selectedProductForSale.id, { quantitySold: currentSold, salesHistory: [...(selectedProductForSale.salesHistory || []), newSale], status: status as ProductStatus, units: updatedUnits }); 
+        if (linkedOrderId) { 
+            const orderRef = db.collection('orders').doc(linkedOrderId); 
+            const orderDoc = await orderRef.get(); 
+            if (orderDoc.exists) { 
+                const orderData = orderDoc.data() as Order; 
+                const updatedItems = orderData.items.map((item: any) => { 
+                    const isMatch = item.productId === selectedProductForSale.publicProductId && ((!item.selectedVariant && !selectedProductForSale.variant) || (item.selectedVariant === selectedProductForSale.variant)); 
+                    if (isMatch && selectedUnitsForSale.length > 0) { 
+                        const currentSn = item.serialNumbers || []; 
+                        return { ...item, serialNumbers: [...new Set([...currentSn, ...selectedUnitsForSale])] }; 
+                    } 
+                    return item; 
+                }); 
+                await orderRef.update({ items: updatedItems, stockDeducted: true }); 
+            } 
+        } 
+        setIsSaleModalOpen(false); 
+        // Sincronização automática silenciosa
+        setTimeout(() => handleSyncPublicStock(true), 1000);
+    } catch(e) { 
+        console.error(e); 
+        alert("Erro ao registar venda."); 
+    } 
+  };
   
   // Other small handlers (rest of file remains)
   const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
@@ -358,12 +403,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleMoveImage = (index: number, direction: 'left' | 'right') => { if ((direction === 'left' && index === 0) || (direction === 'right' && index === formData.images.length - 1)) return; const newImages = [...formData.images]; const targetIndex = direction === 'left' ? index - 1 : index + 1; [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setFormData(prev => ({ ...prev, images: newImages })); };
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
-  const handleSyncPublicStock = async () => {
+  const handleSyncPublicStock = async (silent = false) => {
     if (products.length === 0) {
-      alert("O inventário parece estar vazio ou ainda a carregar.");
+      if (!silent) alert("O inventário parece estar vazio ou ainda a carregar.");
       return;
     }
-    if (!window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return;
+    if (!silent && !window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return;
     
     setIsSyncingStock(true);
     try {
@@ -373,15 +418,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       products.forEach(p => {
         if (p.publicProductId !== undefined && p.publicProductId !== null) {
           const pid = p.publicProductId.toString();
-          const remaining = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
+          const physical = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
+          
+          // Calcular reservas para este lote específico (se possível) ou produto
+          let pending = 0;
+          pendingOrders.forEach(order => {
+              order.items.forEach((item: any) => {
+                  if (item.productId === p.publicProductId) {
+                      const itemVariant = (item.selectedVariant || '').trim().toLowerCase();
+                      const batchVariant = (p.variant || '').trim().toLowerCase();
+                      if (batchVariant === '' || itemVariant === batchVariant) {
+                          pending += (item.quantity || 1);
+                      }
+                  }
+              });
+          });
+
+          const available = Math.max(0, physical - pending);
+
           if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0;
-          stockMap[pid] += remaining;
+          stockMap[pid] += available;
           linkedItemsCount++;
         }
       });
 
       if (linkedItemsCount === 0) {
-        alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos.");
+        if (!silent) alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos.");
         setIsSyncingStock(false);
         return;
       }
@@ -398,10 +460,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         batches.push(batch);
       }
       await Promise.all(batches.map(b => b.commit()));
-      alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
+      if (!silent) alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
     } catch (error: any) {
       console.error("Erro ao sincronizar:", error);
-      alert(`Ocorreu um erro ao sincronizar: ${error.message}`);
+      if (!silent) alert(`Ocorreu um erro ao sincronizar: ${error.message}`);
     } finally {
       setIsSyncingStock(false);
     }
@@ -557,12 +619,51 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {/* ... Tab Contents ... */}
         {activeTab === 'inventory' && (
             <InventoryTab 
-                products={products} stats={stats} onlineUsersCount={onlineUsers.length} stockAlerts={stockAlerts} onEdit={handleEdit} onCreateVariant={handleCreateVariant} onDeleteGroup={handleDeleteGroup} onSale={openSaleModal} onDelete={handleDelete} onSyncStock={handleSyncPublicStock} isSyncingStock={isSyncingStock} onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} onOpenCalculator={() => setIsCalculatorOpen(true)} onImport={() => {}} isImporting={isImporting} onRecalculate={() => {}} isRecalculating={isRecalculating} onAddNew={handleAddNew} onOpenInvestedModal={handleOpenInvestedModal} onOpenRevenueModal={handleOpenRevenueModal} onOpenProfitModal={handleOpenProfitModal} onOpenCashbackManager={handleOpenCashbackManager} onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId || null, p.name, 999)} copyToClipboard={copyToClipboard} searchTerm={inventorySearchTerm} onSearchChange={setInventorySearchTerm}
+                products={products} 
+                pendingOrders={pendingOrders}
+                stats={stats} 
+                onlineUsersCount={onlineUsers.length} 
+                stockAlerts={stockAlerts} 
+                onEdit={handleEdit} 
+                onCreateVariant={handleCreateVariant} 
+                onDeleteGroup={handleDeleteGroup} 
+                onSale={openSaleModal} 
+                onDelete={handleDelete} 
+                onSyncStock={handleSyncPublicStock} 
+                isSyncingStock={isSyncingStock} 
+                onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} 
+                onOpenCalculator={() => setIsCalculatorOpen(true)} 
+                onImport={() => {}} 
+                isImporting={isImporting} 
+                onRecalculate={() => {}} 
+                isRecalculating={isRecalculating} 
+                onAddNew={handleAddNew} 
+                onOpenInvestedModal={handleOpenInvestedModal} 
+                onOpenRevenueModal={handleOpenRevenueModal} 
+                onOpenProfitModal={handleOpenProfitModal} 
+                onOpenCashbackManager={handleOpenCashbackManager} 
+                onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} 
+                onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId || null, p.name, 999)} 
+                copyToClipboard={copyToClipboard} 
+                searchTerm={inventorySearchTerm} 
+                onSearchChange={setInventorySearchTerm}
             />
         )}
         
         {activeTab === 'orders' && (
-            <OrdersTab orders={allOrders} inventoryProducts={products} isAdmin={isAdmin} onStatusChange={handleOrderStatusChange} onDeleteOrder={handleDeleteOrder} onViewDetails={setSelectedOrderDetails} onOpenManualOrder={() => setIsManualOrderModalOpen(true)} />
+            <OrdersTab 
+                orders={allOrders} 
+                inventoryProducts={products} 
+                isAdmin={isAdmin} 
+                onStatusChange={handleOrderStatusChange} 
+                onDeleteOrder={handleDeleteOrder} 
+                onViewDetails={setSelectedOrderDetails} 
+                onOpenManualOrder={() => setIsManualOrderModalOpen(true)}
+                onOpenFulfillment={(order) => {
+                    setSelectedOrderForFulfillment(order);
+                    setIsFulfillmentModalOpen(true);
+                }}
+            />
         )}
         
         {activeTab === 'clients' && (
@@ -830,7 +931,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       
       {/* ... (Keep existing modals) ... */}
       <ProfitCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
-      <ManualOrderModal isOpen={isManualOrderModalOpen} onClose={() => setIsManualOrderModalOpen(false)} publicProducts={publicProductsList} inventoryProducts={products} onConfirm={async (order, deductions) => { try { await db.collection('orders').doc(order.id).set(order); for (const ded of deductions) { const product = products.find(p => p.id === ded.batchId); if (product) { const newSold = (product.quantitySold || 0) + ded.quantity; const status: ProductStatus = newSold >= product.quantityBought ? 'SOLD' : 'PARTIAL'; await updateProduct(product.id, { quantitySold: newSold, status: status, salesHistory: [...(product.salesHistory || []), ded.saleRecord] }); } } setIsManualOrderModalOpen(false); alert("Encomenda manual registada com sucesso!"); } catch (error) { console.error("Erro ao criar encomenda manual:", error); alert("Erro ao processar a encomenda."); } }} />
+      <ManualOrderModal isOpen={isManualOrderModalOpen} onClose={() => setIsManualOrderModalOpen(false)} publicProducts={publicProductsList} inventoryProducts={products} onConfirm={async (order, deductions) => { try { await db.collection('orders').doc(order.id).set(order); for (const ded of deductions) { const product = products.find(p => p.id === ded.batchId); if (product) { const newSold = (product.quantitySold || 0) + ded.quantity; const status: ProductStatus = newSold >= product.quantityBought ? 'SOLD' : 'PARTIAL'; await updateProduct(product.id, { quantitySold: newSold, status: status, salesHistory: [...(product.salesHistory || []), ded.saleRecord] }); } } setIsManualOrderModalOpen(false); alert("Encomenda manual registada com sucesso!"); setTimeout(() => handleSyncPublicStock(true), 1000); } catch (error) { console.error("Erro ao criar encomenda manual:", error); alert("Erro ao processar a encomenda."); } }} />
+      {isFulfillmentModalOpen && selectedOrderForFulfillment && (
+          <OrderFulfillmentModal 
+              order={selectedOrderForFulfillment}
+              inventoryProducts={products}
+              onClose={() => setIsFulfillmentModalOpen(false)}
+              onSuccess={() => {
+                  setIsFulfillmentModalOpen(false);
+                  alert("Encomenda expedida com sucesso!");
+              }}
+          />
+      )}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
       {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}/><div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"><div>
       
