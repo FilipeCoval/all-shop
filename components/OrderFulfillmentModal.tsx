@@ -157,91 +157,132 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
         setError(null);
 
         try {
-            const batch = db.batch();
-            const timestamp = new Date().toISOString();
-            const adminId = auth.currentUser?.uid || 'admin';
-            const adminEmail = auth.currentUser?.email || 'admin';
+            await db.runTransaction(async (transaction) => {
+                const timestamp = new Date().toISOString(); // Mantemos ISO para compatibilidade com interfaces atuais, mas validado na transação
+                const adminId = auth.currentUser?.uid || 'admin';
+                const adminEmail = auth.currentUser?.email || 'admin';
 
-            // 1. Atualizar Inventário (Lotes)
-            const scansByBatch: Record<string, string[]> = {};
-            scannedItems.forEach(item => {
-                if (!scansByBatch[item.inventoryProductId]) scansByBatch[item.inventoryProductId] = [];
-                scansByBatch[item.inventoryProductId].push(item.serialNumber);
-            });
+                // 1. Leituras (Reads) - Têm de ser feitas ANTES de qualquer escrita
+                const orderRef = db.collection('orders').doc(order.id);
+                const orderDoc = await transaction.get(orderRef);
 
-            for (const [batchId, serials] of Object.entries(scansByBatch)) {
-                const batchRef = db.collection('products_inventory').doc(batchId);
-                const batchDoc = inventoryProducts.find(p => p.id === batchId);
+                if (!orderDoc.exists) {
+                    throw new Error("A encomenda não existe.");
+                }
+
+                const currentOrder = orderDoc.data() as Order;
+                if (currentOrder.fulfillmentStatus === 'COMPLETED') {
+                    throw new Error("Esta encomenda já foi expedida anteriormente.");
+                }
+
+                // Identificar e ler todos os lotes necessários
+                const batchIds = Array.from(new Set(scannedItems.map(i => i.inventoryProductId)));
+                const batchDocs: Record<string, firebase.firestore.DocumentSnapshot> = {};
                 
-                if (!batchDoc) throw new Error(`Lote ${batchId} não encontrado.`);
+                for (const batchId of batchIds) {
+                    const ref = db.collection('products_inventory').doc(batchId);
+                    const doc = await transaction.get(ref);
+                    if (!doc.exists) throw new Error(`Lote ${batchId} não encontrado no sistema.`);
+                    batchDocs[batchId] = doc;
+                }
 
-                const newSold = (batchDoc.quantitySold || 0) + serials.length;
-                const newStatus: ProductStatus = newSold >= batchDoc.quantityBought ? 'SOLD' : 'PARTIAL';
-                
-                const updatedUnits = (batchDoc.units || []).map(u => {
-                    if (serials.includes(u.id)) {
-                        return { ...u, status: 'SOLD' as const, soldAt: timestamp, soldToOrder: order.id };
+                // 2. Processamento e Validações em Memória
+                const updatesByBatch: Record<string, { newSold: number, newStatus: ProductStatus, updatedUnits: any[] }> = {};
+                const stockMovementItems: any[] = [];
+
+                // Agrupar scans por lote para processamento
+                const scansByBatch: Record<string, string[]> = {};
+                scannedItems.forEach(item => {
+                    if (!scansByBatch[item.inventoryProductId]) scansByBatch[item.inventoryProductId] = [];
+                    scansByBatch[item.inventoryProductId].push(item.serialNumber);
+                });
+
+                for (const [batchId, serials] of Object.entries(scansByBatch)) {
+                    const batchDoc = batchDocs[batchId];
+                    const batchData = batchDoc.data() as InventoryProduct;
+                    
+                    let currentUnits = batchData.units || [];
+                    
+                    // Validar cada serial
+                    for (const serial of serials) {
+                        const unitIndex = currentUnits.findIndex(u => u.id === serial);
+                        if (unitIndex === -1) throw new Error(`Unidade ${serial} não encontrada no lote ${batchData.name}.`);
+                        
+                        if (currentUnits[unitIndex].status !== 'AVAILABLE') {
+                            throw new Error(`Unidade ${serial} já não está disponível (Status: ${currentUnits[unitIndex].status}).`);
+                        }
+
+                        // Atualizar unidade em memória
+                        currentUnits[unitIndex] = {
+                            ...currentUnits[unitIndex],
+                            status: 'SOLD',
+                            soldAt: timestamp,
+                            soldToOrder: order.id
+                        };
                     }
-                    return u;
+
+                    const newSold = (batchData.quantitySold || 0) + serials.length;
+                    const newStatus: ProductStatus = newSold >= batchData.quantityBought ? 'SOLD' : 'PARTIAL';
+
+                    updatesByBatch[batchId] = {
+                        newSold,
+                        newStatus,
+                        updatedUnits: currentUnits
+                    };
+                }
+
+                // 3. Escritas (Writes)
+                
+                // A. Atualizar Lotes
+                for (const [batchId, update] of Object.entries(updatesByBatch)) {
+                    const ref = db.collection('products_inventory').doc(batchId);
+                    transaction.update(ref, {
+                        quantitySold: update.newSold,
+                        status: update.newStatus,
+                        units: update.updatedUnits
+                        // REMOVIDO: salesHistory update (evita duplicação de registos de venda)
+                    });
+                }
+
+                // B. Criar Stock Movement
+                const movementRef = db.collection('stock_movements').doc();
+                transaction.set(movementRef, {
+                    id: movementRef.id,
+                    type: 'SALE',
+                    orderId: order.id,
+                    items: orderItems.map(item => ({
+                        productId: item.productId.toString(),
+                        quantity: item.quantity,
+                        serialNumbers: scannedItems.filter(s => s.orderItemId === item.uniqueId).map(s => s.serialNumber)
+                    })),
+                    totalValue: order.total,
+                    createdAt: timestamp,
+                    createdBy: adminEmail
                 });
 
-                const saleRecord: SaleRecord = {
-                    id: `FULFILL-${order.id}-${Date.now()}`,
-                    date: timestamp,
-                    quantity: serials.length,
-                    unitPrice: batchDoc.salePrice || 0,
-                    notes: `Expedição Encomenda #${order.id}`
-                };
-
-                batch.update(batchRef, {
-                    quantitySold: newSold,
-                    status: newStatus,
-                    units: updatedUnits,
-                    salesHistory: firebase.firestore.FieldValue.arrayUnion(saleRecord)
-                });
-            }
-
-            // 2. Criar Stock Movement
-            const movementRef = db.collection('stock_movements').doc();
-            const movementData: StockMovement = {
-                id: movementRef.id,
-                type: 'SALE',
-                orderId: order.id,
-                items: orderItems.map(item => ({
-                    productId: item.productId.toString(),
-                    quantity: item.quantity,
-                    serialNumbers: scannedItems.filter(s => s.orderItemId === item.uniqueId).map(s => s.serialNumber)
-                })),
-                totalValue: order.total,
-                createdAt: timestamp,
-                createdBy: adminEmail
-            };
-            batch.set(movementRef, movementData);
-
-            // 3. Atualizar Encomenda
-            const orderRef = db.collection('orders').doc(order.id);
-            batch.update(orderRef, {
-                status: 'Enviado',
-                fulfilledAt: timestamp,
-                fulfilledBy: adminEmail,
-                serialNumbersUsed: scannedItems.map(s => s.serialNumber),
-                fulfillmentStatus: 'COMPLETED',
-                stockDeducted: true,
-                trackingNumber: trackingNumber || null, // Add tracking number
-                statusHistory: firebase.firestore.FieldValue.arrayUnion({
+                // C. Atualizar Encomenda
+                transaction.update(orderRef, {
                     status: 'Enviado',
-                    date: timestamp,
-                    notes: `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`
-                })
+                    fulfilledAt: timestamp,
+                    fulfilledBy: adminEmail,
+                    serialNumbersUsed: scannedItems.map(s => s.serialNumber),
+                    fulfillmentStatus: 'COMPLETED',
+                    stockDeducted: true,
+                    trackingNumber: trackingNumber || null,
+                    statusHistory: firebase.firestore.FieldValue.arrayUnion({
+                        status: 'Enviado',
+                        date: timestamp,
+                        notes: `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`
+                    })
+                });
             });
 
-            await batch.commit();
             onSuccess();
             onClose();
 
         } catch (err: any) {
-            console.error("Erro na expedição:", err);
-            setError("Erro ao processar expedição: " + err.message);
+            console.error("Erro na transação de expedição:", err);
+            setError("Erro crítico ao processar: " + err.message);
             setIsProcessing(false);
         }
     };
