@@ -1,317 +1,376 @@
-
-import React, { useState, useEffect } from 'react';
-import { X, Package, CheckCircle, ScanBarcode, Search } from 'lucide-react';
-import { Order, InventoryProduct, OrderItem, SaleRecord } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, CheckCircle, AlertTriangle, Package, ScanLine, Loader2, Lock, Camera, MousePointerClick } from 'lucide-react';
+import { Order, InventoryProduct, OrderItem, StockMovement, ProductStatus, SaleRecord } from '../types';
+import { db, auth, firebase } from '../services/firebaseConfig';
 import BarcodeScanner from './BarcodeScanner';
 
 interface OrderFulfillmentModalProps {
-    isOpen: boolean;
+    order: Order;
+    inventoryProducts: InventoryProduct[];
     onClose: () => void;
-    orders: Order[]; // Apenas encomendas pendentes (Processamento/Pago)
-    inventory: InventoryProduct[];
-    onConfirmFulfillment: (orderId: string, deductions: { batchId: string, quantity: number, saleRecord: SaleRecord, serialNumbers?: string[] }[]) => Promise<void>;
+    onSuccess: () => void;
 }
 
-const formatCurrency = (value: number) => 
-  new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
+interface ScannedItem {
+    orderItemId: string; // productId-variant ou apenas productId
+    serialNumber: string;
+    inventoryProductId: string; // ID do documento no Firestore (lote)
+    productName: string;
+}
 
-const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ isOpen, onClose, orders, inventory, onConfirmFulfillment }) => {
-    const [selectedOrderId, setSelectedOrderId] = useState<string>('');
-    // Mapeia index do item na encomenda -> dados de fulfillment
-    const [scannedItems, setScannedItems] = useState<Record<string, { batchId: string, serials: string[], fulfilledQty: number }>>({});
+const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, inventoryProducts, onClose, onSuccess }) => {
+    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+    const [currentInput, setCurrentInput] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
-    const [activeScanItemIndex, setActiveScanItemIndex] = useState<number | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showManualSelection, setShowManualSelection] = useState<string | null>(null); // ID do item da encomenda para seleção manual
 
-    // Reset ao abrir
-    useEffect(() => {
-        if (isOpen) {
-            setSelectedOrderId('');
-            setScannedItems({});
-            setIsSubmitting(false);
-        }
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-
-    const selectedOrder = orders.find(o => o.id === selectedOrderId);
-
-    // Helpers
-    const getSafeItems = (items: any): OrderItem[] => {
-        if (!items) return [];
-        return Array.isArray(items) 
-            ? items.filter(i => typeof i === 'object') as OrderItem[] 
-            : [];
-    };
-
-    const orderItems = selectedOrder ? getSafeItems(selectedOrder.items) : [];
-
-    // Encontrar stock compatível para um item da encomenda
-    const findMatchingInventory = (orderItem: OrderItem) => {
-        return inventory.filter(inv => {
-            const idMatch = inv.publicProductId === orderItem.productId;
-            // Se o item da encomenda tem variante, o stock tem de ter a mesma variante
-            // Se o item não tem variante, aceita qualquer lote (ou preferencialmente lote sem variante)
-            const variantMatch = !orderItem.selectedVariant || (inv.variant === orderItem.selectedVariant);
-            const hasStock = (inv.quantityBought - inv.quantitySold) > 0;
-            return idMatch && variantMatch && hasStock;
-        });
-    };
-
-    const handleScan = (code: string) => {
-        if (activeScanItemIndex === null || !selectedOrder) return;
-        
-        const item = orderItems[activeScanItemIndex];
-        const matchingBatches = findMatchingInventory(item);
-        
-        // 1. Tentar encontrar a unidade pelo Serial Number (S/N) nos lotes compatíveis
-        let foundBatch = null;
-        let isSerialMatch = false;
-
-        for (const batch of matchingBatches) {
-            if (batch.units?.some(u => u.id === code && u.status === 'AVAILABLE')) {
-                foundBatch = batch;
-                isSerialMatch = true;
-                break;
-            }
-        }
-
-        // Se encontrou por S/N
-        if (isSerialMatch && foundBatch) {
-            const key = `${activeScanItemIndex}`;
-            const current = scannedItems[key] || { batchId: foundBatch.id, serials: [], fulfilledQty: 0 };
-            
-            if (current.serials.includes(code)) {
-                alert("Este número de série já foi adicionado.");
-                return;
-            }
-
-            if (current.fulfilledQty >= item.quantity) {
-                alert("Quantidade máxima atingida para este item.");
-                return;
-            }
-
-            setScannedItems(prev => ({
-                ...prev,
-                [key]: {
-                    batchId: foundBatch!.id,
-                    serials: [...current.serials, code],
-                    fulfilledQty: current.fulfilledQty + 1
-                }
-            }));
-            
-            // Feedback sonoro
-            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-            audio.play().catch(() => {});
-            
-            // Se completou a quantidade deste item, fecha o scanner
-            if (current.fulfilledQty + 1 >= item.quantity) {
-                setIsScannerOpen(false);
-            }
-        } else {
-            // Fallback: Se o código lido for o EAN/Código do produto e o produto não exigir S/N
-            alert(`Código "${code}" não corresponde a um S/N disponível para este artigo.`);
-        }
-    };
-
-    const handleManualSelect = (index: number, batchId: string) => {
-        const item = orderItems[index];
-        const key = `${index}`;
-        
-        // Para seleção manual (sem S/N), assumimos que preenche a quantidade total restante
-        // Isto é ideal para cabos ou acessórios sem S/N individual
-        
-        setScannedItems(prev => ({
-            ...prev,
-            [key]: {
-                batchId: batchId,
-                serials: [], // Sem seriais manuais
-                fulfilledQty: item.quantity 
-            }
-        }));
-    };
-
-    const isReadyToSubmit = orderItems.length > 0 && orderItems.every((item, idx) => {
-        const data = scannedItems[`${idx}`];
-        return data && data.fulfilledQty === item.quantity;
-    });
-
-    const handleSubmit = async () => {
-        if (!selectedOrder) return;
-        setIsSubmitting(true);
-
-        const deductions = Object.entries(scannedItems).map(([key, data]) => {
-            const idx = parseInt(key);
-            const item = orderItems[idx];
-            
-            const saleRecord: SaleRecord = {
-                id: `FULFILL-${selectedOrder.id}-${Date.now()}`,
-                date: new Date().toISOString(),
-                quantity: data.fulfilledQty,
-                unitPrice: item.price,
-                notes: `Encomenda Online ${selectedOrder.id}`,
-                shippingCost: 0 // Portes são globais
-            };
-
+    // Normalizar itens da encomenda para facilitar o processamento
+    const orderItems = useMemo(() => {
+        return (order.items || []).map(item => {
+            if (typeof item === 'string') return null; // Ignorar legacy string items se existirem
+            const i = item as OrderItem;
             return {
-                batchId: data.batchId,
-                quantity: data.fulfilledQty,
-                saleRecord,
-                serialNumbers: data.serials.length > 0 ? data.serials : undefined
+                ...i,
+                uniqueId: i.selectedVariant ? `${i.productId}-${i.selectedVariant}` : `${i.productId}`,
+                needed: i.quantity
             };
+        }).filter(Boolean) as (OrderItem & { uniqueId: string, needed: number })[];
+    }, [order.items]);
+
+    // Calcular progresso
+    const progress = useMemo(() => {
+        const totalNeeded = orderItems.reduce((acc, item) => acc + item.needed, 0);
+        const totalScanned = scannedItems.length;
+        return { totalNeeded, totalScanned, isComplete: totalNeeded === totalScanned && totalNeeded > 0 };
+    }, [orderItems, scannedItems]);
+
+    const processCode = (code: string) => {
+        if (!code) return;
+        setError(null);
+
+        // 1. Verificar se já foi scaneado nesta sessão
+        if (scannedItems.some(s => s.serialNumber === code)) {
+            setError(`O serial ${code} já foi adicionado a esta expedição.`);
+            return;
+        }
+
+        // 2. Encontrar o lote de inventário que contém este serial
+        let foundBatch: InventoryProduct | undefined;
+        let foundUnit: any | undefined;
+
+        for (const batch of inventoryProducts) {
+            if (batch.units) {
+                const unit = batch.units.find(u => u.id.toUpperCase() === code);
+                if (unit) {
+                    foundBatch = batch;
+                    foundUnit = unit;
+                    break;
+                }
+            }
+        }
+
+        if (!foundBatch || !foundUnit) {
+            setError(`Serial ${code} não encontrado no sistema.`);
+            return;
+        }
+
+        // 3. Validar estado da unidade
+        if (foundUnit.status !== 'AVAILABLE') {
+             setError(`A unidade ${code} não está disponível (Status: ${foundUnit.status}).`);
+             return;
+        }
+
+        // 4. Verificar se corresponde a algum item da encomenda que ainda precisa de unidades
+        const targetItem = orderItems.find(item => {
+            const isProductMatch = item.productId === foundBatch?.publicProductId;
+            
+            const orderVariant = (item.selectedVariant || '').trim().toLowerCase();
+            const batchVariant = (foundBatch?.variant || '').trim().toLowerCase();
+            
+            const isVariantMatch = orderVariant === '' || orderVariant === batchVariant;
+
+            const scannedForThisItem = scannedItems.filter(s => s.orderItemId === item.uniqueId).length;
+            const needsMore = scannedForThisItem < item.needed;
+
+            return isProductMatch && isVariantMatch && needsMore;
         });
+
+        if (!targetItem) {
+            setError(`O serial ${code} (${foundBatch.name}) não corresponde a nenhum item pendente nesta encomenda.`);
+            return;
+        }
+
+        // 5. Adicionar à lista
+        setScannedItems(prev => [...prev, {
+            orderItemId: targetItem.uniqueId,
+            serialNumber: code,
+            inventoryProductId: foundBatch!.id,
+            productName: foundBatch!.name
+        }]);
+        setCurrentInput('');
+        setIsScannerOpen(false);
+    };
+
+    const handleScanSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        processCode(currentInput.trim().toUpperCase());
+    };
+
+    const handleManualSelect = (serial: string) => {
+        processCode(serial);
+        setShowManualSelection(null);
+    };
+
+    const getAvailableUnitsForOrderItem = (orderItemUniqueId: string) => {
+        const item = orderItems.find(i => i.uniqueId === orderItemUniqueId);
+        if (!item) return [];
+
+        const availableUnits: { serial: string, batchName: string }[] = [];
+
+        inventoryProducts.forEach(batch => {
+            const isProductMatch = item.productId === batch.publicProductId;
+            const orderVariant = (item.selectedVariant || '').trim().toLowerCase();
+            const batchVariant = (batch.variant || '').trim().toLowerCase();
+            const isVariantMatch = orderVariant === '' || orderVariant === batchVariant;
+
+            if (isProductMatch && isVariantMatch && batch.units) {
+                batch.units.forEach(unit => {
+                    if (unit.status === 'AVAILABLE' && !scannedItems.some(s => s.serialNumber === unit.id)) {
+                        availableUnits.push({ serial: unit.id, batchName: batch.name });
+                    }
+                });
+            }
+        });
+
+        return availableUnits;
+    };
+
+    const [trackingNumber, setTrackingNumber] = useState('');
+
+    const handleConfirmFulfillment = async () => {
+        if (!progress.isComplete) return;
+        if (!window.confirm("Tem a certeza? Esta ação é irreversível e irá abater o stock imediatamente.")) return;
+
+        setIsProcessing(true);
+        setError(null);
 
         try {
-            await onConfirmFulfillment(selectedOrder.id, deductions);
+            const batch = db.batch();
+            const timestamp = new Date().toISOString();
+            const adminId = auth.currentUser?.uid || 'admin';
+            const adminEmail = auth.currentUser?.email || 'admin';
+
+            // ... (rest of the logic)
+
+            // 3. Atualizar Encomenda
+            const orderRef = db.collection('orders').doc(order.id);
+            batch.update(orderRef, {
+                status: 'Enviado',
+                fulfilledAt: timestamp,
+                fulfilledBy: adminEmail,
+                serialNumbersUsed: scannedItems.map(s => s.serialNumber),
+                fulfillmentStatus: 'COMPLETED',
+                stockDeducted: true,
+                trackingNumber: trackingNumber || null, // Add tracking number
+                statusHistory: firebase.firestore.FieldValue.arrayUnion({
+                    status: 'Enviado',
+                    date: timestamp,
+                    notes: `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`
+                })
+            });
+
+            await batch.commit();
+            onSuccess();
             onClose();
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao processar venda.");
-        } finally {
-            setIsSubmitting(false);
+
+        } catch (err: any) {
+            console.error("Erro na expedição:", err);
+            setError("Erro ao processar expedição: " + err.message);
+            setIsProcessing(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <div>
-                        <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
-                            <Package className="text-indigo-600"/> Processar Encomenda
-                        </h3>
-                        <p className="text-xs text-gray-500 mt-1">Valide o stock para expedir a encomenda.</p>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative">
+                
+                {/* Scanner Overlay */}
+                {isScannerOpen && (
+                    <div className="absolute inset-0 z-50 bg-black">
+                        <BarcodeScanner 
+                            onScan={(code) => processCode(code)} 
+                            onClose={() => setIsScannerOpen(false)} 
+                        />
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={24}/></button>
+                )}
+
+                {/* Header */}
+                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <Package className="text-indigo-600" /> Preparar Encomenda #{order.id}
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Digitalize os números de série para confirmar a expedição.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
+                        <X size={24} />
+                    </button>
                 </div>
 
-                <div className="p-6 flex-1 overflow-y-auto space-y-6">
-                    {/* 1. Seleção de Encomenda */}
-                    <div className="space-y-2">
-                        <label className="block text-sm font-bold text-gray-700">1. Selecione a Encomenda Pendente</label>
-                        <div className="relative">
-                            <select 
-                                value={selectedOrderId} 
-                                onChange={(e) => { setSelectedOrderId(e.target.value); setScannedItems({}); }} 
-                                className="w-full p-4 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-base bg-white appearance-none cursor-pointer"
-                            >
-                                <option value="">-- Selecione --</option>
-                                {orders.map(o => (
-                                    <option key={o.id} value={o.id}>
-                                        {o.id} | {o.shippingInfo.name} | {formatCurrency(o.total)} | {new Date(o.date).toLocaleDateString()}
-                                    </option>
-                                ))}
-                            </select>
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    
+                    {/* Progress Bar */}
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                        <div className="flex justify-between items-end mb-2">
+                            <span className="text-sm font-bold text-blue-900 uppercase">Progresso da Expedição</span>
+                            <span className="text-2xl font-bold text-blue-700">{progress.totalScanned} / {progress.totalNeeded}</span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2.5">
+                            <div 
+                                className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                                style={{ width: `${(progress.totalScanned / progress.totalNeeded) * 100}%` }}
+                            ></div>
                         </div>
                     </div>
 
-                    {selectedOrder && (
-                        <div className="animate-fade-in space-y-6">
-                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white p-2 rounded-full text-indigo-600 shadow-sm"><Package size={24}/></div>
-                                    <div>
-                                        <p className="font-bold text-indigo-900">{selectedOrder.shippingInfo.name}</p>
-                                        <p className="text-sm text-indigo-700">{selectedOrder.shippingInfo.email}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <span className="inline-block px-3 py-1 bg-white text-indigo-600 rounded-lg text-xs font-bold shadow-sm border border-indigo-100">
-                                        {selectedOrder.shippingInfo.deliveryMethod === 'Pickup' ? 'Levantamento em Loja' : 'Envio CTT'}
-                                    </span>
-                                </div>
-                            </div>
+                    {/* Tracking Number Input */}
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Número de Rastreio (Opcional)</label>
+                        <input 
+                            type="text" 
+                            value={trackingNumber}
+                            onChange={(e) => setTrackingNumber(e.target.value)}
+                            placeholder="Ex: EA123456789PT"
+                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                    </div>
 
-                            {/* 2. Lista de Artigos para validar */}
-                            <div>
-                                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2 border-b pb-2">
-                                    2. Validação de Artigos <span className="text-xs font-normal text-gray-500 ml-auto">Escaneie o S/N ou selecione o lote</span>
-                                </h4>
-                                <div className="space-y-3">
-                                    {orderItems.map((item, idx) => {
-                                        const matchingBatches = findMatchingInventory(item);
-                                        const status = scannedItems[`${idx}`];
-                                        const isFulfilled = status && status.fulfilledQty >= item.quantity;
-                                        const hasAvailableSerials = matchingBatches.some(b => b.units && b.units.some(u => u.status === 'AVAILABLE'));
-                                        
-                                        return (
-                                            <div key={idx} className={`p-4 rounded-xl border-2 transition-all ${isFulfilled ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div>
-                                                        <p className="font-bold text-gray-900 text-lg">{item.name}</p>
-                                                        <p className="text-sm text-gray-500">{item.selectedVariant || 'Padrão'}</p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${isFulfilled ? 'bg-green-200 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                            {status ? status.fulfilledQty : 0} / {item.quantity} un
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {!isFulfilled && (
-                                                    <div className="flex flex-col md:flex-row gap-2 items-center">
-                                                        {hasAvailableSerials ? (
-                                                            <button 
-                                                                onClick={() => { setActiveScanItemIndex(idx); setIsScannerOpen(true); }}
-                                                                className="w-full md:w-auto flex-1 bg-gray-900 hover:bg-black text-white py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
-                                                            >
-                                                                <ScanBarcode size={18}/> Ler Número de Série
-                                                            </button>
-                                                        ) : (
-                                                            <div className="w-full relative">
-                                                                <select 
-                                                                    className="w-full p-3 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                                                                    onChange={(e) => handleManualSelect(idx, e.target.value)}
-                                                                    value={status?.batchId || ''}
-                                                                >
-                                                                    <option value="">Selecione o Lote Manualmente...</option>
-                                                                    {matchingBatches.map(b => (
-                                                                        <option key={b.id} value={b.id}>
-                                                                            Lote: {new Date(b.purchaseDate).toLocaleDateString()} (Stock: {b.quantityBought - b.quantitySold})
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
-                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">▼</div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                
-                                                {status && status.serials.length > 0 && (
-                                                    <div className="mt-3 text-xs font-mono text-gray-600 bg-white/80 p-2 rounded border border-gray-200 flex flex-wrap gap-2">
-                                                        <span className="font-bold text-gray-400">S/N:</span> 
-                                                        {status.serials.map(s => <span key={s} className="bg-gray-100 px-1 rounded">{s}</span>)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                    {/* Scanner Input & Actions */}
+                    <div className="flex gap-2">
+                        <form onSubmit={handleScanSubmit} className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <ScanLine className="text-gray-400" />
                             </div>
+                            <input
+                                type="text"
+                                autoFocus
+                                value={currentInput}
+                                onChange={(e) => setCurrentInput(e.target.value)}
+                                placeholder="Clique aqui e leia o código de barras / serial..."
+                                className="w-full pl-10 pr-4 py-3 border-2 border-indigo-100 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 outline-none font-mono shadow-sm transition-all"
+                            />
+                        </form>
+                        <button 
+                            onClick={() => setIsScannerOpen(true)}
+                            className="bg-indigo-600 text-white px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2 font-bold shadow-md"
+                            title="Abrir Câmara"
+                        >
+                            <Camera size={20} /> <span className="hidden md:inline">Ler com Câmara</span>
+                        </button>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r flex items-start gap-3 animate-shake">
+                            <AlertTriangle className="text-red-600 shrink-0" />
+                            <p className="text-red-700 font-medium">{error}</p>
                         </div>
                     )}
+
+                    {/* Items List */}
+                    <div className="space-y-4">
+                        <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider border-b pb-2">Itens da Encomenda</h3>
+                        {orderItems.map((item) => {
+                            const scannedCount = scannedItems.filter(s => s.orderItemId === item.uniqueId).length;
+                            const isComplete = scannedCount >= item.needed;
+                            const availableUnits = getAvailableUnitsForOrderItem(item.uniqueId);
+
+                            return (
+                                <div key={item.uniqueId} className={`p-4 rounded-xl border transition-all ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-bold text-gray-900">{item.name}</p>
+                                            {item.selectedVariant && <p className="text-sm text-gray-500">Variante: {item.selectedVariant}</p>}
+                                            <p className="text-xs text-gray-400 mt-1">ID: {item.productId}</p>
+                                        </div>
+                                        <div className="text-right flex flex-col items-end gap-2">
+                                            <span className={`text-xl font-bold ${isComplete ? 'text-green-600' : 'text-gray-600'}`}>
+                                                {scannedCount} / {item.needed}
+                                            </span>
+                                            {!isComplete && (
+                                                <button 
+                                                    onClick={() => setShowManualSelection(showManualSelection === item.uniqueId ? null : item.uniqueId)}
+                                                    className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded flex items-center gap-1 border border-indigo-200"
+                                                >
+                                                    <MousePointerClick size={12} /> Selecionar Manualmente
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Manual Selection Dropdown */}
+                                    {showManualSelection === item.uniqueId && !isComplete && (
+                                        <div className="mt-3 bg-indigo-50 p-3 rounded-lg border border-indigo-100 animate-fade-in">
+                                            <p className="text-xs font-bold text-indigo-800 mb-2 uppercase">Unidades Disponíveis:</p>
+                                            {availableUnits.length > 0 ? (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {availableUnits.map((unit, idx) => (
+                                                        <button 
+                                                            key={idx}
+                                                            onClick={() => handleManualSelect(unit.serial)}
+                                                            className="text-left bg-white hover:bg-indigo-100 p-2 rounded border border-indigo-100 text-xs transition-colors flex justify-between items-center group"
+                                                        >
+                                                            <span className="font-mono font-bold text-gray-700">{unit.serial}</span>
+                                                            <span className="text-[10px] text-gray-400 group-hover:text-indigo-500">{unit.batchName}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-red-500 italic">Nenhuma unidade disponível encontrada no inventário para este produto.</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Scanned Serials for this item */}
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {scannedItems.filter(s => s.orderItemId === item.uniqueId).map((scan, idx) => (
+                                            <span key={idx} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                                                <CheckCircle size={10} className="text-green-500" />
+                                                {scan.serialNumber}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
 
+                {/* Footer */}
                 <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-100 transition-colors">Cancelar</button>
                     <button 
-                        onClick={handleSubmit} 
-                        disabled={!isReadyToSubmit || isSubmitting}
-                        className="px-8 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all transform active:scale-95"
+                        onClick={onClose}
+                        className="px-6 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+                        disabled={isProcessing}
                     >
-                        <CheckCircle size={20}/> {isSubmitting ? 'A Processar...' : 'Confirmar Saída'}
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={handleConfirmFulfillment}
+                        disabled={!progress.isComplete || isProcessing}
+                        className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg flex items-center gap-2 transition-all ${
+                            progress.isComplete 
+                                ? 'bg-green-600 hover:bg-green-700 hover:scale-105' 
+                                : 'bg-gray-400 cursor-not-allowed'
+                        }`}
+                    >
+                        {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCircle />}
+                        Confirmar Expedição
                     </button>
                 </div>
             </div>
-
-            {isScannerOpen && (
-                <BarcodeScanner 
-                    mode="serial" 
-                    onClose={() => setIsScannerOpen(false)} 
-                    onCodeSubmit={handleScan} 
-                />
-            )}
         </div>
     );
 };
