@@ -9,9 +9,10 @@ interface ReviewSectionProps {
   reviews: Review[];
   onAddReview: (review: Review) => void;
   currentUser: User | null;
+  hasPurchased: boolean;
 }
 
-const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], onAddReview, currentUser }) => {
+const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], onAddReview, currentUser, hasPurchased }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
@@ -26,6 +27,9 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
   // Filtra reviews apenas deste produto
   const productReviews = (reviews || []).filter(r => r.productId === productId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
+  // Verifica se o utilizador já fez review deste produto
+  const alreadyReviewed = currentUser ? productReviews.some(r => r.userId === currentUser.uid) : false;
+
   const averageRating = productReviews.length 
     ? (productReviews.reduce((acc, r) => acc + r.rating, 0) / productReviews.length).toFixed(1) 
     : null;
@@ -120,6 +124,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
     const newReview: Review = {
       id: Date.now().toString(),
       productId,
+      userId: currentUser?.uid,
       userName: userName || 'Cliente Anónimo',
       rating,
       comment,
@@ -130,7 +135,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
     // GAMIFICAÇÃO: Dar pontos pela review
     if (currentUser) {
         try {
-            const points = 50;
+            const points = 15; // Reduzido de 50 para 15
             const newHistory: PointHistory = {
                 id: `review-${newReview.id}`,
                 date: new Date().toISOString(),
@@ -183,13 +188,25 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
           </div>
         </div>
         
-        {!isFormOpen && (
+        {!isFormOpen && !alreadyReviewed && hasPurchased && (
             <button 
                 onClick={() => setIsFormOpen(true)}
                 className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-full font-bold transition-colors shadow-md flex items-center gap-2"
             >
-                <Star size={18} fill="currentColor"/> Avaliar (+50 Pontos)
+                <Star size={18} fill="currentColor"/> Avaliar (+15 Pontos)
             </button>
+        )}
+        
+        {!hasPurchased && currentUser && (
+            <div className="text-sm text-gray-500 italic bg-gray-50 dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                Apenas clientes que compraram este produto podem avaliar.
+            </div>
+        )}
+
+        {alreadyReviewed && (
+            <div className="text-sm text-green-600 font-medium bg-green-50 dark:bg-green-900/20 px-4 py-2 rounded-lg border border-green-200 dark:border-green-900/50 flex items-center gap-2">
+                <CheckCircle size={16} /> Já avaliou este produto.
+            </div>
         )}
       </div>
 
