@@ -85,6 +85,7 @@ export interface UserCheckoutInfo {
   email: string;
   street: string;
   doorNumber: string;
+  addressExtra?: string; // NOVO: Campo opcional para andar, bloco, etc.
   zip: string;
   city: string;
   phone: string;
@@ -253,3 +254,4 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
