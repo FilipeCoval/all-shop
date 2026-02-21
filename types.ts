@@ -90,7 +90,7 @@ export interface UserCheckoutInfo {
   city: string;
   phone: string;
   nif?: string;
-  paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança';
+  paymentMethod: 'MB Way' | 'Transferência' | 'Cobrança' | 'Outro';
   deliveryMethod?: 'Shipping' | 'Pickup';
 }
 
@@ -254,4 +254,3 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
-
