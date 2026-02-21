@@ -270,6 +270,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         date: new Date().toISOString(),
         total: finalTotal,
         status: 'Processamento',
+        stockDeducted: false,
         items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', addedAt: new Date().toISOString() })),
         shippingInfo: finalUserInfo,
         userId: user?.uid || null
@@ -449,6 +450,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                               <div>
                                   <input type="text" placeholder="Nº Porta *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} />
                               </div>
+                          </div>
+                          <div className="mb-3">
+                              <input type="text" placeholder="Andar, Bloco, Lote (Opcional)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.addressExtra || ''} onChange={e => setUserInfo({...userInfo, addressExtra: e.target.value})} />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <input type="text" placeholder="Localidade *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
