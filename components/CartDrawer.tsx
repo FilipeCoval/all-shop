@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
-import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote, Sparkles, PartyPopper } from 'lucide-react';
+import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote, Sparkles, PartyPopper, Info } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig';
 
@@ -401,7 +401,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                   {/* SELETOR DE PAGAMENTO ADICIONADO AQUI */}
                   <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Método de Pagamento</label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-4 gap-2">
                           <button
                               onClick={() => setUserInfo({...userInfo, paymentMethod: 'MB Way'})}
                               className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'MB Way' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
@@ -423,7 +423,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                               <Banknote size={18} />
                               Cobrança
                           </button>
+                          <button
+                              onClick={() => setUserInfo({...userInfo, paymentMethod: 'Outro'})}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Outro' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                          >
+                              <Sparkles size={18} />
+                              Outro
+                          </button>
                       </div>
+                      {userInfo.paymentMethod === 'Outro' && (
+                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-[10px] text-blue-700 dark:text-blue-400 flex items-start gap-1">
+                              <Info size={12} className="shrink-0 mt-0.5" />
+                              <span>Aceitamos PayPal, Revolut, N26, Entidade e Referência. Detalhes serão enviados na confirmação.</span>
+                          </div>
+                      )}
                       {userInfo.paymentMethod === 'Cobrança' && deliveryMethod !== 'Pickup' && (
                           <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-[10px] text-yellow-700 dark:text-yellow-400 flex items-start gap-1">
                               <AlertCircle size={12} className="shrink-0 mt-0.5" />
