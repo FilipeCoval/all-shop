@@ -92,7 +92,7 @@ const App: React.FC = () => {
   const { getStockForProduct: getAdminStock, loading: stockLoading } = useStock(isAdmin);
   const { products: dbProducts, loading: productsLoading } = usePublicProducts();
   const { reservations } = useStockReservations(); 
-  const { pendingOrders } = usePendingOrders(); 
+  const { pendingOrders } = usePendingOrders(isAdmin); 
 
   const sessionId = useMemo(() => {
     let id = sessionStorage.getItem('session_id');
@@ -547,16 +547,9 @@ const App: React.FC = () => {
           }
 
           // 3. Decrementar stock público imediatamente para outros utilizadores verem
-          for (const item of newOrder.items) {
-              if (typeof item === 'object' && item !== null) {
-                  const orderItem = item as OrderItem;
-                  const pRef = db.collection('products_public').doc(orderItem.productId.toString());
-                  batch.update(pRef, {
-                      stock: firebase.firestore.FieldValue.increment(-(orderItem.quantity || 1))
-                  });
-              }
-          }
-
+          // REMOVIDO: A atualização do stock público deve ser feita via backend ou admin para garantir segurança.
+          // O cliente não tem permissão para escrever em 'products_public'.
+          
           await batch.commit();
 
           setOrders(prev => [newOrder, ...prev]);
