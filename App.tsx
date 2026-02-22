@@ -26,7 +26,7 @@ import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
 import { usePendingOrders } from './hooks/usePendingOrders';
 import { notifyNewOrder } from './services/telegramNotifier.ts';
-import AllPoints from './components/AllPoints';
+import LoyaltyPage from './components/LoyaltyPage';
 
 // LAZY LOADING DO DASHBOARD
 // O código do Dashboard (gráficos, tabelas grandes, scanners) só é baixado se o utilizador for admin e clicar na rota.
@@ -638,7 +638,7 @@ const App: React.FC = () => {
         case '#faq': return <FAQ />;
         case '#returns': return <Returns />;
         case '#tracking': return <OrderTracker />; 
-        case '#allpoints': return <AllPoints user={user} onUpdateUser={handleUpdateUser} onOpenLogin={() => setIsLoginOpen(true)} />; // NOVA ROTA
+        case '#allpoints': return <LoyaltyPage user={user} onUpdateUser={handleUpdateUser} onOpenLogin={() => setIsLoginOpen(true)} />; // NOVA ROTA
         default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} processingProductIds={processingProductIds} />;
     }
   };
