@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Coupon, PointHistory } from '../types';
 import { db, firebase } from '../services/firebaseConfig';
-import { Coins, Gift, Calendar, Star, ArrowRight, Loader2, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
-import { LOYALTY_TIERS } from '../constants';
+import { Coins, Gift, Calendar, Star, ArrowRight, Loader2, CheckCircle, AlertTriangle, Lock, Share2 } from 'lucide-react';
+import { LOYALTY_TIERS, SHARE_URL } from '../constants';
 
 interface AllPointsProps {
   user: User | null;
@@ -86,17 +86,41 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
   
   const progress = !user || !nextTier ? 0 : Math.min(100, ((user.totalSpent || 0) / nextTier.threshold) * 100);
 
+  const handleShare = async () => {
+    const shareData = {
+      title: 'AllPoints - Clube de Fidelidade',
+      text: 'Ganhe pontos em todas as compras e troque por descontos exclusivos!',
+      url: `${SHARE_URL}/allpoints`
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      navigator.clipboard.writeText(shareData.url);
+      alert('Link copiado para a área de transferência!');
+    }
+  };
+
   return (
     <div className={isEmbedded ? "animate-fade-in" : "container mx-auto px-4 py-12 animate-fade-in"}>
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 md:p-12 text-white shadow-2xl mb-12 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
             <div className="relative z-10 max-w-2xl">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-yellow-500 p-2 rounded-lg text-gray-900">
-                        <Coins size={24} />
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-yellow-500 p-2 rounded-lg text-gray-900">
+                            <Coins size={24} />
+                        </div>
+                        <span className="font-bold tracking-wider text-yellow-500 uppercase text-sm">Clube AllPoints</span>
                     </div>
-                    <span className="font-bold tracking-wider text-yellow-500 uppercase text-sm">Clube AllPoints</span>
+                    <button onClick={handleShare} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors" title="Partilhar">
+                        <Share2 size={20} />
+                    </button>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black mb-6 leading-tight">
                     Transforme as suas compras em <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200">recompensas reais.</span>
