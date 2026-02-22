@@ -17,6 +17,7 @@ export interface User {
   fcmToken?: string; // Mantido para retrocompatibilidade
   deviceTokens?: string[]; // NOVO: Lista de dispositivos ativos
   lastShareDate?: string; // Data da última partilha premiada (ISO Date string)
+  birthday?: string; // Data de nascimento (ISO Date string ou YYYY-MM-DD)
 }
 
 export interface Address {
@@ -211,6 +212,9 @@ export interface Coupon {
   isActive: boolean;
   usageCount: number;
   validProductId?: number; // Opcional: Se definido, só funciona neste produto
+  maxDiscount?: number; // NOVO: Teto máximo de desconto (ex: 5% mas máx 5€)
+  userId?: string; // NOVO: Cupão exclusivo para um user
+  maxUsages?: number; // NOVO: Limite de usos (ex: 1 para vouchers de pontos)
 }
 
 export interface PointHistory {
