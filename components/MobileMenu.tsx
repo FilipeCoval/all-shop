@@ -94,6 +94,9 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
             <button onClick={() => { handleNav('/'); setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="text-left px-4 py-3 rounded-xl font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-primary transition-colors flex items-center gap-3">
                 Produtos
             </button>
+            <button onClick={() => handleNav('allpoints')} className="text-left px-4 py-3 rounded-xl font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-primary transition-colors flex items-center gap-3">
+                AllPoints
+            </button>
             <button onClick={() => handleNav('about')} className="text-left px-4 py-3 rounded-xl font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-primary dark:hover:text-primary transition-colors flex items-center gap-3">
                 Sobre Nós
             </button>
