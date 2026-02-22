@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let description = "";
   let finalImage = "";
 
-  // --- LÓGICA ESPECIAL: HOME / LOJA ---
+  // --- LÓGICA ESPECIAL: HOME / LOJA / ALLPOINTS ---
   if (productId === 'home') {
       product.name = "All-Shop Oficial";
       product.description = "A sua loja de tecnologia favorita. TV Boxes, Cabos e Gadgets com stock nacional e garantia de 3 anos.";
@@ -66,6 +66,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description = `🇵🇹 Stock Nacional • Entrega 24h\n⭐️ Garantia 3 Anos • Suporte Premium\n🔥 As melhores TV Boxes e Gadgets estão aqui!\n👇 Toque para visitar a loja.`;
       finalImage = HOME_BANNER;
   
+  } else if (productId === 'allpoints') {
+      product.name = "AllPoints - Clube de Fidelidade";
+      product.description = "Ganhe pontos em todas as compras e troque por descontos exclusivos.";
+      product.image = HOME_BANNER; // Pode ser alterado para uma imagem específica de fidelidade
+      product.category = "Fidelidade";
+
+      destinationUrl = `${PUBLIC_URL}/#allpoints`;
+
+      seoTitle = `AllPoints | Ganhe Descontos Reais`;
+      description = `💎 Ganhe 1 ponto por cada 1€ gasto\n🎁 Troque pontos por Vouchers de Desconto\n🎂 Bónus de Aniversário e Reviews\n👇 Comece a poupar hoje mesmo!`;
+      finalImage = HOME_BANNER;
+
   } else {
       // --- LÓGICA PADRÃO: PRODUTO ---
       try {
@@ -148,4 +160,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   
   return res.status(200).send(html);
 }
-
