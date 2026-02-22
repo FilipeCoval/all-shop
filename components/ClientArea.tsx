@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage, requestPushPermission, messaging } from '../services/firebaseConfig';
+import AllPoints from './AllPoints';
 
 interface ClientAreaProps {
   user: User;
@@ -647,89 +648,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
             {/* ALLPOINTS */}
             {activeTab === 'points' && (
-              <div className="animate-fade-in space-y-8">
-                <div className="bg-gradient-to-br from-indigo-600 to-primary p-8 rounded-3xl text-white flex flex-col md:flex-row items-center gap-8 shadow-xl relative overflow-hidden">
-                    <div className="relative z-10 bg-white/20 p-6 rounded-3xl backdrop-blur-md border border-white/30 text-center min-w-[160px]">
-                        <p className="text-xs font-bold uppercase tracking-widest text-blue-100 mb-1">Saldo Atual</p>
-                        <div className="text-5xl font-black flex items-center justify-center gap-2">
-                            {currentPoints} <Coins size={32} className="text-yellow-400" />
-                        </div>
-                    </div>
-                    <div className="relative z-10 flex-1 space-y-4">
-                        <h2 className="text-2xl font-bold">Loja de Pontos All-Shop</h2>
-                        <p className="text-blue-100 text-sm">
-                            Ganhe <strong>+50 pontos</strong> por avaliação e <strong>+5 pontos</strong> por partilha diária!
-                            <br/>Troque os seus pontos acumulados por descontos reais.
-                        </p>
-                        <div className="flex flex-wrap gap-4 pt-2">
-                            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold border border-white/20"><Award size={14}/> Nível: {currentTier}</div>
-                            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold border border-white/20"><Zap size={14}/> Multiplicador: {tierInfo.multiplier}x</div>
-                        </div>
-                    </div>
-                    <div className="absolute -right-10 -bottom-10 text-white/10">
-                        <Coins size={200} />
-                    </div>
-                </div>
-
-                <div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Gift className="text-primary"/> Recompensas Disponíveis</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {sortedRewards.map(reward => {
-                            const isAvailable = currentPoints >= reward.cost;
-                            return (
-                                <div key={reward.id} className={`bg-white p-6 rounded-2xl border transition-all relative overflow-hidden group ${isAvailable ? 'border-primary shadow-lg' : 'border-gray-100 grayscale opacity-75'}`}>
-                                    <div className="relative z-10">
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${isAvailable ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                            <TicketPercent size={28} />
-                                        </div>
-                                        <h4 className="font-bold text-gray-900">{reward.title}</h4>
-                                        <p className="text-xs text-gray-500 mt-1">Custo: <strong>{reward.cost} pts</strong></p>
-                                        <p className="text-[10px] text-gray-400 mt-0.5">Compra mín: {reward.minPurchase}€</p>
-                                        <button 
-                                            onClick={() => handleRedeemReward(reward)}
-                                            disabled={!isAvailable || isRedeeming !== null}
-                                            className={`w-full mt-4 py-2 rounded-lg font-bold text-sm transition-all ${isAvailable ? 'bg-primary text-white hover:bg-blue-600 shadow-md' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                                        >
-                                            {isRedeeming === reward.id ? <Loader2 size={16} className="animate-spin mx-auto"/> : 'Resgatar'}
-                                        </button>
-                                    </div>
-                                    <div className="absolute -right-4 -bottom-4 text-gray-50 group-hover:text-gray-100 transition-colors">
-                                        <Coins size={80} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                        <h3 className="font-bold text-gray-900 flex items-center gap-2"><History size={20} className="text-primary"/> Histórico de Pontos</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 uppercase font-bold text-[10px]">
-                                <tr><th className="px-6 py-4">Data</th><th className="px-6 py-4">Motivo</th><th className="px-6 py-4 text-right">Pontos</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {(!user.pointsHistory || user.pointsHistory.length === 0) ? (
-                                    <tr><td colSpan={3} className="px-6 py-12 text-center text-gray-400 italic">Sem histórico de movimentos.</td></tr>
-                                ) : (
-                                    user.pointsHistory.map(h => (
-                                        <tr key={h.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 text-gray-500">{new Date(h.date).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 font-medium text-gray-700">{h.reason}</td>
-                                            <td className={`px-6 py-4 text-right font-bold ${h.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {h.amount > 0 ? `+${h.amount}` : h.amount}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-              </div>
+              <AllPoints user={user} onUpdateUser={onUpdateUser} onOpenLogin={() => {}} />
             )}
 
             {/* WISHLIST */}
