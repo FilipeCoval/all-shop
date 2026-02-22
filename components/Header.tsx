@@ -119,6 +119,7 @@ const Header: React.FC<HeaderProps> = ({
             <nav className="hidden md:flex items-center gap-6 text-base font-medium text-gray-600 dark:text-gray-300">
                 <a href="#/" onClick={(e) => { e.preventDefault(); onResetHome(); }} className="hover:text-primary dark:hover:text-white transition-colors">Início</a>
                 <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }} className="hover:text-primary dark:hover:text-white transition-colors">Produtos</a>
+                <a href="#allpoints" onClick={handleNav('allpoints')} className="hover:text-primary dark:hover:text-white transition-colors flex items-center gap-1"><Award size={16} className="text-yellow-500" /> AllPoints</a>
                 <a href="#about" onClick={handleNav('about')} className="hover:text-primary dark:hover:text-white transition-colors">Sobre</a>
                 <a href="#contact" onClick={handleNav('contact')} className="hover:text-primary dark:hover:text-white transition-colors">Contato</a>
             </nav>
