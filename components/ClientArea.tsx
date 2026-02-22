@@ -69,7 +69,8 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
     name: user?.name || '', 
     email: user?.email || '', 
     phone: user?.phone || '', 
-    nif: user?.nif || '' 
+    nif: user?.nif || '',
+    birthday: user?.birthday || ''
   });
   const [profileSaved, setProfileSaved] = useState(false);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
@@ -696,6 +697,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Email</label><input type="email" disabled value={profileForm.email} className="w-full p-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed" /></div>
                               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Telemóvel</label><input type="tel" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
                               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">NIF (para faturas)</label><input type="text" value={profileForm.nif} onChange={e => setProfileForm({...profileForm, nif: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Data de Nascimento</label><input type="date" value={profileForm.birthday} onChange={e => setProfileForm({...profileForm, birthday: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
                           </div>
                           <button type="submit" className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-colors flex items-center gap-2"><Save size={20}/> Guardar Alterações</button>
                       </form>
