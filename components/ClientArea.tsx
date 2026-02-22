@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage, requestPushPermission, messaging } from '../services/firebaseConfig';
-import AllPoints from './AllPoints';
+import LoyaltyPage from './LoyaltyPage';
 
 interface ClientAreaProps {
   user: User;
@@ -648,7 +648,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
             {/* ALLPOINTS */}
             {activeTab === 'points' && (
-              <AllPoints user={user} onUpdateUser={onUpdateUser} onOpenLogin={() => {}} />
+              <LoyaltyPage user={user} onUpdateUser={onUpdateUser} onOpenLogin={() => {}} isEmbedded={true} />
             )}
 
             {/* WISHLIST */}
