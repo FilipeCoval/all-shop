@@ -4,6 +4,7 @@ import { CartItem, UserCheckoutInfo, Order, Coupon, User } from '../types';
 import { X, Trash2, Check, Loader2, ChevronLeft, User as UserIcon, Clock, Tag, AlertCircle, Store, Truck, MapPin, Smartphone, Landmark, Banknote, Sparkles, PartyPopper, Info } from 'lucide-react';
 import { SELLER_PHONE, TELEGRAM_LINK } from '../constants';
 import { db } from '../services/firebaseConfig';
+import OrderTutorial from './OrderTutorial';
 
 const ReservationBanner: React.FC<{ items: CartItem[] }> = ({ items }) => {
     const [displayTime, setDisplayTime] = useState<string | null>(null);
@@ -72,9 +73,12 @@ interface CartDrawerProps {
 const CartDrawer: React.FC<CartDrawerProps> = ({ 
   isOpen, onClose, cartItems, onRemoveItem, onUpdateQuantity, total, onCheckout, user, onOpenLogin
 }) => {
-  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform' | 'success'>('cart');
+  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform' | 'tutorial' | 'success'>('cart');
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
+  const [finalMessage, setFinalMessage] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState<'wa' | 'tg'>('wa');
+  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   
   // State para o método de entrega
   const [deliveryMethod, setDeliveryMethod] = useState<'Shipping' | 'Pickup'>('Shipping');
@@ -244,7 +248,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
-  const handleFinalize = async (platform: 'wa' | 'tg') => {
+  const handleStartCheckout = async (platform: 'wa' | 'tg') => {
     setIsFinalizing(true);
     
     // Atualizar uso do cupão
@@ -276,22 +280,30 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         userId: user?.uid || null
     };
 
-    const success = await onCheckout(newOrder);
-    if (success) {
-        let msg = `🛍️ Pedido ${currentOrderId}\n`;
-        msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja (Leiria)' : '🚚 Envio CTT'}\n`;
-        msg += `Pagamento: ${userInfo.paymentMethod}\n`;
-        msg += `Cliente: ${userInfo.name} (${userInfo.phone})\n`;
-        msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`).join('\n')}\n`;
-        if (discountAmount > 0) msg += `Desconto (${appliedCoupon?.code}): -${formatCurrency(discountAmount)}\n`;
-        msg += `Portes: ${shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}\n`;
-        msg += `Total Final: *${formatCurrency(finalTotal)}*`;
-        
-        if (platform === 'wa') window.open(`https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(msg)}`);
-        else window.open(TELEGRAM_LINK);
-        setCheckoutStep('success');
-    }
+    let msg = `🛍️ Pedido ${currentOrderId}\n`;
+    msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja (Leiria)' : '🚚 Envio CTT'}\n`;
+    msg += `Pagamento: ${userInfo.paymentMethod}\n`;
+    msg += `Cliente: ${userInfo.name} (${userInfo.phone})\n`;
+    msg += `Itens:\n${cartItems.map(i => `• ${i.quantity}x ${i.name} ${i.selectedVariant ? `(${i.selectedVariant})` : ''}`).join('\n')}\n`;
+    if (discountAmount > 0) msg += `Desconto (${appliedCoupon?.code}): -${formatCurrency(discountAmount)}\n`;
+    msg += `Portes: ${shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}\n`;
+    msg += `Total Final: *${formatCurrency(finalTotal)}*`;
+    
+    setPendingOrder(newOrder);
+    setFinalMessage(msg);
+    setSelectedPlatform(platform);
+    setCheckoutStep('tutorial');
     setIsFinalizing(false);
+  };
+
+  const handleConfirmSent = async () => {
+      if (!pendingOrder) return;
+      setIsFinalizing(true);
+      const success = await onCheckout(pendingOrder);
+      if (success) {
+          setCheckoutStep('success');
+      }
+      setIsFinalizing(false);
   };
 
   return (
@@ -299,7 +311,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
       <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
-        {checkoutStep !== 'success' && (
+        {checkoutStep !== 'success' && checkoutStep !== 'tutorial' && (
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 shrink-0">
             <div className="flex items-center gap-2">
                 {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep('cart')} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full dark:text-white"><ChevronLeft size={20}/></button>}
@@ -498,9 +510,19 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 <p className="font-bold mb-2">Quase lá!</p>
                 <p className="text-sm">Escolha por onde quer enviar o pedido. A nossa equipa irá confirmar os dados e pagamento consigo.</p>
               </div>
-              <button onClick={() => handleFinalize('wa')} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition-colors">Enviar via WhatsApp</button>
-              <button onClick={() => handleFinalize('tg')} className="w-full bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-600 transition-colors">Enviar via Telegram</button>
+              <button onClick={() => handleStartCheckout('wa')} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition-colors">Enviar via WhatsApp</button>
+              <button onClick={() => handleStartCheckout('tg')} className="w-full bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-600 transition-colors">Enviar via Telegram</button>
             </div>
+          )}
+
+          {checkoutStep === 'tutorial' && (
+              <OrderTutorial 
+                  message={finalMessage} 
+                  platform={selectedPlatform} 
+                  actionUrl={selectedPlatform === 'wa' ? `https://wa.me/${SELLER_PHONE}?text=${encodeURIComponent(finalMessage)}` : TELEGRAM_LINK}
+                  onComplete={handleConfirmSent}
+                  isLoading={isFinalizing}
+              />
           )}
 
           {checkoutStep === 'success' && (
@@ -533,7 +555,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
           )}
         </div>
 
-        {cartItems.length > 0 && checkoutStep !== 'success' && checkoutStep !== 'platform' && (
+        {cartItems.length > 0 && checkoutStep !== 'success' && checkoutStep !== 'platform' && checkoutStep !== 'tutorial' && (
           <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
             <div className="flex justify-between text-gray-500 dark:text-gray-400 text-sm mb-2"><span>Subtotal</span><span>{formatCurrency(total)}</span></div>
             {discountAmount > 0 && (
