@@ -61,6 +61,9 @@ service cloud.firestore {
     // Campanhas de Notificação (Push): Apenas Admin (ESTA É A REGRA QUE FALTAVA)
     match /push_campaigns/{campaignId} { allow read, write: if isAdmin(); }
 
+    // Movimentos de Stock: Apenas Admin (Necessário para dar baixa de encomendas)
+    match /stock_movements/{movementId} { allow read, write: if isAdmin(); }
+
     // Cupões
     match /coupons/{docId} {
       allow read: if true;
