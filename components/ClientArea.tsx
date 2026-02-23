@@ -349,23 +349,23 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
           
           {/* Sidebar */}
           <aside className="w-full md:w-1/4 space-y-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-center">
                 <div className="relative inline-block mb-4">
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-50 shadow-md bg-gray-100 mx-auto">
-                        {user.photoURL ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" /> : <UserIcon size={48} className="text-gray-300 mt-6 mx-auto" />}
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-50 dark:border-gray-700 shadow-md bg-gray-100 dark:bg-gray-700 mx-auto">
+                        {user.photoURL ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" /> : <UserIcon size={48} className="text-gray-300 dark:text-gray-500 mt-6 mx-auto" />}
                         {isUploading && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="text-white animate-spin" /></div>}
                     </div>
                     <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full shadow-lg hover:scale-110 transition-transform"><Camera size={14}/></button>
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                 </div>
-                <h3 className="font-bold text-lg text-gray-900">{user.name}</h3>
-                <p className="text-sm text-gray-500 mb-4">{user.email}</p>
-                <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold gap-1.5 ${currentTier === 'Ouro' ? 'bg-yellow-100 text-yellow-700' : currentTier === 'Prata' ? 'bg-gray-100 text-gray-700' : 'bg-orange-100 text-orange-700'}`}>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">{user.name}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{user.email}</p>
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold gap-1.5 ${currentTier === 'Ouro' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : currentTier === 'Prata' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'}`}>
                     <Award size={14} /> Cliente {currentTier}
                 </div>
             </div>
 
-            <nav className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <nav className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                 {[
                     { id: 'overview', icon: LayoutDashboard, label: 'Visão Geral' },
                     { id: 'orders', icon: Package, label: 'Encomendas' },
@@ -378,12 +378,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     <button 
                         key={item.id}
                         onClick={() => setActiveTab(item.id as ActiveTab)}
-                        className={`flex items-center gap-3 px-6 py-4 text-sm font-bold transition-colors border-l-4 ${activeTab === item.id ? 'bg-blue-50 text-primary border-primary' : 'text-gray-600 border-transparent hover:bg-gray-50'}`}
+                        className={`flex items-center gap-3 px-6 py-4 text-sm font-bold transition-colors border-l-4 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-primary border-primary' : 'text-gray-600 dark:text-gray-400 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
                     >
                         <item.icon size={18} /> {item.label}
                     </button>
                 ))}
-                <button onClick={onLogout} className="flex items-center gap-3 px-6 py-4 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors border-l-4 border-transparent mt-4">
+                <button onClick={onLogout} className="flex items-center gap-3 px-6 py-4 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border-l-4 border-transparent mt-4">
                     <LogOut size={18} /> Terminar Sessão
                 </button>
             </nav>
@@ -396,17 +396,17 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             {activeTab === 'overview' && (
               <div className="animate-fade-in space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div className="bg-blue-50 p-3 rounded-xl text-primary"><Package size={24}/></div>
-                        <div><p className="text-xs text-gray-500 font-bold uppercase">Encomendas</p><p className="text-2xl font-bold">{totalOrdersCount}</p></div>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl text-primary"><Package size={24}/></div>
+                        <div><p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Encomendas</p><p className="text-2xl font-bold text-gray-900 dark:text-white">{totalOrdersCount}</p></div>
                     </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div className="bg-yellow-50 p-3 rounded-xl text-yellow-600"><Coins size={24}/></div>
-                        <div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="text-2xl font-bold">{currentPoints}</p></div>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+                        <div className="bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-xl text-yellow-600 dark:text-yellow-400"><Coins size={24}/></div>
+                        <div><p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">AllPoints</p><p className="text-2xl font-bold text-gray-900 dark:text-white">{currentPoints}</p></div>
                     </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div className="bg-green-50 p-3 rounded-xl text-green-600"><DollarSign size={24}/></div>
-                        <div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="text-2xl font-bold">{totalSpentCount.toFixed(2)}€</p></div>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+                        <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-xl text-green-600 dark:text-green-400"><DollarSign size={24}/></div>
+                        <div><p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Total Gasto</p><p className="text-2xl font-bold text-gray-900 dark:text-white">{totalSpentCount.toFixed(2)}€</p></div>
                     </div>
                 </div>
 
@@ -432,12 +432,12 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             {/* SUPPORT TICKETS (NOVO) */}
             {activeTab === 'support' && (
                 <div className="animate-fade-in space-y-6">
-                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                         <div>
-                            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <Headphones className="text-primary"/> Os Meus Pedidos de Suporte
                             </h2>
-                            <p className="text-gray-500 text-sm mt-1">Histórico de assistência criada pela Rofi.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Histórico de assistência criada pela Rofi.</p>
                         </div>
                         <button onClick={onOpenSupportChat} className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-sm shadow hover:bg-blue-600 transition-colors flex items-center gap-2">
                             <Sparkles size={16} /> Novo Pedido (Rofi)
@@ -447,34 +447,34 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     {loadingTickets ? (
                         <div className="text-center py-12"><Loader2 className="animate-spin text-primary mx-auto" size={32} /></div>
                     ) : myTickets.length === 0 ? (
-                        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-                            <div className="bg-blue-50 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center border border-gray-100 dark:border-gray-700">
+                            <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
                                 <Headphones size={32} className="text-primary" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900">Sem pedidos de suporte</h3>
-                            <p className="text-gray-500 mt-2">Se tiver algum problema com uma encomenda, fale com a Rofi no canto do ecrã.</p>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sem pedidos de suporte</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mt-2">Se tiver algum problema com uma encomenda, fale com a Rofi no canto do ecrã.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {myTickets.map(ticket => (
-                                <div key={ticket.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-blue-300 transition-all">
+                                <div key={ticket.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-300 transition-all">
                                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === 'Aberto' ? 'bg-red-100 text-red-700' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === 'Aberto' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
                                                     {ticket.status}
                                                 </span>
                                                 <span className="text-gray-400 text-xs font-mono">#{ticket.id}</span>
                                             </div>
-                                            <h3 className="font-bold text-lg text-gray-900">{ticket.subject}</h3>
+                                            <h3 className="font-bold text-lg text-gray-900 dark:text-white">{ticket.subject}</h3>
                                         </div>
-                                        <div className="text-right text-xs text-gray-500 flex flex-col items-end">
+                                        <div className="text-right text-xs text-gray-500 dark:text-gray-400 flex flex-col items-end">
                                             <span className="flex items-center gap-1"><Clock size={12}/> {new Date(ticket.createdAt).toLocaleDateString()}</span>
-                                            {ticket.orderId && <span className="font-bold text-primary bg-blue-50 px-2 py-0.5 rounded mt-1">Enc: {ticket.orderId}</span>}
+                                            {ticket.orderId && <span className="font-bold text-primary bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded mt-1">Enc: {ticket.orderId}</span>}
                                         </div>
                                     </div>
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                        <p className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex gap-2">
                                             <MessageSquare size={16} className="text-gray-400 shrink-0 mt-0.5"/>
                                             {ticket.description}
                                         </p>
@@ -489,13 +489,13 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             {/* ORDERS */}
             {activeTab === 'orders' && (
               <div className="animate-fade-in space-y-6">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3"><Package className="text-primary"/> As Minhas Encomendas</h2>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-3"><Package className="text-primary"/> As Minhas Encomendas</h2>
                 
                 {(!orders || orders.length === 0) ? (
-                  <div className="p-12 text-center bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                    <div className="bg-gray-100 p-4 rounded-full mb-4"><Package size={32} className="text-gray-400" /></div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Sem encomendas</h3>
-                    <p className="text-gray-500 max-sm">Ainda não fez nenhuma compra. Explore a nossa loja.</p>
+                  <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center justify-center">
+                    <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-full mb-4"><Package size={32} className="text-gray-400" /></div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sem encomendas</h3>
+                    <p className="text-gray-500 dark:text-gray-400 max-sm">Ainda não fez nenhuma compra. Explore a nossa loja.</p>
                     <a href="#/" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; }} className="mt-6 text-primary font-medium hover:underline">Ir para a Loja</a>
                   </div>
                 ) : (
@@ -504,41 +504,41 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                     const currentStep = getStatusStep(order.status);
 
                     return (
-                      <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300">
-                        <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-50/50" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
+                      <div key={order.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                        <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-700/50" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
                             <div className="flex items-center gap-4">
                                 <div className="hidden sm:flex items-center gap-2 -space-x-4">
                                     {getSafeItems(order.items).slice(0, 3).map((item, idx) => (
-                                        <div key={idx} className="w-12 h-12 bg-white rounded-full border-2 border-white shadow flex items-center justify-center overflow-hidden">
+                                        <div key={idx} className="w-12 h-12 bg-white dark:bg-gray-700 rounded-full border-2 border-white dark:border-gray-600 shadow flex items-center justify-center overflow-hidden">
                                             <img src={typeof item === 'object' ? item.image : LOGO_URL} alt="" className="w-full h-full object-cover"/>
                                         </div>
                                     ))}
                                 </div>
                                 <div>
-                                    <p className="font-bold text-gray-900">{displayOrderId(order.id)}</p>
-                                    <p className="text-xs text-gray-500">{new Date(order.date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                    <p className="font-bold text-gray-900 dark:text-white">{displayOrderId(order.id)}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(order.date).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <span className="font-bold text-lg">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0)}</span>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${order.status === 'Entregue' ? 'bg-green-100 text-green-800' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800' : order.status === 'Pago' ? 'bg-cyan-100 text-cyan-800' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{order.status}</span>
+                                <span className="font-bold text-lg text-gray-900 dark:text-white">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(order.total || 0)}</span>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${order.status === 'Entregue' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : order.status === 'Enviado' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : order.status === 'Pago' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400' : order.status === 'Cancelado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>{order.status}</span>
                                 {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
                             </div>
                         </div>
 
                         {isExpanded && (
-                          <div className="p-6 border-t border-gray-100 bg-gray-50/30 animate-fade-in-down">
+                          <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/30 animate-fade-in-down">
                             
                             {/* Visual Timeline (NOVO) */}
-                            <div className="mb-10 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-                                <h4 className="font-bold text-gray-800 mb-6 text-sm flex items-center gap-2"><Truck size={16} className="text-primary"/> Rastreio da Encomenda</h4>
+                            <div className="mb-10 bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                <h4 className="font-bold text-gray-800 dark:text-white mb-6 text-sm flex items-center gap-2"><Truck size={16} className="text-primary"/> Rastreio da Encomenda</h4>
                                 {order.status === 'Cancelado' ? (
-                                    <div className="bg-red-50 p-4 rounded-lg text-center text-red-600 font-bold border border-red-100 flex items-center justify-center gap-2">
+                                    <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg text-center text-red-600 dark:text-red-400 font-bold border border-red-100 dark:border-red-800 flex items-center justify-center gap-2">
                                         <XCircle size={20} /> Encomenda Cancelada
                                     </div>
                                 ) : (
                                     <div className="relative">
-                                        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -translate-y-1/2 rounded-full hidden md:block"></div>
+                                        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 dark:bg-gray-700 -translate-y-1/2 rounded-full hidden md:block"></div>
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
                                             {['Processamento', 'Pago', 'Enviado', 'Entregue'].map((step, idx) => {
                                                 const isCompleted = currentStep >= idx;
@@ -546,15 +546,15 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                                 
                                                 return (
                                                     <div key={step} className="flex flex-row md:flex-col items-center gap-4 md:gap-2 relative z-10">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 transition-all duration-500 ${isCompleted ? 'bg-primary border-blue-200 text-white shadow-md' : 'bg-white border-gray-200 text-gray-300'}`}>
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 transition-all duration-500 ${isCompleted ? 'bg-primary border-blue-200 dark:border-blue-900 text-white shadow-md' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-300 dark:text-gray-600'}`}>
                                                             {idx === 0 && <Clock size={16} />}
                                                             {idx === 1 && <CheckCircle size={16} />}
                                                             {idx === 2 && <Truck size={16} />}
                                                             {idx === 3 && <Package size={16} />}
                                                         </div>
                                                         <div className="md:text-center">
-                                                            <p className={`font-bold text-sm ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>{step}</p>
-                                                            {isCurrent && <span className="text-[10px] text-primary font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block mt-1">Em curso</span>}
+                                                            <p className={`font-bold text-sm ${isCompleted ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{step}</p>
+                                                            {isCurrent && <span className="text-[10px] text-primary font-medium bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full inline-block mt-1">Em curso</span>}
                                                         </div>
                                                     </div>
                                                 );
@@ -565,16 +565,16 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
                                 {/* Tracking Link Box (NOVO) */}
                                 {order.trackingNumber && (
-                                    <div className="mt-8 bg-green-50 border border-green-100 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="mt-8 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="bg-white p-2 rounded-lg text-green-600 border border-green-100"><Truck size={20} /></div>
+                                            <div className="bg-white dark:bg-gray-800 p-2 rounded-lg text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800"><Truck size={20} /></div>
                                             <div>
-                                                <p className="text-xs text-green-800 font-bold uppercase">Código de Rastreio CTT</p>
-                                                <div className="font-mono text-lg font-bold text-green-900 tracking-wider">{order.trackingNumber}</div>
+                                                <p className="text-xs text-green-800 dark:text-green-300 font-bold uppercase">Código de Rastreio CTT</p>
+                                                <div className="font-mono text-lg font-bold text-green-900 dark:text-green-100 tracking-wider">{order.trackingNumber}</div>
                                             </div>
                                         </div>
                                         <div className="flex gap-2 w-full sm:w-auto">
-                                            <button onClick={() => copyTracking(order.trackingNumber!)} className="bg-white hover:bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-bold border border-green-200 flex-1 sm:flex-none flex items-center justify-center gap-2">
+                                            <button onClick={() => copyTracking(order.trackingNumber!)} className="bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 px-4 py-2 rounded-lg text-sm font-bold border border-green-200 dark:border-green-700 flex-1 sm:flex-none flex items-center justify-center gap-2">
                                                 {copyTrackingSuccess ? 'Copiado!' : <><Copy size={16}/> Copiar</>}
                                             </button>
                                             <a 
@@ -592,17 +592,17 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1">
-                                    <h4 className="font-bold text-gray-800 mb-4">Detalhes do Estado</h4>
+                                    <h4 className="font-bold text-gray-800 dark:text-white mb-4">Detalhes do Estado</h4>
                                     <ul className="space-y-4">
                                         {(order.statusHistory || [{ status: order.status, date: order.date }]).map((h, idx) => (
                                             <li key={idx} className="flex gap-3">
                                                 <div className="flex flex-col items-center">
-                                                    <div className="w-2 h-2 rounded-full bg-gray-300 mt-2"></div>
-                                                    {idx < (order.statusHistory || []).length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1"></div>}
+                                                    <div className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 mt-2"></div>
+                                                    {idx < (order.statusHistory || []).length - 1 && <div className="w-0.5 flex-1 bg-gray-200 dark:bg-gray-700 mt-1"></div>}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-sm text-gray-900">{h.status}</p>
-                                                    <p className="text-xs text-gray-500">{new Date(h.date).toLocaleString('pt-PT', { day: 'numeric', month: 'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
+                                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{h.status}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(h.date).toLocaleString('pt-PT', { day: 'numeric', month: 'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</p>
                                                     {h.notes && <p className="text-xs text-gray-400 italic mt-0.5">{h.notes}</p>}
                                                 </div>
                                             </li>
@@ -612,29 +612,29 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 
                                 <div className="lg:col-span-2 space-y-6">
                                     <div>
-                                        <h4 className="font-bold text-gray-800 mb-2">Itens</h4>
+                                        <h4 className="font-bold text-gray-800 dark:text-white mb-2">Itens</h4>
                                         <div className="space-y-3">
                                           {getSafeItems(order.items).map((item, idx) => (
-                                            <div key={idx} className="flex items-start gap-4 p-3 bg-white rounded-lg border border-gray-100">
-                                                <img src={typeof item === 'object' ? item.image : LOGO_URL} className="w-16 h-16 object-cover rounded-md bg-gray-100" />
+                                            <div key={idx} className="flex items-start gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                                                <img src={typeof item === 'object' ? item.image : LOGO_URL} className="w-16 h-16 object-cover rounded-md bg-gray-100 dark:bg-gray-700" />
                                                 <div className="flex-1">
-                                                    <p className="font-bold text-sm text-gray-800">{typeof item === 'object' ? item.name : item}</p>
-                                                    {typeof item === 'object' && item.selectedVariant && <p className="text-xs text-gray-500">{item.selectedVariant}</p>}
+                                                    <p className="font-bold text-sm text-gray-800 dark:text-white">{typeof item === 'object' ? item.name : item}</p>
+                                                    {typeof item === 'object' && item.selectedVariant && <p className="text-xs text-gray-500 dark:text-gray-400">{item.selectedVariant}</p>}
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="font-bold text-sm">{typeof item === 'object' ? formatCurrency(item.price * item.quantity) : ''}</p>
-                                                    <p className="text-xs text-gray-500">Qtd: {typeof item === 'object' ? item.quantity : 1}</p>
+                                                    <p className="font-bold text-sm text-gray-900 dark:text-white">{typeof item === 'object' ? formatCurrency(item.price * item.quantity) : ''}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Qtd: {typeof item === 'object' ? item.quantity : 1}</p>
                                                 </div>
                                             </div>
                                           ))}
                                         </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
-                                        <button onClick={() => handlePrintOrder(order)} className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-100 px-4 py-2 rounded-lg hover:bg-blue-200 shadow-sm"><Printer size={16}/> Imprimir Fatura / Garantia</button>
+                                    <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <button onClick={() => handlePrintOrder(order)} className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 shadow-sm"><Printer size={16}/> Imprimir Fatura / Garantia</button>
                                         
-                                        {['Processamento', 'Pago'].includes(order.status) && <button onClick={() => setModalState({ type: 'cancel', order })} className="flex items-center gap-2 text-sm font-bold text-red-600 bg-red-100 px-4 py-2 rounded-lg hover:bg-red-200"><XCircle size={16}/> Cancelar Encomenda</button>}
+                                        {['Processamento', 'Pago'].includes(order.status) && <button onClick={() => setModalState({ type: 'cancel', order })} className="flex items-center gap-2 text-sm font-bold text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50"><XCircle size={16}/> Cancelar Encomenda</button>}
                                         
-                                        {order.status === 'Entregue' && <button onClick={onOpenSupportChat} className="flex items-center gap-2 text-sm font-bold text-purple-700 bg-purple-100 border border-purple-200 px-4 py-2 rounded-lg hover:bg-purple-200 shadow-sm"><Sparkles size={16} /> Ajuda / Garantia (IA)</button>}
+                                        {order.status === 'Entregue' && <button onClick={onOpenSupportChat} className="flex items-center gap-2 text-sm font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-200 dark:border-purple-800 px-4 py-2 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 shadow-sm"><Sparkles size={16} /> Ajuda / Garantia (IA)</button>}
                                     </div>
                                 </div>
                             </div>
@@ -654,24 +654,24 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
             {/* WISHLIST */}
             {activeTab === 'wishlist' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
-                  <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Heart size={20} className="text-red-500"/> Meus Favoritos</h2></div>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-8 animate-fade-in">
+                  <div className="p-6 border-b border-gray-100 dark:border-gray-700"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Heart size={20} className="text-red-500"/> Meus Favoritos</h2></div>
                   <div className="p-6">
                       {favoriteProducts.length === 0 ? (
                           <div className="text-center py-12">
-                              <Heart size={48} className="mx-auto text-gray-200 mb-4" />
-                              <p className="text-gray-500">Ainda não guardou nenhum produto.</p>
+                              <Heart size={48} className="mx-auto text-gray-200 dark:text-gray-600 mb-4" />
+                              <p className="text-gray-500 dark:text-gray-400">Ainda não guardou nenhum produto.</p>
                           </div>
                       ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                               {favoriteProducts.map(p => (
-                                  <div key={p.id} className="group border rounded-xl p-4 hover:shadow-md transition-shadow relative">
-                                      <button onClick={() => onToggleWishlist(p.id)} className="absolute top-2 right-2 text-red-500 p-1 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={16}/></button>
+                                  <div key={p.id} className="group border dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition-shadow relative bg-white dark:bg-gray-800">
+                                      <button onClick={() => onToggleWishlist(p.id)} className="absolute top-2 right-2 text-red-500 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"><Trash2 size={16}/></button>
                                       <a href={`#product/${p.id}`} className="block">
-                                          <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden mb-3 p-4">
-                                              <img src={p.image} className="w-full h-full object-contain mix-blend-multiply" />
+                                          <div className="aspect-square bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 p-4">
+                                              <img src={p.image} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                                           </div>
-                                          <h4 className="font-bold text-gray-900 text-sm truncate">{p.name}</h4>
+                                          <h4 className="font-bold text-gray-900 dark:text-white text-sm truncate">{p.name}</h4>
                                           <p className="text-primary font-bold text-lg mt-1">{formatCurrency(p.price)}</p>
                                       </a>
                                       <button onClick={() => onAddToCart(p)} className="w-full mt-3 bg-secondary text-white py-2 rounded-lg text-xs font-bold hover:bg-primary transition-colors flex items-center justify-center gap-2"><ShoppingCart size={14}/> Adicionar</button>
@@ -686,34 +686,34 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             {/* PROFILE */}
             {activeTab === 'profile' && (
               <div className="space-y-6 animate-fade-in">
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-primary"/> Dados da Conta</h2>
-                          {profileSaved && <span className="text-green-600 text-xs font-bold animate-fade-in flex items-center gap-1"><CheckCircle size={14}/> Guardado com sucesso!</span>}
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                      <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><UserIcon size={20} className="text-primary"/> Dados da Conta</h2>
+                          {profileSaved && <span className="text-green-600 dark:text-green-400 text-xs font-bold animate-fade-in flex items-center gap-1"><CheckCircle size={14}/> Guardado com sucesso!</span>}
                       </div>
                       <form onSubmit={handleProfileSubmit} className="p-8 space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Nome Completo</label><input type="text" required value={profileForm.name} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
-                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Email</label><input type="email" disabled value={profileForm.email} className="w-full p-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed" /></div>
-                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Telemóvel</label><input type="tel" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
-                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">NIF (para faturas)</label><input type="text" value={profileForm.nif} onChange={e => setProfileForm({...profileForm, nif: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
-                              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-2">Data de Nascimento</label><input type="date" value={profileForm.birthday} onChange={e => setProfileForm({...profileForm, birthday: e.target.value})} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Nome Completo</label><input type="text" required value={profileForm.name} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Email</label><input type="email" disabled value={profileForm.email} className="w-full p-3 bg-gray-100 dark:bg-gray-600 border border-gray-200 dark:border-gray-500 rounded-xl text-gray-500 dark:text-gray-400 cursor-not-allowed" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Telemóvel</label><input type="tel" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">NIF (para faturas)</label><input type="text" value={profileForm.nif} onChange={e => setProfileForm({...profileForm, nif: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white" /></div>
+                              <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Data de Nascimento</label><input type="date" value={profileForm.birthday} onChange={e => setProfileForm({...profileForm, birthday: e.target.value})} className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white" /></div>
                           </div>
                           <button type="submit" className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-colors flex items-center gap-2"><Save size={20}/> Guardar Alterações</button>
                       </form>
                   </div>
 
                   {/* Configurações de Notificação */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="p-6 border-b border-gray-100">
-                          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Bell size={20} className="text-yellow-500"/> Notificações</h2>
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                      <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+                          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Bell size={20} className="text-yellow-500"/> Notificações</h2>
                       </div>
                       <div className="p-6 flex items-center justify-between">
                           <div>
-                              <p className="font-bold text-gray-800">Alertas de Stock e Promoções</p>
-                              <p className="text-sm text-gray-500 mb-2">Receba avisos quando os seus produtos favoritos voltarem ao stock.</p>
+                              <p className="font-bold text-gray-800 dark:text-white">Alertas de Stock e Promoções</p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Receba avisos quando os seus produtos favoritos voltarem ao stock.</p>
                               {isPushEnabled && (
-                                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-bold">
+                                  <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs px-2 py-1 rounded font-bold">
                                       <CheckCircle size={12}/> Ativo neste dispositivo
                                   </span>
                               )}
@@ -723,7 +723,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             disabled={notifLoading}
                             className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all 
                                 ${isPushEnabled 
-                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' 
+                                    ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800' 
                                     : 'bg-green-600 text-white hover:bg-green-700 shadow-md'
                                 }`}
                           >
@@ -736,37 +736,37 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
             {/* ADDRESSES */}
             {activeTab === 'addresses' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 animate-fade-in">
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                      <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><MapPin size={20} className="text-primary"/> Moradas de Envio</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-8 animate-fade-in">
+                  <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><MapPin size={20} className="text-primary"/> Moradas de Envio</h2>
                       <button onClick={() => setIsAddingAddress(true)} className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"><Plus size={16}/> Adicionar Nova</button>
                   </div>
                   <div className="p-8">
                       {isAddingAddress && (
-                          <form onSubmit={handleAddAddress} className="bg-gray-50 p-6 rounded-2xl border border-gray-200 mb-8 animate-fade-in-down">
-                              <h3 className="font-bold mb-4">Nova Morada</h3>
+                          <form onSubmit={handleAddAddress} className="bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl border border-gray-200 dark:border-gray-600 mb-8 animate-fade-in-down">
+                              <h3 className="font-bold mb-4 text-gray-900 dark:text-white">Nova Morada</h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <input placeholder="Apelido (ex: Casa, Trabalho)" required className="p-3 border rounded-xl" value={newAddress.alias} onChange={e => setNewAddress({...newAddress, alias: e.target.value})} />
-                                  <input placeholder="Rua e Nº Porta" required className="p-3 border rounded-xl" value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} />
-                                  <input placeholder="Localidade" required className="p-3 border rounded-xl" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} />
-                                  <input placeholder="Código Postal" required className="p-3 border rounded-xl" value={newAddress.zip} onChange={e => setNewAddress({...newAddress, zip: e.target.value})} />
+                                  <input placeholder="Apelido (ex: Casa, Trabalho)" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.alias} onChange={e => setNewAddress({...newAddress, alias: e.target.value})} />
+                                  <input placeholder="Rua e Nº Porta" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} />
+                                  <input placeholder="Localidade" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} />
+                                  <input placeholder="Código Postal" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.zip} onChange={e => setNewAddress({...newAddress, zip: e.target.value})} />
                               </div>
                               <div className="flex gap-2 mt-6">
                                   <button type="submit" className="bg-primary text-white px-6 py-2 rounded-xl font-bold">Guardar</button>
-                                  <button type="button" onClick={() => setIsAddingAddress(false)} className="bg-gray-200 px-6 py-2 rounded-xl font-bold">Cancelar</button>
+                                  <button type="button" onClick={() => setIsAddingAddress(false)} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-6 py-2 rounded-xl font-bold">Cancelar</button>
                               </div>
                           </form>
                       )}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(!user.addresses || user.addresses.length === 0) ? (
-                              <p className="text-gray-500 italic col-span-2">Nenhuma morada registada.</p>
+                              <p className="text-gray-500 dark:text-gray-400 italic col-span-2">Nenhuma morada registada.</p>
                           ) : (
                               user.addresses.map(addr => (
-                                  <div key={addr.id} className="border border-gray-200 p-5 rounded-2xl flex justify-between items-start group hover:border-primary transition-colors">
+                                  <div key={addr.id} className="border border-gray-200 dark:border-gray-700 p-5 rounded-2xl flex justify-between items-start group hover:border-primary dark:hover:border-primary transition-colors">
                                       <div>
-                                          <p className="font-bold text-gray-900 flex items-center gap-2">{addr.alias} <CheckCircle size={14} className="text-green-500"/></p>
-                                          <p className="text-sm text-gray-600 mt-1">{addr.street}</p>
-                                          <p className="text-sm text-gray-600">{addr.zip} {addr.city}</p>
+                                          <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">{addr.alias} <CheckCircle size={14} className="text-green-500"/></p>
+                                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{addr.street}</p>
+                                          <p className="text-sm text-gray-600 dark:text-gray-400">{addr.zip} {addr.city}</p>
                                       </div>
                                       <button onClick={() => handleDeleteAddress(addr.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2"><Trash2 size={18}/></button>
                                   </div>
@@ -783,27 +783,27 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         {/* Modal Genérico para Ações de Encomenda */}
         {modalState.order && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
                   <div className="flex items-start justify-between mb-4">
                       <div>
-                          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                               {modalState.type === 'cancel' && <><AlertTriangle className="text-red-500"/> Cancelar Encomenda</>}
                               {modalState.type === 'return' && <><Undo2 className="text-orange-500"/> Pedir Devolução</>}
                           </h3>
-                          <p className="text-sm text-gray-500 mt-1">Ref: {displayOrderId(modalState.order.id)}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Ref: {displayOrderId(modalState.order.id)}</p>
                       </div>
-                      <button onClick={() => setModalState({type: 'cancel', order: null})} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                      <button onClick={() => setModalState({type: 'cancel', order: null})} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={24}/></button>
                   </div>
                   <div className="mb-4">
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                         Descreva a situação detalhadamente (obrigatório).
                       </p>
-                      <label htmlFor="modalReason" className="block text-sm font-bold text-gray-700 mb-2">Descrição</label>
-                      <textarea id="modalReason" value={modalReason} onChange={(e) => setModalReason(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none" rows={4} placeholder="O que aconteceu?"/>
+                      <label htmlFor="modalReason" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Descrição</label>
+                      <textarea id="modalReason" value={modalReason} onChange={(e) => setModalReason(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl focus:ring-2 focus:ring-primary outline-none" rows={4} placeholder="O que aconteceu?"/>
                   </div>
                   <div className="flex justify-end gap-3">
-                      <button onClick={() => setModalState({type: 'cancel', order: null})} className="px-4 py-2 border rounded-lg text-gray-700 font-medium hover:bg-gray-50">Voltar</button>
-                      <button onClick={handleOrderAction} disabled={!modalReason.trim() || isProcessingAction} className="px-6 py-2 bg-primary text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                      <button onClick={() => setModalState({type: 'cancel', order: null})} className="px-4 py-2 border dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Voltar</button>
+                      <button onClick={handleOrderAction} disabled={!modalReason.trim() || isProcessingAction} className="px-6 py-2 bg-primary text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200 dark:shadow-none transition-all active:scale-95">
                           {isProcessingAction ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
                           {isProcessingAction ? 'A processar...' : 'Confirmar'}
                       </button>
