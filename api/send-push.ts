@@ -44,7 +44,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let tokens: string[] = [];
 
         // 2. Recolher Tokens (Lógica Robusta Multi-Device & Segmentação)
-        if (target === 'specific' && specificUserId) {
+        if (target === 'admins') {
+            // Caso Especial: Enviar para ADMINS
+            // Lista de emails de admin (Sincronizada com firestore.rules)
+            const ADMIN_EMAILS = [
+                "filipe_coval_90@hotmail.com", 
+                "mcpoleca@gmail.com", 
+                "filipe@teste.com"
+            ];
+            
+            // Buscar utilizadores com estes emails
+            // Nota: Firestore 'in' query suporta até 10 valores
+            const adminsSnap = await db.collection('users').where('email', 'in', ADMIN_EMAILS).get();
+            
+            adminsSnap.forEach(doc => {
+                const userData = doc.data();
+                if (userData?.deviceTokens && Array.isArray(userData.deviceTokens)) {
+                    tokens.push(...userData.deviceTokens);
+                } else if (userData?.fcmToken) {
+                    tokens.push(userData.fcmToken);
+                }
+            });
+        }
+        else if (target === 'specific' && specificUserId) {
             // Caso A: Um único utilizador
             const userDoc = await db.collection('users').doc(specificUserId).get();
             if (userDoc.exists) {
