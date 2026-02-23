@@ -567,7 +567,10 @@ const App: React.FC = () => {
                   body: `Pedido ${newOrder.id} de ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(newOrder.total)} recebido.`,
                   link: 'https://www.all-shop.net/#dashboard'
               })
-          }).catch(err => console.error("Falha ao enviar push para admins:", err));
+          })
+          .then(res => res.json())
+          .then(data => console.log("Push Admin Response:", data))
+          .catch(err => console.error("Falha ao enviar push para admins:", err));
           
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
