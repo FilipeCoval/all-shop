@@ -45,24 +45,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2. Recolher Tokens (Lógica Robusta Multi-Device & Segmentação)
         if (target === 'admins') {
+            console.log("Targeting admins (scan mode)...");
             // Caso Especial: Enviar para ADMINS
             // Lista de emails de admin (Sincronizada com firestore.rules)
             const ADMIN_EMAILS = [
                 "filipe_coval_90@hotmail.com", 
                 "mcpoleca@gmail.com", 
                 "filipe@teste.com"
-            ];
+            ].map(e => e.toLowerCase());
             
-            // Buscar utilizadores com estes emails
-            // Nota: Firestore 'in' query suporta até 10 valores
-            const adminsSnap = await db.collection('users').where('email', 'in', ADMIN_EMAILS).get();
+            // Buscar TODOS os utilizadores e filtrar em memória para evitar problemas de Case Sensitivity
+            // Nota: Em produção com milhares de users, deve-se usar um campo 'normalizedEmail' ou 'isAdmin' na BD.
+            const allUsersSnap = await db.collection('users').get();
+            console.log(`Scanning ${allUsersSnap.size} users for admins...`);
             
-            adminsSnap.forEach(doc => {
+            allUsersSnap.forEach(doc => {
                 const userData = doc.data();
-                if (userData?.deviceTokens && Array.isArray(userData.deviceTokens)) {
-                    tokens.push(...userData.deviceTokens);
-                } else if (userData?.fcmToken) {
-                    tokens.push(userData.fcmToken);
+                if (userData.email && ADMIN_EMAILS.includes(userData.email.trim().toLowerCase())) {
+                    console.log(`Found admin: ${userData.email}`);
+                    if (userData.deviceTokens && Array.isArray(userData.deviceTokens)) {
+                        console.log(`Found ${userData.deviceTokens.length} device tokens.`);
+                        tokens.push(...userData.deviceTokens);
+                    } else if (userData.fcmToken) {
+                        console.log(`Found legacy fcmToken.`);
+                        tokens.push(userData.fcmToken);
+                    } else {
+                        console.log("No tokens found for this admin.");
+                    }
                 }
             });
         }
