@@ -151,7 +151,7 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
                             </div>
                             {nextTier && (
                                 <p className="text-xs text-gray-400 mt-2 text-center">
-                                    Faltam {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(nextTier.threshold - (user.totalSpent || 0))} para nível {nextTier.name}
+                                    Faltam {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(nextTier.threshold - (user.totalSpent || 0))} para nível {nextTier.label}
                                 </p>
                             )}
                         </div>
@@ -184,6 +184,62 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
                     </div>
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2">Aniversário</h3>
                     <p className="text-gray-500 dark:text-gray-400 text-sm">Receba um presente de <span className="font-bold text-pink-600">100 pontos</span> no dia do seu aniversário.</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-green-600 mb-4">
+                        <Share2 size={24} />
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2">Partilhar Produtos</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Ganhe <span className="font-bold text-green-600">5 pontos</span> por cada partilha diária de produtos nas redes sociais.</p>
+                </div>
+            </div>
+        </div>
+
+        {/* Níveis de Fidelidade */}
+        <div className="mb-16">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 text-center">Níveis de Fidelidade</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Bronze */}
+                <div className={`p-6 rounded-2xl border-2 transition-all ${user?.tier === 'Bronze' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10 shadow-lg scale-105' : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 opacity-80'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-yellow-600 text-white p-2 rounded-lg font-bold text-xs uppercase">Bronze</div>
+                        {user?.tier === 'Bronze' && <span className="text-xs font-bold text-yellow-600 flex items-center gap-1"><CheckCircle size={12}/> Nível Atual</span>}
+                    </div>
+                    <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">Iniciante</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">O ponto de partida para todos os membros.</p>
+                    <ul className="space-y-2 text-sm">
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> 1 ponto por cada 1€ gasto</li>
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> Acesso a recompensas básicas</li>
+                    </ul>
+                </div>
+
+                {/* Silver */}
+                <div className={`p-6 rounded-2xl border-2 transition-all ${user?.tier === 'Prata' ? 'border-gray-400 bg-gray-50 dark:bg-gray-700/30 shadow-lg scale-105' : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 opacity-80'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-gray-400 text-white p-2 rounded-lg font-bold text-xs uppercase">Prata</div>
+                        {user?.tier === 'Prata' && <span className="text-xs font-bold text-gray-500 flex items-center gap-1"><CheckCircle size={12}/> Nível Atual</span>}
+                    </div>
+                    <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">Membro Prata</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Ao atingir {LOYALTY_TIERS.SILVER.threshold}€ em compras.</p>
+                    <ul className="space-y-2 text-sm">
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> <strong>{LOYALTY_TIERS.SILVER.multiplier}x pontos</strong> por compra</li>
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> Ofertas exclusivas</li>
+                    </ul>
+                </div>
+
+                {/* Gold */}
+                <div className={`p-6 rounded-2xl border-2 transition-all ${user?.tier === 'Ouro' ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 shadow-lg scale-105' : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 opacity-80'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-yellow-400 text-black p-2 rounded-lg font-bold text-xs uppercase">Ouro</div>
+                        {user?.tier === 'Ouro' && <span className="text-xs font-bold text-yellow-500 flex items-center gap-1"><CheckCircle size={12}/> Nível Atual</span>}
+                    </div>
+                    <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">Membro VIP</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Ao atingir {LOYALTY_TIERS.GOLD.threshold}€ em compras.</p>
+                    <ul className="space-y-2 text-sm">
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> <strong>{LOYALTY_TIERS.GOLD.multiplier}x pontos</strong> por compra</li>
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> Atendimento prioritário</li>
+                        <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300"><CheckCircle size={14} className="text-green-500"/> Acesso antecipado a promoções</li>
+                    </ul>
                 </div>
             </div>
         </div>
