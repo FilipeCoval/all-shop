@@ -295,8 +295,9 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 {isScannerOpen && (
                     <div className="absolute inset-0 z-50 bg-black">
                         <BarcodeScanner 
-                            onScan={(code) => processCode(code)} 
+                            onCodeSubmit={(code) => processCode(code)} 
                             onClose={() => setIsScannerOpen(false)} 
+                            mode="serial"
                         />
                     </div>
                 )}
