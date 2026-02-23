@@ -557,6 +557,18 @@ const App: React.FC = () => {
           setCartItems([]);
           notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
           
+          // Notificar Admins via Push (Nova Funcionalidade)
+          fetch('/api/send-push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  target: 'admins',
+                  title: 'Nova Encomenda! 💰',
+                  body: `Pedido ${newOrder.id} de ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(newOrder.total)} recebido.`,
+                  link: 'https://www.all-shop.net/#dashboard'
+              })
+          }).catch(err => console.error("Falha ao enviar push para admins:", err));
+          
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
