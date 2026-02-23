@@ -173,6 +173,8 @@ export interface ProductUnit {
   addedAt: string;
   reservedBy?: string; // sessionId ou userId
   reservedUntil?: string;
+  soldAt?: string;
+  soldToOrder?: string;
 }
 
 export interface StockReservation {
@@ -258,3 +260,4 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
