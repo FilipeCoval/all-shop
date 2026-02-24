@@ -18,6 +18,7 @@ import InventoryTab from './InventoryTab';
 import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
 import OrderFulfillmentModal from './OrderFulfillmentModal';
+import ReportsTab from './ReportsTab';
 
 // --- HELPERS ---
 const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -39,7 +40,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports'>('inventory');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -596,6 +597,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Headphones size={16} /> Suporte</button>
                 <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
                 <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
+                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><BarChart2 size={16} /> Relatórios</button>
             </div>
             
             {/* DESKTOP SOUND TOGGLE (Visible on Desktop) */}
@@ -779,6 +781,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         )}
 
         {/* ... (Coupons, Support Tabs) ... */}
+
         {activeTab === 'coupons' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
                 {/* Create Coupon Card */}
@@ -869,6 +872,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     {coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}
                 </div>
             </div>
+        )}
+
+        {activeTab === 'reports' && (
+            <ReportsTab orders={allOrders} inventoryProducts={products} />
         )}
 
         {/* ... (Support Tab) ... */}
@@ -1040,3 +1047,4 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
+
