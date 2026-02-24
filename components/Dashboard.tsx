@@ -1047,4 +1047,3 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
-
