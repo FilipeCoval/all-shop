@@ -20,7 +20,9 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
         return orders.filter(o => {
             const d = new Date(o.date);
             const isValidStatus = ['Pago', 'Enviado', 'Entregue', 'Levantamento em Loja'].includes(o.status);
-            return isValidStatus && d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+            const isYearMatch = d.getFullYear() === selectedYear;
+            const isMonthMatch = selectedMonth === -1 ? true : d.getMonth() === selectedMonth;
+            return isValidStatus && isYearMatch && isMonthMatch;
         });
     }, [orders, selectedMonth, selectedYear]);
 
@@ -70,28 +72,51 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
         };
     }, [monthlyOrders, inventoryProducts]);
 
-    // Dados para o Gráfico Diário
+    // Dados para o Gráfico
     const chartData = useMemo(() => {
-        const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
         const data = [];
 
-        for (let i = 1; i <= daysInMonth; i++) {
-            const dayOrders = monthlyOrders.filter(o => new Date(o.date).getDate() === i);
-            const daySales = dayOrders.reduce((acc, o) => acc + o.total, 0);
-            const dayProfit = dayOrders.reduce((acc, o) => {
-                let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
-                o.items.forEach((item: any) => {
-                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                    cost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                });
-                return acc + (o.total - cost);
-            }, 0);
+        if (selectedMonth === -1) {
+            // Gráfico Anual (Jan-Dez)
+            for (let i = 0; i < 12; i++) {
+                const monthOrders = monthlyOrders.filter(o => new Date(o.date).getMonth() === i);
+                const monthSales = monthOrders.reduce((acc, o) => acc + o.total, 0);
+                const monthProfit = monthOrders.reduce((acc, o) => {
+                    let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
+                    o.items.forEach((item: any) => {
+                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                        cost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                    });
+                    return acc + (o.total - cost);
+                }, 0);
 
-            data.push({
-                day: i,
-                Vendas: daySales,
-                Lucro: dayProfit
-            });
+                data.push({
+                    name: new Date(0, i).toLocaleString('pt-PT', { month: 'short' }),
+                    Vendas: monthSales,
+                    Lucro: monthProfit
+                });
+            }
+        } else {
+            // Gráfico Mensal (Dias)
+            const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dayOrders = monthlyOrders.filter(o => new Date(o.date).getDate() === i);
+                const daySales = dayOrders.reduce((acc, o) => acc + o.total, 0);
+                const dayProfit = dayOrders.reduce((acc, o) => {
+                    let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
+                    o.items.forEach((item: any) => {
+                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                        cost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                    });
+                    return acc + (o.total - cost);
+                }, 0);
+
+                data.push({
+                    name: i.toString(),
+                    Vendas: daySales,
+                    Lucro: dayProfit
+                });
+            }
         }
         return data;
     }, [monthlyOrders, selectedMonth, selectedYear, inventoryProducts]);
@@ -116,6 +141,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                         className="p-2 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                     >
+                        <option value={-1}>Todo o Ano</option>
                         {Array.from({ length: 12 }, (_, i) => (
                             <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-PT', { month: 'long' })}</option>
                         ))}
@@ -175,11 +201,11 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
 
             {/* Gráfico */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-96">
-                <h3 className="font-bold text-gray-800 mb-6">Evolução Diária</h3>
+                <h3 className="font-bold text-gray-800 mb-6">{selectedMonth === -1 ? 'Evolução Mensal' : 'Evolução Diária'}</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} />
                         <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} tickFormatter={(val) => `€${val}`} />
                         <Legend />
                         <Bar dataKey="Vendas" fill="#4F46E5" radius={[4, 4, 0, 0]} />
