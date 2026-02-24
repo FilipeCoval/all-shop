@@ -51,6 +51,7 @@ export interface Order {
   fulfilledBy?: string | null;
   serialNumbersUsed?: string[];
   fulfillmentStatus?: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  storeShippingCost?: number; // Custo real de envio para a loja (para cálculo de lucro)
 }
 
 export interface StockMovement {
@@ -260,4 +261,3 @@ export interface SupportTicket {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
-
