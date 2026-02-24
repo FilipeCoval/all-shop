@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Order, InventoryProduct, OrderItem } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, DollarSign, TrendingUp, TrendingDown, Truck, Package, Download } from 'lucide-react';
 
 interface ReportsTabProps {
