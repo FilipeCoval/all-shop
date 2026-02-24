@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Order, InventoryProduct, OrderItem } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, DollarSign, TrendingUp, TrendingDown, Truck, Package, Download } from 'lucide-react';
 
 interface ReportsTabProps {
@@ -181,10 +181,6 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                         <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} />
                         <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} tickFormatter={(val) => `€${val}`} />
-                        <Tooltip 
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
-                            formatter={(value: number) => formatCurrency(value)}
-                        />
                         <Legend />
                         <Bar dataKey="Vendas" fill="#4F46E5" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Lucro" fill="#10B981" radius={[4, 4, 0, 0]} />
