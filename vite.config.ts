@@ -80,7 +80,7 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (id.includes('node_modules')) {
               if (id.includes('firebase')) return 'firebase';
-              if (id.includes('react')) return 'vendor';
+              if (id.includes('react') || id.includes('recharts')) return 'vendor';
               if (id.includes('lucide')) return 'icons';
               if (id.includes('@google/genai')) return 'ai';
               if (id.includes('zxing') || id.includes('barcode')) return 'scanner';
