@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { FileText, X, Truck, Scale, CheckCircle, Copy, AlertTriangle, Loader2, XCircle, Coins, QrCode } from 'lucide-react';
+import { FileText, X, Truck, Scale, CheckCircle, Copy, AlertTriangle, Loader2, XCircle, Coins, QrCode, Printer } from 'lucide-react';
 import { Order, InventoryProduct, OrderItem, User as UserType, PointHistory } from '../types';
 import { db, firebase } from '../services/firebaseConfig';
-import { LOYALTY_TIERS } from '../constants';
+import { LOYALTY_TIERS, STORE_NAME, STORE_ADDRESS, LOGO_URL } from '../constants';
 
 interface OrderDetailsModalProps {
     order: Order | null;
@@ -51,6 +51,146 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
         setTimeout(() => setCopySuccess(''), 2000);
     };
 
+    const handlePrintShippingLabel = () => {
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (!printWindow) return;
+
+        const extraAddress = order.shippingInfo.addressExtra ? `<br>${order.shippingInfo.addressExtra}` : '';
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Etiqueta de Envio - ${order.id}</title>
+                <style>
+                    @page { size: A6 landscape; margin: 0; }
+                    body { 
+                        font-family: 'Arial', sans-serif; 
+                        margin: 0; 
+                        padding: 20px; 
+                        width: 148mm; 
+                        height: 105mm; 
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        border: 1px dashed #ccc; /* Border for visual guide on screen */
+                    }
+                    @media print {
+                        body { border: none; }
+                    }
+                    .header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        border-bottom: 2px solid #000;
+                        padding-bottom: 10px;
+                        margin-bottom: 20px;
+                    }
+                    .sender {
+                        font-size: 10px;
+                        color: #555;
+                    }
+                    .sender strong {
+                        font-size: 12px;
+                        color: #000;
+                        text-transform: uppercase;
+                    }
+                    .recipient {
+                        font-size: 16px;
+                        line-height: 1.4;
+                        margin-left: 40px; /* Indent recipient */
+                    }
+                    .recipient strong {
+                        font-size: 22px;
+                        text-transform: uppercase;
+                        display: block;
+                        margin-bottom: 5px;
+                    }
+                    .recipient .address-line {
+                        display: block;
+                        font-size: 18px;
+                    }
+                    .recipient .zip-city {
+                        font-size: 20px;
+                        font-weight: bold;
+                        margin-top: 5px;
+                        display: block;
+                    }
+                    .footer {
+                        border-top: 2px solid #000;
+                        padding-top: 10px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-end;
+                        font-size: 10px;
+                    }
+                    .tracking-placeholder {
+                        border: 2px dashed #999;
+                        width: 200px;
+                        height: 60px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #999;
+                        font-weight: bold;
+                        background: #f9f9f9;
+                    }
+                    .order-ref {
+                        text-align: right;
+                    }
+                    .logo {
+                        max-height: 40px;
+                        margin-bottom: 5px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="sender">
+                        <img src="${LOGO_URL}" class="logo" alt="Logo" /><br>
+                        <strong>Remetente:</strong><br>
+                        ${STORE_NAME}<br>
+                        ${STORE_ADDRESS.senderName}<br>
+                        ${STORE_ADDRESS.street}<br>
+                        ${STORE_ADDRESS.zip} ${STORE_ADDRESS.city}<br>
+                        ${STORE_ADDRESS.country}
+                    </div>
+                    <div class="stamp-area" style="border: 1px solid #000; width: 60px; height: 70px; display: flex; align-items: center; justify-content: center; font-size: 10px; text-align: center;">
+                        CTT<br>Postage
+                    </div>
+                </div>
+
+                <div class="recipient">
+                    <strong>${order.shippingInfo.name}</strong>
+                    <span class="address-line">${order.shippingInfo.street}, ${order.shippingInfo.doorNumber}</span>
+                    ${extraAddress}
+                    <span class="zip-city">${order.shippingInfo.zip} ${order.shippingInfo.city}</span>
+                    <br>
+                    <span style="font-size: 12px;">Tel: ${order.shippingInfo.phone}</span>
+                </div>
+
+                <div class="footer">
+                    <div class="tracking-placeholder">
+                        Colar Etiqueta CTT Aqui
+                    </div>
+                    <div class="order-ref">
+                        <strong>Ref: #${order.id}</strong><br>
+                        Peso: ${totalWeight.toFixed(3)} kg<br>
+                        Data: ${new Date().toLocaleDateString()}
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+    };
+
     return (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><FileText size={20} className="text-indigo-600"/> Detalhes da Encomenda</h3><button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">ID Encomenda</p><p className="font-bold text-indigo-700 text-sm mt-1">{order.id}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Estado</p><p className="font-bold text-sm mt-1">{order.status}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Data</p><p className="font-bold text-sm mt-1">{new Date(order.date).toLocaleDateString()}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Total</p><p className="font-bold text-sm mt-1">{formatCurrency(order.total)}</p></div></div>
     
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -75,8 +215,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                 </button>
             </div>
         </div>
-        <button disabled className="w-full bg-gray-200 text-gray-500 font-bold py-2 rounded-lg text-sm cursor-not-allowed flex items-center justify-center gap-2">
-            <Truck size={16} /> Gerar Etiqueta Automática (Brevemente)
+        <button 
+            onClick={handlePrintShippingLabel}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors shadow-sm"
+        >
+            <Printer size={16} /> Imprimir Etiqueta de Envio
         </button>
     </div>
 
