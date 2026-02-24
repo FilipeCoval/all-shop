@@ -2,6 +2,13 @@
 import { Product } from './types';
 
 export const STORE_NAME = "All-Shop";
+export const STORE_ADDRESS = {
+    senderName: "Rodrigo Monteiro",
+    street: "Rua central, n82",
+    zip: "2430-017",
+    city: "Garcia/Marinha Grande",
+    country: "Portugal"
+};
 export const CURRENCY = "EUR";
 export const LOGO_URL = "https://i.imgur.com/nSiZKBf.png"; 
 
@@ -44,4 +51,3 @@ export const LOYALTY_REWARDS = [
 // LISTA LIMPA: Os produtos antigos foram removidos para evitar confusão.
 // A loja carrega tudo da Firebase.
 export const INITIAL_PRODUCTS: Product[] = [];
-
