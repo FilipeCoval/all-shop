@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, CheckCircle, AlertTriangle, Package, ScanLine, Loader2, Lock, Camera, MousePointerClick } from 'lucide-react';
-import { Order, InventoryProduct, OrderItem, StockMovement, ProductStatus, SaleRecord } from '../types';
+import { Order, InventoryProduct, OrderItem, StockMovement, ProductStatus, SaleRecord, User, PointHistory } from '../types';
 import { db, auth, firebase } from '../services/firebaseConfig';
 import BarcodeScanner from './BarcodeScanner';
+import { LOYALTY_TIERS } from '../constants';
 
 interface OrderFulfillmentModalProps {
     order: Order;
@@ -177,6 +178,13 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     throw new Error("Esta encomenda já foi processada anteriormente.");
                 }
 
+                // Ler documento do utilizador se for levantamento em loja para atribuir pontos
+                let userDoc: firebase.firestore.DocumentSnapshot | null = null;
+                const userRef = order.userId ? db.collection('users').doc(order.userId) : null;
+                if (isPickup && userRef && !currentOrder.pointsAwarded) {
+                    userDoc = await transaction.get(userRef);
+                }
+
                 // Identificar e ler todos os lotes necessários
                 const batchIds = Array.from(new Set(scannedItems.map(i => i.inventoryProductId)));
                 const batchDocs: Record<string, firebase.firestore.DocumentSnapshot> = {};
@@ -262,7 +270,35 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     createdBy: adminEmail
                 });
 
-                // C. Atualizar Encomenda
+                // C. Atribuir Pontos (Se for levantamento em loja)
+                let pointsWereAwarded = false;
+                if (isPickup && userDoc && userDoc.exists && userRef) {
+                    const userData = userDoc.data() as User;
+                    const tier = userData.tier || 'Bronze';
+                    let multiplier = 1;
+                    if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier;
+                    if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier;
+
+                    const pointsToAward = Math.floor(order.total * multiplier);
+
+                    if (pointsToAward > 0) {
+                        const newHistory: PointHistory = {
+                            id: `earn-${order.id}`,
+                            date: timestamp,
+                            amount: pointsToAward,
+                            reason: `Compra #${order.id} (Levantamento em Loja)`,
+                            orderId: order.id
+                        };
+
+                        transaction.update(userRef, {
+                            loyaltyPoints: (userData.loyaltyPoints || 0) + pointsToAward,
+                            pointsHistory: [newHistory, ...(userData.pointsHistory || [])]
+                        });
+                        pointsWereAwarded = true;
+                    }
+                }
+
+                // D. Atualizar Encomenda
                 const newStatus = isPickup ? 'Entregue' : 'Enviado';
                 const notes = isPickup 
                     ? `Levantado em loja. Processado por ${adminEmail} com validação de serial.`
@@ -276,6 +312,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     fulfillmentStatus: 'COMPLETED',
                     stockDeducted: true,
                     trackingNumber: isPickup ? null : (trackingNumber || null),
+                    pointsAwarded: pointsWereAwarded,
                     statusHistory: firebase.firestore.FieldValue.arrayUnion({
                         status: newStatus,
                         date: timestamp,
@@ -481,3 +518,4 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 };
 
 export default OrderFulfillmentModal;
+
