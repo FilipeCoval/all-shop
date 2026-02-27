@@ -21,17 +21,13 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
     if (user?.uid) {
         const unsubscribe = db.collection('coupons')
             .where('userId', '==', user.uid)
-            .orderBy('isActive', 'desc') // Mostrar ativos primeiro (requer índice composto ou ordenação em memória se falhar)
             .onSnapshot(snapshot => {
                 const coupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
+                // Sort in memory: Active first
+                coupons.sort((a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1));
                 setMyCoupons(coupons);
             }, err => {
                 console.error("Erro ao carregar cupões:", err);
-                // Fallback sem ordenação se der erro de índice
-                db.collection('coupons').where('userId', '==', user.uid).get().then(snap => {
-                     const coupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
-                     setMyCoupons(coupons);
-                });
             });
         return () => unsubscribe();
     }
