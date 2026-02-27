@@ -293,6 +293,13 @@ const App: React.FC = () => {
                             userUpdateData.pointsHistory = [...newHistoryItems, ...(userData.pointsHistory || [])];
                         }
                         if (Object.keys(userUpdateData).length > 0) batch.update(userDocRef, userUpdateData);
+                        
+                        // FIX: Marcar encomendas como processadas para não atribuir pontos infinitamente
+                        ordersToAwardPoints.forEach(o => {
+                            const orderRef = db.collection('orders').doc(o.id);
+                            batch.update(orderRef, { pointsAwarded: true });
+                        });
+
                         ordersToMigrate.forEach(doc => batch.update(doc.ref, { userId: firebaseUser.uid }));
                         await batch.commit();
                     }
@@ -567,10 +574,7 @@ const App: React.FC = () => {
                   body: `Pedido ${newOrder.id} de ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(newOrder.total)} recebido.`,
                   link: 'https://www.all-shop.net/#dashboard'
               })
-          })
-          .then(res => res.json())
-          .then(data => console.log("Push Admin Response:", data))
-          .catch(err => console.error("Falha ao enviar push para admins:", err));
+          }).catch(err => console.error("Falha ao enviar push para admins:", err));
           
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
