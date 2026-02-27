@@ -148,10 +148,12 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
     };
 
     const [trackingNumber, setTrackingNumber] = useState('');
+    
+    const isPickup = order.status === 'Levantamento em Loja';
 
     const handleConfirmFulfillment = async () => {
         if (!progress.isComplete) return;
-        if (!window.confirm("Tem a certeza? Esta ação é irreversível e irá abater o stock imediatamente.")) return;
+        if (!window.confirm(isPickup ? "Confirmar entrega ao cliente? O stock será abatido." : "Tem a certeza? Esta ação é irreversível e irá abater o stock imediatamente.")) return;
 
         setIsProcessing(true);
         setError(null);
@@ -172,7 +174,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
                 const currentOrder = orderDoc.data() as Order;
                 if (currentOrder.fulfillmentStatus === 'COMPLETED') {
-                    throw new Error("Esta encomenda já foi expedida anteriormente.");
+                    throw new Error("Esta encomenda já foi processada anteriormente.");
                 }
 
                 // Identificar e ler todos os lotes necessários
@@ -261,18 +263,23 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 });
 
                 // C. Atualizar Encomenda
+                const newStatus = isPickup ? 'Entregue' : 'Enviado';
+                const notes = isPickup 
+                    ? `Levantado em loja. Processado por ${adminEmail} com validação de serial.`
+                    : `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`;
+
                 transaction.update(orderRef, {
-                    status: 'Enviado',
+                    status: newStatus,
                     fulfilledAt: timestamp,
                     fulfilledBy: adminEmail,
                     serialNumbersUsed: scannedItems.map(s => s.serialNumber),
                     fulfillmentStatus: 'COMPLETED',
                     stockDeducted: true,
-                    trackingNumber: trackingNumber || null,
+                    trackingNumber: isPickup ? null : (trackingNumber || null),
                     statusHistory: firebase.firestore.FieldValue.arrayUnion({
-                        status: 'Enviado',
+                        status: newStatus,
                         date: timestamp,
-                        notes: `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`
+                        notes: notes
                     })
                 });
             });
@@ -306,9 +313,9 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Package className="text-indigo-600" /> Preparar Encomenda #{order.id}
+                            <Package className="text-indigo-600" /> {isPickup ? `Processar Levantamento #${order.id}` : `Preparar Encomenda #${order.id}`}
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">Digitalize os números de série para confirmar a expedição.</p>
+                        <p className="text-sm text-gray-500 mt-1">{isPickup ? 'Digitalize os seriais para confirmar a entrega ao cliente.' : 'Digitalize os números de série para confirmar a expedição.'}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
                         <X size={24} />
@@ -321,7 +328,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     {/* Progress Bar */}
                     <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
                         <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-bold text-blue-900 uppercase">Progresso da Expedição</span>
+                            <span className="text-sm font-bold text-blue-900 uppercase">{isPickup ? 'Progresso da Validação' : 'Progresso da Expedição'}</span>
                             <span className="text-2xl font-bold text-blue-700">{progress.totalScanned} / {progress.totalNeeded}</span>
                         </div>
                         <div className="w-full bg-blue-200 rounded-full h-2.5">
@@ -332,17 +339,19 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                         </div>
                     </div>
 
-                    {/* Tracking Number Input */}
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Número de Rastreio (Opcional)</label>
-                        <input 
-                            type="text" 
-                            value={trackingNumber}
-                            onChange={(e) => setTrackingNumber(e.target.value)}
-                            placeholder="Ex: EA123456789PT"
-                            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                    </div>
+                    {/* Tracking Number Input - Only show if NOT pickup */}
+                    {!isPickup && (
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Número de Rastreio (Opcional)</label>
+                            <input 
+                                type="text" 
+                                value={trackingNumber}
+                                onChange={(e) => setTrackingNumber(e.target.value)}
+                                placeholder="Ex: EA123456789PT"
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
+                    )}
 
                     {/* Scanner Input & Actions */}
                     <div className="flex gap-2">
