@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Coupon, PointHistory } from '../types';
 import { db, firebase } from '../services/firebaseConfig';
-import { Coins, Gift, Calendar, Star, ArrowRight, Loader2, CheckCircle, AlertTriangle, Lock, Share2 } from 'lucide-react';
+import { Coins, Gift, Calendar, Star, ArrowRight, Loader2, CheckCircle, AlertTriangle, Lock, Share2, Ticket, Copy } from 'lucide-react';
 import { LOYALTY_TIERS, SHARE_URL } from '../constants';
 
 interface AllPointsProps {
@@ -15,6 +15,27 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
   const [loading, setLoading] = useState(false);
   const [generatedCoupon, setGeneratedCoupon] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [myCoupons, setMyCoupons] = useState<Coupon[]>([]);
+
+  useEffect(() => {
+    if (user?.uid) {
+        const unsubscribe = db.collection('coupons')
+            .where('userId', '==', user.uid)
+            .orderBy('isActive', 'desc') // Mostrar ativos primeiro (requer índice composto ou ordenação em memória se falhar)
+            .onSnapshot(snapshot => {
+                const coupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
+                setMyCoupons(coupons);
+            }, err => {
+                console.error("Erro ao carregar cupões:", err);
+                // Fallback sem ordenação se der erro de índice
+                db.collection('coupons').where('userId', '==', user.uid).get().then(snap => {
+                     const coupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
+                     setMyCoupons(coupons);
+                });
+            });
+        return () => unsubscribe();
+    }
+  }, [user]);
 
   // Recompensas Disponíveis
   const REWARDS = [
@@ -51,7 +72,11 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
         await db.collection('coupons').add(newCoupon);
 
         // 2. Deduzir Pontos
-        const pointsCost = reward.points;
+        const pointsCost = Number(reward.points); // Garantir que é número
+        if (isNaN(pointsCost) || pointsCost <= 0) {
+            throw new Error("Custo de pontos inválido");
+        }
+
         const newHistory: PointHistory = {
             id: `redeem-${Date.now()}`,
             date: new Date().toISOString(),
@@ -64,17 +89,15 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
             pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory)
         });
 
-        // 3. Atualizar UI Local
-        onUpdateUser({
-            loyaltyPoints: (user.loyaltyPoints || 0) - pointsCost,
-            pointsHistory: [...(user.pointsHistory || []), newHistory]
-        });
+        // NOTA: Não chamamos onUpdateUser aqui porque o App.tsx tem um listener (onSnapshot)
+        // que vai detetar a mudança no Firestore e atualizar a UI automaticamente.
+        // Chamar onUpdateUser aqui causaria uma segunda escrita desnecessária e potenciais conflitos.
 
         setGeneratedCoupon(code);
 
     } catch (err) {
         console.error("Erro ao trocar pontos:", err);
-        setError("Ocorreu um erro ao gerar o seu voucher. Por favor, tente novamente.");
+        setError("Ocorreu um erro ao gerar o seu voucher. Por favor, tente novamente ou contacte o suporte.");
     } finally {
         setLoading(false);
     }
@@ -243,6 +266,49 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
                 </div>
             </div>
         </div>
+
+        {/* Meus Vouchers */}
+        {myCoupons.length > 0 && (
+            <div className="mb-16 animate-fade-in">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 text-center flex items-center justify-center gap-2">
+                    <Ticket className="text-indigo-600" /> Os Meus Vouchers
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {myCoupons.map(coupon => (
+                        <div key={coupon.id} className={`relative p-4 rounded-xl border-2 flex items-center justify-between gap-4 transition-all ${coupon.isActive ? 'bg-white dark:bg-gray-800 border-indigo-100 dark:border-indigo-900 shadow-sm hover:border-indigo-300' : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 opacity-60'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${coupon.isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
+                                    <Ticket size={20} />
+                                </div>
+                                <div>
+                                    <p className="font-mono font-bold text-lg tracking-wider text-gray-900 dark:text-white">{coupon.code}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {coupon.type === 'PERCENTAGE' ? `${coupon.value}% Desconto` : `€${coupon.value} Desconto`}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${coupon.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                    {coupon.isActive ? 'Ativo' : 'Usado'}
+                                </span>
+                                {coupon.isActive && (
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(coupon.code);
+                                            alert("Código copiado!");
+                                        }}
+                                        className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50 transition-colors"
+                                        title="Copiar Código"
+                                    >
+                                        <Copy size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
 
         {/* Loja de Recompensas */}
         <div id="rewards" className="scroll-mt-24">
