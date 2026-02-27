@@ -123,6 +123,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
   const [clientOrders, setClientOrders] = useState<Order[]>([]);
   const [isRecalculatingClient, setIsRecalculatingClient] = useState(false);
+  
+  // Manual Point Adjustment State
+  const [manualPointAmount, setManualPointAmount] = useState('');
+  const [manualPointReason, setManualPointReason] = useState('');
+  const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
 
   const [isMerging, setIsMerging] = useState(false);
   const [mergeSearchEmail, setMergeSearchEmail] = useState('');
@@ -493,6 +498,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleToggleCoupon = async (coupon: Coupon) => { if(!coupon.id) return; try { await db.collection('coupons').doc(coupon.id).update({ isActive: !coupon.isActive }); } catch(e) { alert("Erro ao atualizar cupão."); } };
   const handleDeleteCoupon = async (id?: string) => { if (!id || !window.confirm("Apagar cupão permanentemente?")) return; try { await db.collection('coupons').doc(id).delete(); setCoupons(prevCoupons => prevCoupons.filter(coupon => coupon.id !== id)); } catch (e) { alert("Erro ao apagar o cupão."); console.error("Delete coupon error:", e); } };
   const handleRecalculateClientData = async () => {}; // Placeholder
+  
+  const handleManualPointAdjustment = async () => {
+    if (!selectedUserDetails || !manualPointAmount || !manualPointReason) return;
+    const amount = parseInt(manualPointAmount);
+    if (isNaN(amount) || amount === 0) return alert("Valor inválido.");
+
+    setIsAdjustingPoints(true);
+    try {
+        const newHistory: PointHistory = {
+            id: `manual-${Date.now()}`,
+            date: new Date().toISOString(),
+            amount: amount,
+            reason: manualPointReason
+        };
+
+        await db.collection('users').doc(selectedUserDetails.uid).update({
+            loyaltyPoints: firebase.firestore.FieldValue.increment(amount),
+            pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory)
+        });
+
+        // Update local state
+        setSelectedUserDetails(prev => prev ? {
+            ...prev,
+            loyaltyPoints: (prev.loyaltyPoints || 0) + amount,
+            pointsHistory: [newHistory, ...(prev.pointsHistory || [])]
+        } : null);
+
+        setManualPointAmount('');
+        setManualPointReason('');
+        alert("Pontos atualizados com sucesso!");
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao atualizar pontos.");
+    } finally {
+        setIsAdjustingPoints(false);
+    }
+  };
+
   const handleSearchDuplicate = async () => {}; // Placeholder
   const handleConfirmMerge = async () => {}; // Placeholder
   const handleOpenInvestedModal = () => { setDetailsModalData({ title: "Detalhe do Investimento", data: products.map(p => ({ id: p.id, name: p.name, qty: p.quantityBought, cost: p.purchasePrice, total: p.quantityBought * p.purchasePrice })).filter(i => i.total > 0).sort((a,b) => b.total - a.total), total: stats.totalInvested, columns: [{ header: "Produto", accessor: "name" }, { header: "Qtd. Comprada", accessor: "qty" }, { header: "Custo Unit.", accessor: (i) => formatCurrency(i.cost) }, { header: "Total", accessor: (i) => formatCurrency(i.total) }] }); };
@@ -1041,7 +1084,132 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       
       {isCashbackManagerOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Wallet size={20} className="text-yellow-600"/> Gestor Financeiro de Cashback</h3><button onClick={() => setIsCashbackManagerOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 bg-gray-50"><div className="flex gap-2 mb-6"><button onClick={() => setCashbackManagerFilter('PENDING')} className={`px-4 py-2 rounded-lg font-bold text-sm ${cashbackManagerFilter === 'PENDING' ? 'bg-yellow-500 text-white shadow' : 'bg-white text-gray-600 border'}`}>A Receber</button><button onClick={() => setCashbackManagerFilter('ALL')} className={`px-4 py-2 rounded-lg font-bold text-sm ${cashbackManagerFilter === 'ALL' ? 'bg-gray-800 text-white shadow' : 'bg-white text-gray-600 border'}`}>Histórico Completo</button></div><div className="space-y-4">{(Object.entries(groupedCashback) as [string, { total: number, items: InventoryProduct[] }][]).map(([account, data]) => { const isExpanded = expandedCashbackAccounts.includes(account); return (<div key={account} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm"><div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleCashbackAccount(account)}><div className="flex items-center gap-4"><div className="bg-blue-50 p-2 rounded-full text-blue-600"><AtSign size={20} /></div><div><h4 className="font-bold text-gray-900">{account}</h4><p className="text-xs text-gray-500">{data.items[0]?.cashbackPlatform || 'Plataforma Desconhecida'} • {data.items.length} itens</p></div></div><div className="flex items-center gap-4"><span className="text-xl font-bold text-gray-900">{formatCurrency(data.total)}</span>{isExpanded ? <ChevronDown size={20} className="text-gray-400"/> : <ChevronRight size={20} className="text-gray-400"/>}</div></div>{isExpanded && (<div className="border-t border-gray-100 bg-gray-50 p-4"><table className="w-full text-left text-sm mb-4"><thead className="text-xs text-gray-500 uppercase bg-gray-100"><tr><th>Produto</th><th>Data Compra</th><th>Previsão</th><th>Valor</th><th>Estado</th></tr></thead><tbody className="divide-y divide-gray-200">{data.items.map(item => (<tr key={item.id}><td className="py-2 pr-2 font-medium">{item.name} <span className="text-xs text-gray-500 block">{item.variant}</span></td><td className="py-2 text-gray-500 text-xs">{new Date(item.purchaseDate).toLocaleDateString()}</td><td className="py-2 text-gray-500 text-xs font-bold">{item.cashbackExpectedDate ? new Date(item.cashbackExpectedDate).toLocaleDateString() : '-'}</td><td className="py-2 font-bold">{formatCurrency(item.cashbackValue)}</td><td className="py-2"><span className={`text-[10px] px-2 py-1 rounded font-bold ${item.cashbackStatus === 'RECEIVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.cashbackStatus === 'RECEIVED' ? 'Recebido' : 'Pendente'}</span></td></tr>))}</tbody></table>{cashbackManagerFilter === 'PENDING' && (<div className="flex justify-end"><button onClick={() => handleMarkBatchReceived(data.items)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-colors"><CheckCircle size={16}/> Marcar {formatCurrency(data.total)} como Recebido</button></div>)}</div>)}</div>); })}{Object.keys(groupedCashback).length === 0 && <div className="text-center py-12 text-gray-500">Nenhum registo de cashback encontrado.</div>}</div></div></div></div>)}
       {selectedTicket && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Headphones size={20} className="text-indigo-600"/> Ticket #{selectedTicket.id}</h3><button onClick={() => setSelectedTicket(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="p-6 overflow-y-auto flex-1 space-y-6"><div className="flex gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100"><div className="w-12 h-12 bg-blue-100 text-primary rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0">{selectedTicket.customerName?.charAt(0)}</div><div><h4 className="font-bold text-gray-900">{selectedTicket.customerName}</h4><p className="text-sm text-gray-500">{selectedTicket.customerEmail}</p>{selectedTicket.orderId && <p className="text-xs text-indigo-600 font-bold mt-1">Enc: {selectedTicket.orderId}</p>}</div></div><div><h4 className="font-bold text-gray-900 mb-2">Resumo da IA</h4><div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-gray-700 text-sm leading-relaxed">{selectedTicket.description}</div></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Prioridade</label><span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedTicket.priority === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{selectedTicket.priority}</span></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">{selectedTicket.category}</span></div></div><div className="border-t pt-6"><h4 className="font-bold text-gray-900 mb-4">Ações</h4><div className="flex gap-2"><a href={`mailto:${selectedTicket.customerEmail}?subject=Re: ${selectedTicket.subject} [Ticket ${selectedTicket.id}]`} className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg text-center hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"><Mail size={18}/> Responder Email</a><select value={selectedTicket.status} onChange={(e) => handleUpdateTicketStatus(selectedTicket.id, e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg font-bold"><option value="Aberto">Aberto</option><option value="Em Análise">Em Análise</option><option value="Resolvido">Resolvido</option></select></div><button onClick={() => handleDeleteTicket(selectedTicket.id)} className="w-full mt-2 text-red-500 text-xs font-bold hover:underline">Apagar Ticket</button></div></div></div></div>)}
-      {selectedUserDetails && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-indigo-600"/> Detalhes do Cliente</h3><button onClick={() => setSelectedUserDetails(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p><p className="text-xs text-gray-400 mt-1">Push Tokens: {selectedUserDetails.deviceTokens?.length || (selectedUserDetails.fcmToken ? 1 : 0)}</p></div></div><div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div><div className="pt-6 border-t border-dashed"><h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4><div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4"><p className="text-sm font-bold text-orange-900">1. Recalcular Dados de Lealdade</p><p className="text-xs text-orange-800 -mt-2">Use esta função para corrigir o "Total Gasto", nível e pontos, com base em todas as encomendas associadas a este cliente.</p><button onClick={handleRecalculateClientData} disabled={isRecalculatingClient} className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">{isRecalculatingClient ? <Loader2 className="animate-spin" /> : <><RefreshCw size={14}/> Sincronizar Agora</>}</button></div><div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4 mt-4"><p className="text-sm font-bold text-gray-800">2. Fundir Contas Duplicadas</p><div className="flex gap-2"><input type="email" value={mergeSearchEmail} onChange={(e) => setMergeSearchEmail(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded text-sm" placeholder="Email da conta a fundir" /><button onClick={handleSearchDuplicate} className="bg-gray-700 text-white px-4 rounded font-bold text-sm hover:bg-gray-800">Procurar</button></div>{foundDuplicate && (<div className="bg-white p-4 rounded border border-orange-300 animate-fade-in space-y-2"><h5 className="font-bold text-sm">Conta duplicada encontrada:</h5><p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p><p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p><p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p><p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(duplicateOrdersTotal || 0)}</p><p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p><button onClick={handleConfirmMerge} disabled={isMerging} className="w-full mt-2 bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">{isMerging ? <Loader2 className="animate-spin" /> : <><AlertTriangle size={14}/> Confirmar Fusão</>}</button></div>)}</div></div></div></div></div>)}
+      {selectedUserDetails && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-indigo-600"/> Detalhes do Cliente</h3><button onClick={() => setSelectedUserDetails(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p><p className="text-xs text-gray-400 mt-1">Push Tokens: {selectedUserDetails.deviceTokens?.length || (selectedUserDetails.fcmToken ? 1 : 0)}</p></div></div><div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
+      
+      {/* Histórico de Encomendas */}
+      <div className="pt-6 border-t border-gray-100">
+          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-blue-500"/> Histórico de Encomendas ({clientOrders.length})</h4>
+          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-60 overflow-y-auto">
+              <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-100 text-gray-500 font-semibold uppercase sticky top-0">
+                      <tr>
+                          <th className="p-3">Data</th>
+                          <th className="p-3">ID</th>
+                          <th className="p-3">Estado</th>
+                          <th className="p-3 text-right">Total</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                      {clientOrders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(order => (
+                          <tr key={order.id} className="hover:bg-white transition-colors">
+                              <td className="p-3">{new Date(order.date).toLocaleDateString()}</td>
+                              <td className="p-3 font-mono text-gray-500">#{order.id.slice(-6)}</td>
+                              <td className="p-3">
+                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                      order.status === 'Entregue' ? 'bg-green-100 text-green-700' :
+                                      order.status === 'Cancelado' ? 'bg-red-100 text-red-700' :
+                                      'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                      {order.status}
+                                  </span>
+                              </td>
+                              <td className="p-3 text-right font-bold">{formatCurrency(order.total)}</td>
+                          </tr>
+                      ))}
+                      {clientOrders.length === 0 && (
+                          <tr><td colSpan={4} className="p-4 text-center text-gray-400 italic">Sem encomendas registadas.</td></tr>
+                      )}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      {/* Histórico de Pontos */}
+      <div className="pt-6 border-t border-gray-100">
+          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><TicketPercent size={16} className="text-purple-500"/> Histórico de Pontos</h4>
+          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-60 overflow-y-auto">
+              <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-100 text-gray-500 font-semibold uppercase sticky top-0">
+                      <tr>
+                          <th className="p-3">Data</th>
+                          <th className="p-3">Motivo</th>
+                          <th className="p-3 text-right">Valor</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                      {(selectedUserDetails.pointsHistory || []).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((history, idx) => (
+                          <tr key={history.id || idx} className="hover:bg-white transition-colors">
+                              <td className="p-3">{new Date(history.date).toLocaleDateString()}</td>
+                              <td className="p-3 text-gray-700">{history.reason}</td>
+                              <td className={`p-3 text-right font-bold ${history.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {history.amount > 0 ? '+' : ''}{history.amount}
+                              </td>
+                          </tr>
+                      ))}
+                       {(!selectedUserDetails.pointsHistory || selectedUserDetails.pointsHistory.length === 0) && (
+                          <tr><td colSpan={3} className="p-4 text-center text-gray-400 italic">Sem histórico de pontos.</td></tr>
+                      )}
+                  </tbody>
+              </table>
+          </div>
+      </div>
+
+      <div className="pt-6 border-t border-dashed">
+    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4>
+    
+    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4">
+        <p className="text-sm font-bold text-orange-900">1. Recalcular Dados de Lealdade</p>
+        <p className="text-xs text-orange-800 -mt-2">Use esta função para corrigir o "Total Gasto", nível e pontos, com base em todas as encomendas associadas a este cliente.</p>
+        <button onClick={handleRecalculateClientData} disabled={isRecalculatingClient} className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">{isRecalculatingClient ? <Loader2 className="animate-spin" /> : <><RefreshCw size={14}/> Sincronizar Agora</>}</button>
+    </div>
+
+    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4 mt-4">
+        <p className="text-sm font-bold text-gray-800">2. Fundir Contas Duplicadas</p>
+        <div className="flex gap-2">
+            <input type="email" value={mergeSearchEmail} onChange={(e) => setMergeSearchEmail(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded text-sm" placeholder="Email da conta a fundir" />
+            <button onClick={handleSearchDuplicate} className="bg-gray-700 text-white px-4 rounded font-bold text-sm hover:bg-gray-800">Procurar</button>
+        </div>
+        {foundDuplicate && (
+            <div className="bg-white p-4 rounded border border-orange-300 animate-fade-in space-y-2">
+                <h5 className="font-bold text-sm">Conta duplicada encontrada:</h5>
+                <p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p>
+                <p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p>
+                <p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p>
+                <p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(duplicateOrdersTotal || 0)}</p>
+                <p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p>
+                <button onClick={handleConfirmMerge} disabled={isMerging} className="w-full mt-2 bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">{isMerging ? <Loader2 className="animate-spin" /> : <><AlertTriangle size={14}/> Confirmar Fusão</>}</button>
+            </div>
+        )}
+    </div>
+
+    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4 mt-4">
+        <p className="text-sm font-bold text-blue-900">3. Atribuição Manual de Pontos</p>
+        <p className="text-xs text-blue-800 -mt-2">Adicione ou remova pontos manualmente (ex: compensação por atraso).</p>
+        <div className="grid grid-cols-2 gap-2">
+            <input 
+                type="number" 
+                placeholder="Pontos (+/-)" 
+                value={manualPointAmount} 
+                onChange={e => setManualPointAmount(e.target.value)} 
+                className="p-2 border border-blue-300 rounded text-sm"
+            />
+            <input 
+                type="text" 
+                placeholder="Motivo (ex: Atraso)" 
+                value={manualPointReason} 
+                onChange={e => setManualPointReason(e.target.value)} 
+                className="p-2 border border-blue-300 rounded text-sm"
+            />
+        </div>
+        <button 
+            onClick={handleManualPointAdjustment} 
+            disabled={isAdjustingPoints || !manualPointAmount || !manualPointReason} 
+            className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+            {isAdjustingPoints ? <Loader2 className="animate-spin" size={14} /> : <><Coins size={14}/> Atualizar Pontos</>}
+        </button>
+    </div>
+</div></div></div></div>)}
     </div>
   );
 };
