@@ -261,9 +261,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     // Atualizar uso do cupão
     if (appliedCoupon && appliedCoupon.id) {
         try {
-            await db.collection('coupons').doc(appliedCoupon.id).update({
-                usageCount: (appliedCoupon.usageCount || 0) + 1
-            });
+            const newUsageCount = (appliedCoupon.usageCount || 0) + 1;
+            const updateData: any = { usageCount: newUsageCount };
+            
+            // Se atingiu o limite de usos, desativar o cupão
+            if (appliedCoupon.maxUsages && newUsageCount >= appliedCoupon.maxUsages) {
+                updateData.isActive = false;
+            }
+
+            await db.collection('coupons').doc(appliedCoupon.id).update(updateData);
         } catch (e) { console.error("Erro ao atualizar cupão", e); }
     }
 
