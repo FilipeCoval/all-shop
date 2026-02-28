@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Paperclip, Loader2, User, ShieldAlert, Bell, Smartphone } from 'lucide-react';
+import { X, Send, Loader2, Bell, Smartphone } from 'lucide-react';
 import { SupportTicket, TicketMessage, User as UserType } from '../types';
-import { db, firebase, storage, requestPushPermission } from '../services/firebaseConfig';
+import { db, firebase, requestPushPermission } from '../services/firebaseConfig';
 
 interface SupportTicketModalProps {
-    ticket?: SupportTicket | null; // Se null, é modo de criação
+    ticket?: SupportTicket | null;
     user: UserType;
     onClose: () => void;
     onTicketCreated?: () => void;
@@ -16,7 +16,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState<SupportTicket['category']>('Dúvida Técnica');
     const [isCreating, setIsCreating] = useState(false);
-    const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
+    const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
     // Modo Chat
     const [messages, setMessages] = useState<TicketMessage[]>([]);
@@ -26,12 +26,19 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
 
     // Verificar permissão de notificação ao montar
     useEffect(() => {
+        if (typeof Notification !== 'undefined') {
+            setNotificationPermission(Notification.permission);
+        }
+
         if (!ticket) {
             // Se for criar ticket, verificar permissões
-            if (Notification.permission !== 'granted') {
-                // Tentar pedir logo se for default
+            if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
                 if (Notification.permission === 'default') {
-                    requestPushPermission().then(() => setNotificationPermission(Notification.permission));
+                    requestPushPermission().then(() => {
+                        if (typeof Notification !== 'undefined') {
+                            setNotificationPermission(Notification.permission);
+                        }
+                    });
                 }
             }
         }
@@ -65,7 +72,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
         e.preventDefault();
         
         // FORÇAR NOTIFICAÇÕES
-        if (Notification.permission !== 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
             const confirm = window.confirm("Para receber a resposta do suporte, é CRUCIAL que ative as notificações. Sem isto, não saberá quando respondermos. Deseja ativar agora?");
             if (confirm) {
                 const token = await requestPushPermission();
@@ -105,9 +112,6 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
 
             const docRef = await db.collection('support_tickets').add(newTicket);
             await docRef.update({ id: docRef.id });
-
-            // Enviar notificação para Admin (via API ou trigger se existisse)
-            // Aqui confiamos que o Admin vê no Dashboard
 
             onTicketCreated?.();
             onClose();
@@ -191,7 +195,11 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                                     {notificationPermission !== 'granted' && (
                                         <button 
                                             type="button"
-                                            onClick={() => requestPushPermission().then(() => setNotificationPermission(Notification.permission))}
+                                            onClick={() => requestPushPermission().then(() => {
+                                                if (typeof Notification !== 'undefined') {
+                                                    setNotificationPermission(Notification.permission);
+                                                }
+                                            })}
                                             className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
                                         >
                                             <Bell size={12} /> Ativar Notificações Agora
