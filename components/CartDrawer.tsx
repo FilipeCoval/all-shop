@@ -146,7 +146,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               .get();
 
           if (snapshot.empty) {
-              setCouponError('Cupão inválido.');
+              console.warn(`[CartDrawer] Cupão não encontrado: "${couponCode.trim().toUpperCase()}"`);
+              setCouponError('Cupão inválido. Verifique se copiou corretamente.');
               setIsCheckingCoupon(false);
               return;
           }
@@ -156,6 +157,12 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
           if (!coupon.isActive) {
               setCouponError('Este cupão expirou.');
+              setIsCheckingCoupon(false);
+              return;
+          }
+
+          if (coupon.maxUsages && (coupon.usageCount || 0) >= coupon.maxUsages) {
+              setCouponError('Este cupão já foi utilizado.');
               setIsCheckingCoupon(false);
               return;
           }
@@ -575,4 +582,3 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
-
