@@ -67,8 +67,10 @@ service cloud.firestore {
     // Cupões
     match /coupons/{docId} {
       allow read: if true;
-      allow create: if isAdmin() || (isSignedIn() && request.resource.data.code.matches('REWARD-.*'));
-      allow update, delete: if isAdmin();
+      allow create: if isAdmin() || (isSignedIn() && (request.resource.data.code.matches('REWARD-.*') || request.resource.data.code.matches('ALL-.*')));
+      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
     }
   }
 }
+
