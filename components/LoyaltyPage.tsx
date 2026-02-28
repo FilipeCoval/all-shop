@@ -64,36 +64,48 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
             maxDiscount: reward.maxDiscount
         };
 
-        // 1. Criar Cupão
-        await db.collection('coupons').add(newCoupon);
-
-        // 2. Deduzir Pontos
-        const pointsCost = Number(reward.points); // Garantir que é número
+        const pointsCost = Number(reward.points);
         if (isNaN(pointsCost) || pointsCost <= 0) {
             throw new Error("Custo de pontos inválido");
         }
 
-        const newHistory: PointHistory = {
-            id: `redeem-${Date.now()}`,
-            date: new Date().toISOString(),
-            amount: -pointsCost,
-            reason: `Troca por ${reward.label}`
-        };
+        await db.runTransaction(async (transaction) => {
+            // 1. Ler dados do utilizador para garantir consistência
+            const userRef = db.collection('users').doc(user.uid);
+            const userDoc = await transaction.get(userRef);
+            
+            if (!userDoc.exists) throw new Error("Utilizador não encontrado.");
+            
+            const userData = userDoc.data() as User;
+            const currentPoints = userData.loyaltyPoints || 0;
 
-        await db.collection('users').doc(user.uid).update({
-            loyaltyPoints: firebase.firestore.FieldValue.increment(-pointsCost),
-            pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory)
+            if (currentPoints < pointsCost) {
+                throw new Error("Pontos insuficientes.");
+            }
+
+            // 2. Criar Cupão
+            const couponRef = db.collection('coupons').doc();
+            transaction.set(couponRef, newCoupon);
+
+            // 3. Deduzir Pontos
+            const newHistory: PointHistory = {
+                id: `redeem-${Date.now()}`,
+                date: new Date().toISOString(),
+                amount: -pointsCost,
+                reason: `Troca por ${reward.label}`
+            };
+
+            transaction.update(userRef, {
+                loyaltyPoints: currentPoints - pointsCost,
+                pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory)
+            });
         });
-
-        // NOTA: Não chamamos onUpdateUser aqui porque o App.tsx tem um listener (onSnapshot)
-        // que vai detetar a mudança no Firestore e atualizar a UI automaticamente.
-        // Chamar onUpdateUser aqui causaria uma segunda escrita desnecessária e potenciais conflitos.
 
         setGeneratedCoupon(code);
 
-    } catch (err) {
+    } catch (err: any) {
         console.error("Erro ao trocar pontos:", err);
-        setError("Ocorreu um erro ao gerar o seu voucher. Por favor, tente novamente ou contacte o suporte.");
+        setError(err.message || "Ocorreu um erro ao gerar o seu voucher. Por favor, tente novamente ou contacte o suporte.");
     } finally {
         setLoading(false);
     }
