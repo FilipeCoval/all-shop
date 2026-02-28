@@ -80,6 +80,7 @@ async function executeCreateTicket(args: any): Promise<string> {
     try {
         const newTicket: SupportTicket = {
             id: `TICKET-${Date.now().toString().slice(-6)}`,
+            userId: 'AI-GENERATED', // Placeholder pois a tool não recebe o ID
             customerEmail: args.customerEmail || 'Não fornecido',
             customerName: args.customerName || 'Cliente Chat',
             subject: args.subject,
@@ -88,8 +89,11 @@ async function executeCreateTicket(args: any): Promise<string> {
             status: 'Aberto',
             priority: args.priority,
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             orderId: args.orderId,
-            aiSummary: "Gerado automaticamente pela Assistente IA."
+            unreadUser: false,
+            unreadAdmin: true,
+            messages: []
         };
 
         await db.collection('support_tickets').doc(newTicket.id).set(newTicket);
