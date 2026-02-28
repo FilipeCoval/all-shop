@@ -248,16 +248,30 @@ export interface ChatMessage {
 
 export interface SupportTicket {
     id: string;
+    userId: string; // ID do utilizador (Obrigatório para chat)
     customerEmail?: string;
     customerName?: string;
     subject: string;
-    description: string; // Resumo feito pela IA
+    description: string; // Descrição inicial
     category: 'Garantia' | 'Devolução' | 'Dúvida Técnica' | 'Outros';
-    status: 'Aberto' | 'Em Análise' | 'Resolvido';
+    status: 'Aberto' | 'Em Análise' | 'Resolvido' | 'Fechado';
     priority: 'Baixa' | 'Média' | 'Alta';
     createdAt: string;
+    updatedAt: string; // Para ordenar por atividade recente
     orderId?: string;
-    aiSummary?: string; // Resumo extra
+    messages?: TicketMessage[];
+    unreadUser: boolean; // Se tem mensagens novas para o user
+    unreadAdmin: boolean; // Se tem mensagens novas para o admin
+}
+
+export interface TicketMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    role: 'user' | 'admin' | 'system';
+    text: string;
+    timestamp: string;
+    attachments?: string[];
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
