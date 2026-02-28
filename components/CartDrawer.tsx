@@ -285,7 +285,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', addedAt: new Date().toISOString() })),
         shippingInfo: finalUserInfo,
         userId: user?.uid || null,
-        storeShippingCost: 5.40 // Valor por defeito do custo de envio para a loja
+        storeShippingCost: 5.40, // Valor por defeito do custo de envio para a loja
+        discountValue: discountAmount > 0 ? discountAmount : undefined,
+        couponCode: appliedCoupon ? appliedCoupon.code : undefined
     };
 
     let msg = `🛍️ Pedido ${currentOrderId}\n`;
