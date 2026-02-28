@@ -52,6 +52,8 @@ export interface Order {
   serialNumbersUsed?: string[];
   fulfillmentStatus?: "PENDING" | "IN_PROGRESS" | "COMPLETED";
   storeShippingCost?: number; // Custo real de envio para a loja (para cálculo de lucro)
+  discountValue?: number; // Valor total do desconto aplicado
+  couponCode?: string; // Código do cupão utilizado
 }
 
 export interface StockMovement {
