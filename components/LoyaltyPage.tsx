@@ -329,10 +329,29 @@ const AllPoints: React.FC<AllPointsProps> = ({ user, onUpdateUser, onOpenLogin, 
                     </div>
                     <h3 className="text-xl font-bold text-green-800 dark:text-green-300 mb-2">Voucher Gerado!</h3>
                     <p className="text-green-700 dark:text-green-400 mb-4 text-sm">Copie o código abaixo e use no checkout.</p>
-                    <div className="bg-white dark:bg-gray-900 border-2 border-dashed border-green-300 dark:border-green-700 p-3 rounded-xl font-mono text-xl font-bold text-gray-800 dark:text-white tracking-widest select-all cursor-pointer" onClick={() => navigator.clipboard.writeText(generatedCoupon)}>
-                        {generatedCoupon}
+                    
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                        <div 
+                            className="bg-white dark:bg-gray-900 border-2 border-dashed border-green-300 dark:border-green-700 p-3 rounded-xl font-mono text-xl font-bold text-gray-800 dark:text-white tracking-widest select-all cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors" 
+                            onClick={() => {
+                                navigator.clipboard.writeText(generatedCoupon);
+                                alert("Código copiado!");
+                            }}
+                        >
+                            {generatedCoupon}
+                        </div>
+                        <button 
+                            onClick={() => {
+                                navigator.clipboard.writeText(generatedCoupon);
+                                alert("Código copiado!");
+                            }}
+                            className="p-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-md"
+                            title="Copiar Código"
+                        >
+                            <Copy size={20} />
+                        </button>
                     </div>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-2">Copiado para a área de transferência ao clicar.</p>
+                    <p className="text-xs text-green-600 dark:text-green-500 mt-2">Toque no código ou no botão para copiar.</p>
                 </div>
             )}
 
