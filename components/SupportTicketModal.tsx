@@ -196,9 +196,37 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                         </h3>
                         {statusBadge}
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
-                        <X size={20} className="text-gray-500 dark:text-gray-400" />
-                    </button>
+                    
+                    <div className="flex items-center gap-2">
+                        {variant === 'admin' && ticket && (
+                            <select
+                                value={ticket.status}
+                                onChange={async (e) => {
+                                    const newStatus = e.target.value as SupportTicket['status'];
+                                    if (window.confirm(`Alterar estado para "${newStatus}"?`)) {
+                                        try {
+                                            await db.collection('support_tickets').doc(ticket.id).update({ 
+                                                status: newStatus,
+                                                updatedAt: new Date().toISOString()
+                                            });
+                                        } catch (err) {
+                                            console.error("Erro ao atualizar estado:", err);
+                                            alert("Erro ao atualizar estado.");
+                                        }
+                                    }
+                                }}
+                                className="text-xs font-bold p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-primary"
+                            >
+                                <option value="Aberto">Aberto</option>
+                                <option value="Em Análise">Em Análise</option>
+                                <option value="Resolvido">Resolvido</option>
+                                <option value="Fechado">Fechado</option>
+                            </select>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+                            <X size={20} className="text-gray-500 dark:text-gray-400" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* CONTENT */}
@@ -339,3 +367,4 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
 };
 
 export default SupportTicketModal;
+
