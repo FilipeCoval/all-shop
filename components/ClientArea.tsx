@@ -12,6 +12,8 @@ import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constan
 import { db, firebase, storage, requestPushPermission, messaging } from '../services/firebaseConfig';
 import LoyaltyPage from './LoyaltyPage';
 
+import SupportTicketModal from './SupportTicketModal';
+
 interface ClientAreaProps {
   user: User;
   orders: Order[];
@@ -94,6 +96,19 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const [notifLoading, setNotifLoading] = useState(false);
   const [isPushEnabled, setIsPushEnabled] = useState(false);
   const [currentToken, setCurrentToken] = useState<string | null>(null);
+
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+
+  const handleOpenNewTicket = () => {
+      setSelectedTicket(null);
+      setIsTicketModalOpen(true);
+  };
+
+  const handleOpenTicket = (ticket: SupportTicket) => {
+      setSelectedTicket(ticket);
+      setIsTicketModalOpen(true);
+  };
 
   const tierMap: Record<UserTier, keyof typeof LOYALTY_TIERS> = {
     'Bronze': 'BRONZE',
@@ -437,10 +452,10 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                             <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <Headphones className="text-primary"/> Os Meus Pedidos de Suporte
                             </h2>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Histórico de assistência criada pela Rofi.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Histórico de assistência.</p>
                         </div>
-                        <button onClick={onOpenSupportChat} className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-sm shadow hover:bg-blue-600 transition-colors flex items-center gap-2">
-                            <Sparkles size={16} /> Novo Pedido (Rofi)
+                        <button onClick={handleOpenNewTicket} className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-sm shadow hover:bg-blue-600 transition-colors flex items-center gap-2">
+                            <Sparkles size={16} /> Novo Pedido
                         </button>
                     </div>
 
@@ -452,31 +467,35 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 <Headphones size={32} className="text-primary" />
                             </div>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sem pedidos de suporte</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mt-2">Se tiver algum problema com uma encomenda, fale com a Rofi no canto do ecrã.</p>
+                            <p className="text-gray-500 dark:text-gray-400 mt-2">Precisa de ajuda? Crie um novo pedido acima.</p>
+                            <button onClick={handleOpenNewTicket} className="mt-6 text-primary font-bold hover:underline">Criar Pedido Agora</button>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {myTickets.map(ticket => (
-                                <div key={ticket.id} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-300 transition-all">
+                                <div key={ticket.id} onClick={() => handleOpenTicket(ticket)} className="cursor-pointer bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-300 transition-all relative group">
+                                    {ticket.unreadUser && (
+                                        <div className="absolute top-4 right-4 bg-red-500 w-3 h-3 rounded-full animate-pulse shadow-lg ring-4 ring-white dark:ring-gray-800"></div>
+                                    )}
                                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === 'Aberto' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === 'Aberto' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
                                                     {ticket.status}
                                                 </span>
-                                                <span className="text-gray-400 text-xs font-mono">#{ticket.id}</span>
+                                                <span className="text-gray-400 text-xs font-mono">#{ticket.id.slice(-6)}</span>
                                             </div>
-                                            <h3 className="font-bold text-lg text-gray-900 dark:text-white">{ticket.subject}</h3>
+                                            <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-primary transition-colors">{ticket.subject}</h3>
                                         </div>
                                         <div className="text-right text-xs text-gray-500 dark:text-gray-400 flex flex-col items-end">
-                                            <span className="flex items-center gap-1"><Clock size={12}/> {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                                            <span className="flex items-center gap-1"><Clock size={12}/> {new Date(ticket.updatedAt || ticket.createdAt).toLocaleDateString()}</span>
                                             {ticket.orderId && <span className="font-bold text-primary bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded mt-1">Enc: {ticket.orderId}</span>}
                                         </div>
                                     </div>
                                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex gap-2">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex gap-2 line-clamp-2">
                                             <MessageSquare size={16} className="text-gray-400 shrink-0 mt-0.5"/>
-                                            {ticket.description}
+                                            {ticket.messages && ticket.messages.length > 0 ? ticket.messages[ticket.messages.length - 1].text : ticket.description}
                                         </p>
                                     </div>
                                 </div>
@@ -484,6 +503,18 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* MODAL DE SUPORTE */}
+            {isTicketModalOpen && (
+                <SupportTicketModal 
+                    user={user}
+                    ticket={selectedTicket}
+                    onClose={() => setIsTicketModalOpen(false)}
+                    onTicketCreated={() => {
+                        // Recarregar lista (já é feito pelo onSnapshot, mas podemos forçar refresh visual se necessário)
+                    }}
+                />
             )}
 
             {/* ORDERS */}
