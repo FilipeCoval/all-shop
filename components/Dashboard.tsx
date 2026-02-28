@@ -248,7 +248,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           if(activeTab === 'coupons') {
               setIsCouponsLoading(true);
               unsubscribeCoupons = db.collection('coupons').onSnapshot(snapshot => { 
-                  setCoupons(snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[]); 
+                  const allCoupons = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Coupon[];
+                  // Filtrar cupões de clientes (que têm userId) para mostrar apenas campanhas
+                  const adminCoupons = allCoupons.filter(c => !c.userId);
+                  setCoupons(adminCoupons); 
                   setIsCouponsLoading(false); 
               });
           }
