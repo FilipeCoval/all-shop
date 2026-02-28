@@ -8,9 +8,10 @@ interface SupportTicketModalProps {
     user: UserType;
     onClose: () => void;
     onTicketCreated?: () => void;
+    variant?: 'client' | 'admin';
 }
 
-const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, onClose, onTicketCreated }) => {
+const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, onClose, onTicketCreated, variant = 'client' }) => {
     // Modo Criação
     const [subject, setSubject] = useState('');
     const [description, setDescription] = useState('');
@@ -30,7 +31,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
             setNotificationPermission(Notification.permission);
         }
 
-        if (!ticket) {
+        if (!ticket && variant === 'client') {
             // Se for criar ticket, verificar permissões
             if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
                 if (Notification.permission === 'default') {
@@ -42,14 +43,16 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                 }
             }
         }
-    }, [ticket]);
+    }, [ticket, variant]);
 
     // Carregar mensagens do ticket
     useEffect(() => {
         if (ticket) {
-            // Marcar como lido pelo user
-            if (ticket.unreadUser) {
+            // Marcar como lido
+            if (variant === 'client' && ticket.unreadUser) {
                 db.collection('support_tickets').doc(ticket.id).update({ unreadUser: false });
+            } else if (variant === 'admin' && ticket.unreadAdmin) {
+                db.collection('support_tickets').doc(ticket.id).update({ unreadAdmin: false });
             }
 
             const unsubscribe = db.collection('support_tickets').doc(ticket.id)
@@ -61,7 +64,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                 });
             return () => unsubscribe();
         }
-    }, [ticket]);
+    }, [ticket, variant]);
 
     // Scroll para o fundo
     useEffect(() => {
@@ -133,17 +136,26 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                 id: Date.now().toString(),
                 senderId: user.uid,
                 senderName: user.name,
-                role: 'user',
+                role: variant === 'admin' ? 'admin' : 'user',
                 text: newMessage.trim(),
                 timestamp: new Date().toISOString()
             };
 
-            await db.collection('support_tickets').doc(ticket.id).update({
+            const updates: any = {
                 messages: firebase.firestore.FieldValue.arrayUnion(message),
                 updatedAt: new Date().toISOString(),
-                unreadAdmin: true,
-                status: ticket.status === 'Resolvido' ? 'Aberto' : ticket.status // Reabrir se o user falar
-            });
+            };
+
+            if (variant === 'client') {
+                updates.unreadAdmin = true;
+                updates.status = ticket.status === 'Resolvido' ? 'Aberto' : ticket.status;
+            } else {
+                updates.unreadUser = true;
+                // Se admin responde, pode manter o status ou mudar para 'Em Análise' se estiver 'Aberto'
+                if (ticket.status === 'Aberto') updates.status = 'Em Análise';
+            }
+
+            await db.collection('support_tickets').doc(ticket.id).update(updates);
 
             setNewMessage('');
         } catch (error) {
@@ -159,7 +171,9 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
             : 'bg-gray-200 text-gray-600';
     };
 
-    const modalTitle = ticket ? ticket.subject : 'Novo Pedido de Suporte';
+    const modalTitle = variant === 'admin' && ticket
+        ? `Ticket #${ticket.id.slice(-6)} - ${ticket.customerName}`
+        : (ticket ? ticket.subject : 'Novo Pedido de Suporte');
     
     const statusBadge = ticket ? (
         <div className="flex items-center gap-2 text-xs mt-1">
@@ -189,7 +203,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
 
                 {/* CONTENT */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-gray-950">
-                    {!ticket ? (
+                    {!ticket && variant === 'client' ? (
                         /* FORMULÁRIO DE CRIAÇÃO */
                         <form onSubmit={handleCreateTicket} className="space-y-6">
                             {/* AVISO DE NOTIFICAÇÕES */}
@@ -264,25 +278,30 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                                 {isCreating ? <Loader2 className="animate-spin" /> : 'Criar Pedido de Suporte'}
                             </button>
                         </form>
-                    ) : (
+                    ) : ticket ? (
                         /* ÁREA DE CHAT */
                         <div className="space-y-4">
                             {/* Mensagem Inicial (Descrição do Ticket) */}
-                            <div className="flex justify-end">
-                                <div className="bg-blue-100 dark:bg-blue-900/30 text-gray-800 dark:text-gray-200 p-4 rounded-2xl rounded-tr-none max-w-[85%]">
-                                    <p className="font-bold text-xs text-blue-600 dark:text-blue-400 mb-1">{user.name}</p>
+                            <div className={`flex ${variant === 'admin' ? 'justify-start' : 'justify-end'}`}>
+                                <div className={`p-4 rounded-2xl rounded-tr-none max-w-[85%] ${variant === 'admin' ? 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm rounded-tl-none' : 'bg-blue-100 dark:bg-blue-900/30 text-gray-800 dark:text-gray-200'}`}>
+                                    <p className={`font-bold text-xs mb-1 ${variant === 'admin' ? 'text-orange-600 dark:text-orange-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                                        {ticket.customerName} (Cliente)
+                                    </p>
                                     <p className="whitespace-pre-wrap">{ticket.description}</p>
                                     <p className="text-[10px] text-right mt-1 opacity-60">{new Date(ticket.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
                             </div>
 
                             {messages.map((msg) => {
-                                const isMe = msg.role === 'user';
+                                // Se variant=client: Eu sou user.
+                                // Se variant=admin: Eu sou admin.
+                                const isMe = variant === 'client' ? msg.role === 'user' : msg.role === 'admin';
+                                
                                 return (
                                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`p-4 rounded-2xl max-w-[85%] ${isMe ? 'bg-blue-100 dark:bg-blue-900/30 text-gray-800 dark:text-gray-200 rounded-tr-none' : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm'}`}>
                                             <p className={`font-bold text-xs mb-1 ${isMe ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                                                {isMe ? 'Eu' : 'Suporte All-Shop'}
+                                                {isMe ? 'Eu' : (msg.role === 'admin' ? 'Suporte All-Shop' : msg.senderName)}
                                             </p>
                                             <p className="whitespace-pre-wrap">{msg.text}</p>
                                             <p className="text-[10px] text-right mt-1 opacity-60">{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
@@ -292,7 +311,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                             })}
                             <div ref={messagesEndRef} />
                         </div>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* FOOTER (INPUT) */}
@@ -302,7 +321,7 @@ const SupportTicketModal: React.FC<SupportTicketModalProps> = ({ ticket, user, o
                             type="text" 
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Escreva uma mensagem..."
+                            placeholder={variant === 'admin' ? "Responder ao cliente..." : "Escreva uma mensagem..."}
                             className="flex-1 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary dark:text-white"
                         />
                         <button 
