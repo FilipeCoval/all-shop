@@ -92,7 +92,7 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
     <>
       {/* Botão Flutuante (Silhueta Grande) com Container para Hover */}
       {!isOpen && (
-        <div className="fixed bottom-4 right-4 z-40 group flex flex-col items-end">
+        <div className="fixed bottom-4 right-4 z-40 group flex flex-col items-end mb-[env(safe-area-inset-bottom)]">
             
             {/* Balão de Fala (Aparece no Hover) */}
             <div className="mr-8 mb-2 bg-white px-4 py-2 rounded-2xl rounded-br-none shadow-xl border border-gray-100 text-sm font-bold text-gray-700 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 pointer-events-none relative max-w-[150px] text-center">
@@ -120,7 +120,7 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
 
       {/* Janela do Chat */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-full max-w-[350px] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[500px] animate-fade-in-up">
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-[350px] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[500px] animate-fade-in-up mb-[env(safe-area-inset-bottom)]">
           
           {/* Header */}
           <div className="bg-primary p-4 flex items-center justify-between text-white relative overflow-hidden">
