@@ -101,20 +101,24 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
                 <div className="absolute -bottom-1.5 right-0 w-3 h-3 bg-white transform rotate-45 border-b border-r border-gray-100"></div>
             </div>
 
-            <button
-              onClick={() => onToggle(true)}
-              className="w-36 h-36 hover:scale-110 transition-all duration-300 flex items-center justify-center bg-transparent border-none outline-none focus:outline-none relative"
-              aria-label="Abrir chat"
-            >
-              {/* Efeito de Aura/Glow atrás */}
-              <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-xl scale-75 group-hover:scale-100 transition-transform duration-500 animate-pulse"></div>
-              
-              <img 
-                src={BOT_AVATAR_URL} 
-                alt={BOT_NAME} 
-                className="w-full h-full object-contain drop-shadow-2xl filter relative z-10" 
-              />
-            </button>
+            <div className="relative w-36 h-36 flex items-center justify-center">
+                {/* Efeito de Aura/Glow atrás - Pointer Events None para não ser clicável */}
+                <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-xl scale-75 group-hover:scale-100 transition-transform duration-500 animate-pulse pointer-events-none"></div>
+                
+                {/* Botão Invisível (Hitbox Reduzida) - Centralizado e menor que a imagem */}
+                <button
+                  onClick={() => onToggle(true)}
+                  className="absolute w-24 h-24 rounded-full z-20 cursor-pointer outline-none focus:outline-none"
+                  aria-label="Abrir chat"
+                ></button>
+
+                {/* Imagem Visual (Não clicável, passa o clique para o botão se estiver por baixo, mas aqui o botão está por cima) */}
+                <img 
+                  src={BOT_AVATAR_URL} 
+                  alt={BOT_NAME} 
+                  className="w-full h-full object-contain drop-shadow-2xl filter relative z-10 pointer-events-none transition-transform duration-300 group-hover:scale-110" 
+                />
+            </div>
         </div>
       )}
 
@@ -220,3 +224,4 @@ const AIChat: React.FC<AIChatProps> = ({ products, isOpen, onToggle, userOrders 
 };
 
 export default AIChat;
+
