@@ -340,6 +340,27 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* --- TEMPORIZADOR --- */}
         {checkoutStep === 'cart' && <ReservationBanner items={cartItems} />}
 
+        {/* --- BARRA DE PORTES GRÁTIS --- */}
+        {checkoutStep === 'cart' && cartItems.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 p-4 animate-fade-in shrink-0">
+                <div className="flex justify-between items-end mb-2">
+                    <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                        {total - discountAmount >= 50 
+                            ? <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><PartyPopper size={14}/> Portes Grátis Conseguidos!</span>
+                            : <span>Faltam {formatCurrency(50 - (total - discountAmount))} para Portes Grátis</span>
+                        }
+                    </p>
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">{Math.min(100, ((total - discountAmount) / 50) * 100).toFixed(0)}%</span>
+                </div>
+                <div className="w-full bg-blue-200 dark:bg-blue-800 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                        className={`h-full transition-all duration-500 ${total - discountAmount >= 50 ? 'bg-green-500' : 'bg-blue-600'}`} 
+                        style={{ width: `${Math.min(100, ((total - discountAmount) / 50) * 100)}%` }}
+                    ></div>
+                </div>
+            </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900">
           {checkoutStep === 'cart' && (
             <div className="space-y-4">
