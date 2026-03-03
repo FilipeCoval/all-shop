@@ -19,6 +19,7 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import ClientArea from './components/ClientArea';
 import InstallPrompt from './components/InstallPrompt';
 import LuckyWheel from './components/LuckyWheel';
+import ProductComparator from './components/ProductComparator';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, OrderItem } from './types';
 import { auth, db, firebase, messaging } from './services/firebaseConfig';
@@ -41,6 +42,10 @@ const App: React.FC = () => {
   const [isAIChatOpen, setIsAIChatOpen] = useState(false); 
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   
+  // Comparator State
+  const [compareList, setCompareList] = useState<number[]>([]);
+  const [isComparatorOpen, setIsComparatorOpen] = useState(false);
+
   // Notification Foreground State
   const [incomingNotification, setIncomingNotification] = useState<any>(null);
 
@@ -375,6 +380,17 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleCompare = (productId: number) => {
+      setCompareList(prev => {
+          if (prev.includes(productId)) return prev.filter(id => id !== productId);
+          if (prev.length >= 3) {
+              alert("Pode comparar no máximo 3 produtos.");
+              return prev;
+          }
+          return [...prev, productId];
+      });
+  };
+
   const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number): Promise<boolean> => {
       if (isAdmin) return true; 
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -674,7 +690,7 @@ const App: React.FC = () => {
         case '#returns': return <Returns />;
         case '#tracking': return <OrderTracker />; 
         case '#allpoints': return <LoyaltyPage user={user} onUpdateUser={handleUpdateUser} onOpenLogin={() => setIsLoginOpen(true)} />; // NOVA ROTA
-        default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} processingProductIds={processingProductIds} />;
+        default: return <Home products={dbProducts} onAddToCart={addToCart} getStock={getStockForProduct} wishlist={wishlist} onToggleWishlist={toggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} processingProductIds={processingProductIds} compareList={compareList} onToggleCompare={toggleCompare} onOpenComparator={() => setIsComparatorOpen(true)} />;
     }
   };
 
@@ -777,6 +793,15 @@ const App: React.FC = () => {
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => { setIsCartOpen(false); setIsLoginOpen(true); }} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
       <LuckyWheel isOpen={showLuckyWheel} onClose={() => setShowLuckyWheel(false)} user={user} onUpdateUser={handleUpdateUser} />
+      
+      <ProductComparator 
+          isOpen={isComparatorOpen} 
+          onClose={() => setIsComparatorOpen(false)} 
+          products={dbProducts.filter(p => compareList.includes(p.id))} 
+          onAddToCart={(p) => { addToCart(p); setIsComparatorOpen(false); }}
+          onRemoveProduct={(id) => setCompareList(prev => prev.filter(pId => pId !== id))}
+      />
+
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
       {route !== '#dashboard' && (
         <AIChat products={dbProducts} isOpen={isAIChatOpen} onToggle={setIsAIChatOpen} userOrders={orders} />
