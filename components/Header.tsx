@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X, Award, Moon, Sun } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X, Award, Moon, Sun, ChevronLeft } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS } from '../constants';
 import { User } from '../types';
 
@@ -85,14 +85,42 @@ const Header: React.FC<HeaderProps> = ({
       return user.name.split(' ')[0];
   };
 
+    const [isHome, setIsHome] = React.useState(true);
+
+    React.useEffect(() => {
+        const checkHome = () => {
+            setIsHome(window.location.hash === '' || window.location.hash === '#/' || window.location.hash === '#');
+        };
+        checkHome();
+        window.addEventListener('hashchange', checkHome);
+        return () => window.removeEventListener('hashchange', checkHome);
+    }, []);
+
+    const handleBack = () => {
+        if (window.history.length > 1) {
+            window.history.back();
+        } else {
+            onResetHome();
+        }
+    };
+
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-lg bg-white/95 dark:bg-gray-900/95 border-b border-gray-200 dark:border-gray-800 shadow-sm transition-all">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-lg bg-white/95 dark:bg-gray-900/95 border-b border-gray-200 dark:border-gray-800 shadow-sm transition-all pt-[env(safe-area-inset-top)]">
       <div className="container mx-auto px-4 h-20 flex items-center justify-between relative">
         
         {/* ESQUERDA: Menu (Mobile) + Logo (Desktop) + Nav (Desktop) */}
-        <div className="flex items-center gap-4 flex-1 justify-start">
+        <div className="flex items-center gap-2 flex-1 justify-start">
+            {!isHome && (
+                <button 
+                    className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" 
+                    onClick={handleBack}
+                    aria-label="Voltar"
+                >
+                    <ChevronLeft size={24} />
+                </button>
+            )}
             <button 
-                className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" 
+                className={`md:hidden p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors ${!isHome ? '' : '-ml-2'}`} 
                 onClick={onOpenMobileMenu}
                 aria-label="Menu"
             >
