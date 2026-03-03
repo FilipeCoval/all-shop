@@ -87,13 +87,19 @@ export const getAnalyticsData = async (days = 30): Promise<DailyStats[]> => {
         
         const startStr = startDate.toISOString().split('T')[0];
         
+        // Fetch all stats (avoid composite index requirement)
+        // Since we only have 1 doc per day, fetching all and filtering in memory is efficient enough
         const snapshot = await db.collection('online_users')
             .where('type', '==', 'daily_stats')
-            .where('date', '>=', startStr)
-            .orderBy('date', 'desc') // Newest first
             .get();
 
-        return snapshot.docs.map(doc => doc.data() as DailyStats);
+        const allStats = snapshot.docs.map(doc => doc.data() as DailyStats);
+        
+        // Filter and sort in memory
+        return allStats
+            .filter(stat => stat.date >= startStr)
+            .sort((a, b) => b.date.localeCompare(a.date)); // Newest first
+
     } catch (error) {
         console.error("Error fetching analytics:", error);
         return [];
