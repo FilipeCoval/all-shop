@@ -62,7 +62,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
       
       {/* Menu Drawer */}
       <div 
-        className={`fixed top-0 left-0 h-full w-[85%] max-w-[320px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col border-r border-gray-100 dark:border-gray-800 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed top-0 left-0 h-full w-[85%] max-w-[320px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col border-r border-gray-100 dark:border-gray-800 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900/50">
           <a href="#/" onClick={handleHomeClick} className="flex items-center gap-2">
