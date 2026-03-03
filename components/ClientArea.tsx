@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Order, Address, Product, ProductVariant, PointHistory, UserTier, Coupon, OrderItem, UserCheckoutInfo, ProductStatus, StatusHistory, SupportTicket } from '../types';
 import { 
@@ -383,12 +382,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             <nav className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                 {[
                     { id: 'overview', icon: LayoutDashboard, label: 'Visão Geral' },
+                    { id: 'profile', icon: UserIcon, label: 'Meu Perfil' },
                     { id: 'orders', icon: Package, label: 'Encomendas' },
-                    { id: 'support', icon: Headphones, label: 'Suporte' },
                     { id: 'points', icon: Coins, label: 'Loja de Pontos' },
                     { id: 'wishlist', icon: Heart, label: 'Favoritos' },
-                    { id: 'profile', icon: UserIcon, label: 'Meu Perfil' },
-                    { id: 'addresses', icon: MapPin, label: 'Moradas' }
+                    { id: 'support', icon: Headphones, label: 'Suporte' }
                 ].map(item => (
                     <button 
                         key={item.id}
@@ -762,47 +760,45 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                           </button>
                       </div>
                   </div>
-              </div>
-            )}
 
-            {/* ADDRESSES */}
-            {activeTab === 'addresses' && (
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-8 animate-fade-in">
-                  <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><MapPin size={20} className="text-primary"/> Moradas de Envio</h2>
-                      <button onClick={() => setIsAddingAddress(true)} className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"><Plus size={16}/> Adicionar Nova</button>
-                  </div>
-                  <div className="p-8">
-                      {isAddingAddress && (
-                          <form onSubmit={handleAddAddress} className="bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl border border-gray-200 dark:border-gray-600 mb-8 animate-fade-in-down">
-                              <h3 className="font-bold mb-4 text-gray-900 dark:text-white">Nova Morada</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <input placeholder="Apelido (ex: Casa, Trabalho)" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.alias} onChange={e => setNewAddress({...newAddress, alias: e.target.value})} />
-                                  <input placeholder="Rua e Nº Porta" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} />
-                                  <input placeholder="Localidade" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} />
-                                  <input placeholder="Código Postal" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.zip} onChange={e => setNewAddress({...newAddress, zip: e.target.value})} />
-                              </div>
-                              <div className="flex gap-2 mt-6">
-                                  <button type="submit" className="bg-primary text-white px-6 py-2 rounded-xl font-bold">Guardar</button>
-                                  <button type="button" onClick={() => setIsAddingAddress(false)} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-6 py-2 rounded-xl font-bold">Cancelar</button>
-                              </div>
-                          </form>
-                      )}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {(!user.addresses || user.addresses.length === 0) ? (
-                              <p className="text-gray-500 dark:text-gray-400 italic col-span-2">Nenhuma morada registada.</p>
-                          ) : (
-                              user.addresses.map(addr => (
-                                  <div key={addr.id} className="border border-gray-200 dark:border-gray-700 p-5 rounded-2xl flex justify-between items-start group hover:border-primary dark:hover:border-primary transition-colors">
-                                      <div>
-                                          <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">{addr.alias} <CheckCircle size={14} className="text-green-500"/></p>
-                                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{addr.street}</p>
-                                          <p className="text-sm text-gray-600 dark:text-gray-400">{addr.zip} {addr.city}</p>
-                                      </div>
-                                      <button onClick={() => handleDeleteAddress(addr.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2"><Trash2 size={18}/></button>
+                  {/* ADDRESSES (Moved inside Profile) */}
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                      <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><MapPin size={20} className="text-primary"/> Moradas de Envio</h2>
+                          <button onClick={() => setIsAddingAddress(true)} className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"><Plus size={16}/> Adicionar Nova</button>
+                      </div>
+                      <div className="p-8">
+                          {isAddingAddress && (
+                              <form onSubmit={handleAddAddress} className="bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl border border-gray-200 dark:border-gray-600 mb-8 animate-fade-in-down">
+                                  <h3 className="font-bold mb-4 text-gray-900 dark:text-white">Nova Morada</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <input placeholder="Apelido (ex: Casa, Trabalho)" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.alias} onChange={e => setNewAddress({...newAddress, alias: e.target.value})} />
+                                      <input placeholder="Rua e Nº Porta" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.street} onChange={e => setNewAddress({...newAddress, street: e.target.value})} />
+                                      <input placeholder="Localidade" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} />
+                                      <input placeholder="Código Postal" required className="p-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white" value={newAddress.zip} onChange={e => setNewAddress({...newAddress, zip: e.target.value})} />
                                   </div>
-                              ))
+                                  <div className="flex gap-2 mt-6">
+                                      <button type="submit" className="bg-primary text-white px-6 py-2 rounded-xl font-bold">Guardar</button>
+                                      <button type="button" onClick={() => setIsAddingAddress(false)} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white px-6 py-2 rounded-xl font-bold">Cancelar</button>
+                                  </div>
+                              </form>
                           )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {(!user.addresses || user.addresses.length === 0) ? (
+                                  <p className="text-gray-500 dark:text-gray-400 italic col-span-2">Nenhuma morada registada.</p>
+                              ) : (
+                                  user.addresses.map(addr => (
+                                      <div key={addr.id} className="border border-gray-200 dark:border-gray-700 p-5 rounded-2xl flex justify-between items-start group hover:border-primary dark:hover:border-primary transition-colors">
+                                          <div>
+                                              <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">{addr.alias} <CheckCircle size={14} className="text-green-500"/></p>
+                                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{addr.street}</p>
+                                              <p className="text-sm text-gray-600 dark:text-gray-400">{addr.zip} {addr.city}</p>
+                                          </div>
+                                          <button onClick={() => handleDeleteAddress(addr.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2"><Trash2 size={18}/></button>
+                                      </div>
+                                  ))
+                              )}
+                          </div>
                       </div>
                   </div>
               </div>
