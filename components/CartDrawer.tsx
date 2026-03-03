@@ -325,15 +325,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   return (
     <>
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose} />
-      <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-gray-900 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-[#0f172a] shadow-2xl z-50 transform transition-transform duration-300 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
         {checkoutStep !== 'success' && checkoutStep !== 'tutorial' && (
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-900 shrink-0">
+            <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0f172a] shrink-0">
             <div className="flex items-center gap-2">
-                {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep('cart')} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full dark:text-white"><ChevronLeft size={20}/></button>}
+                {checkoutStep !== 'cart' && <button onClick={() => setCheckoutStep('cart')} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full dark:text-white"><ChevronLeft size={20}/></button>}
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Carrinho</h2>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24} /></button>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24} /></button>
             </div>
         )}
 
@@ -361,23 +361,23 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-[#0f172a]">
           {checkoutStep === 'cart' && (
             <div className="space-y-4">
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              <div className="divide-y divide-gray-100 dark:divide-slate-800">
                 {cartItems.length === 0 ? (
                   <div className="text-center py-20 text-gray-400">O seu carrinho está vazio.</div>
                 ) : (
                   cartItems.map(item => (
                     <div key={item.cartItemId} className="py-4 flex gap-4">
-                      <img src={item.image} className="w-16 h-16 object-contain bg-gray-50 dark:bg-gray-800 rounded" alt="" />
+                      <img src={item.image} className="w-16 h-16 object-contain bg-gray-50 dark:bg-slate-800 rounded" alt="" />
                       <div className="flex-1">
                         <p className="font-bold text-sm text-gray-800 dark:text-gray-100">{item.name}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{item.selectedVariant}</p>
                         <div className="flex items-center gap-3 mt-2">
-                          <button onClick={() => onUpdateQuantity(item.cartItemId, -1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white flex items-center justify-center">-</button>
+                          <button onClick={() => onUpdateQuantity(item.cartItemId, -1)} className="w-6 h-6 border dark:border-slate-700 rounded-full font-bold dark:text-white flex items-center justify-center">-</button>
                           <span className="text-sm font-bold dark:text-white">{item.quantity}</span>
-                          <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="w-6 h-6 border dark:border-gray-700 rounded-full font-bold dark:text-white flex items-center justify-center">+</button>
+                          <button onClick={() => onUpdateQuantity(item.cartItemId, 1)} className="w-6 h-6 border dark:border-slate-700 rounded-full font-bold dark:text-white flex items-center justify-center">+</button>
                         </div>
                       </div>
                       <div className="text-right">
@@ -391,7 +391,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
               {/* Área de Cupão */}
               {cartItems.length > 0 && (
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 mt-4">
+                  <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 mt-4">
                       {!appliedCoupon ? (
                           <div className="flex gap-2">
                               <div className="relative flex-1">
@@ -400,14 +400,14 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                                     placeholder="Código Promocional" 
                                     value={couponCode} 
                                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm uppercase font-bold focus:ring-2 focus:ring-primary outline-none"
+                                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white text-sm uppercase font-bold focus:ring-2 focus:ring-primary outline-none"
                                 />
                                 <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                               </div>
                               <button 
                                 onClick={handleApplyCoupon} 
                                 disabled={isCheckingCoupon || !couponCode}
-                                className="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50"
+                                className="bg-gray-900 dark:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50"
                               >
                                   {isCheckingCoupon ? <Loader2 size={14} className="animate-spin"/> : 'Aplicar'}
                               </button>
@@ -432,14 +432,14 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="grid grid-cols-2 gap-3">
                   <button 
                     onClick={() => setDeliveryMethod('Shipping')}
-                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Shipping' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 dark:text-gray-400 hover:border-gray-300'}`}
+                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Shipping' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 dark:text-gray-400 hover:border-gray-300'}`}
                   >
                       <Truck size={24} />
                       <span className="font-bold text-sm">Envio CTT</span>
                   </button>
                   <button 
                     onClick={() => setDeliveryMethod('Pickup')}
-                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Pickup' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 dark:text-gray-400 hover:border-gray-300'}`}
+                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${deliveryMethod === 'Pickup' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 dark:text-gray-400 hover:border-gray-300'}`}
                   >
                       <Store size={24} />
                       <span className="font-bold text-sm">Levantar na Loja</span>
@@ -453,28 +453,28 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                       <div className="grid grid-cols-4 gap-2">
                           <button
                               onClick={() => setUserInfo({...userInfo, paymentMethod: 'MB Way'})}
-                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'MB Way' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'MB Way' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400'}`}
                           >
                               <Smartphone size={18} />
                               MB Way
                           </button>
                           <button
                               onClick={() => setUserInfo({...userInfo, paymentMethod: 'Transferência'})}
-                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Transferência' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Transferência' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400'}`}
                           >
                               <Landmark size={18} />
                               Transf.
                           </button>
                           <button
                               onClick={() => setUserInfo({...userInfo, paymentMethod: 'Cobrança'})}
-                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Cobrança' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Cobrança' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400'}`}
                           >
                               <Banknote size={18} />
                               Cobrança
                           </button>
                           <button
                               onClick={() => setUserInfo({...userInfo, paymentMethod: 'Outro'})}
-                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Outro' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'}`}
+                              className={`p-3 rounded-xl text-xs font-bold border transition-all flex flex-col items-center gap-1 ${userInfo.paymentMethod === 'Outro' ? 'border-primary bg-blue-50 dark:bg-blue-900/30 text-primary' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400'}`}
                           >
                               <Sparkles size={18} />
                               Outro
@@ -496,10 +496,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 
                   <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Dados Pessoais</label>
-                      <input type="text" placeholder="Nome Completo *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
-                      <input type="email" placeholder="Email *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} />
-                      <input type="tel" placeholder="Telemóvel *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white mb-3" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
-                      <input type="text" placeholder="NIF (Opcional)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} />
+                      <input type="text" placeholder="Nome Completo *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white mb-3" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
+                      <input type="email" placeholder="Email *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white mb-3" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} />
+                      <input type="tel" placeholder="Telemóvel *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white mb-3" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
+                      <input type="text" placeholder="NIF (Opcional)" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.nif} onChange={e => setUserInfo({...userInfo, nif: e.target.value})} />
                   </div>
 
                   {deliveryMethod === 'Shipping' ? (
@@ -507,18 +507,18 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Morada de Entrega</label>
                           <div className="grid grid-cols-3 gap-2 mb-3">
                               <div className="col-span-2">
-                                  <input type="text" placeholder="Rua *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
+                                  <input type="text" placeholder="Rua *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.street} onChange={e => setUserInfo({...userInfo, street: e.target.value})} />
                               </div>
                               <div>
-                                  <input type="text" placeholder="Nº Porta *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} />
+                                  <input type="text" placeholder="Nº Porta *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.doorNumber} onChange={e => setUserInfo({...userInfo, doorNumber: e.target.value})} />
                               </div>
                           </div>
                           <div className="mb-3">
-                              <input type="text" placeholder="Andar, Bloco, Lote (Opcional)" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.addressExtra || ''} onChange={e => setUserInfo({...userInfo, addressExtra: e.target.value})} />
+                              <input type="text" placeholder="Andar, Bloco, Lote (Opcional)" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.addressExtra || ''} onChange={e => setUserInfo({...userInfo, addressExtra: e.target.value})} />
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <input type="text" placeholder="Localidade *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
-                            <input type="text" placeholder="Cód. Postal *" className="w-full p-3 border dark:border-gray-700 rounded-xl dark:bg-gray-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
+                            <input type="text" placeholder="Localidade *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.city} onChange={e => setUserInfo({...userInfo, city: e.target.value})} />
+                            <input type="text" placeholder="Cód. Postal *" className="w-full p-3 border dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white" value={userInfo.zip} onChange={e => setUserInfo({...userInfo, zip: e.target.value})} />
                           </div>
                       </div>
                   ) : (
@@ -580,12 +580,12 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                     Obrigado pela sua compra. A nossa equipa entrará em contacto brevemente.
                 </p>
 
-                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 w-full mb-8">
+                <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 w-full mb-8">
                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">Referência do Pedido</p>
                     <p className="text-xl font-mono font-bold text-primary">{currentOrderId}</p>
                 </div>
 
-                <button onClick={onClose} className="bg-gray-900 dark:bg-gray-700 text-white px-8 py-4 rounded-xl font-bold w-full shadow-xl hover:scale-[1.02] transition-transform">
+                <button onClick={onClose} className="bg-gray-900 dark:bg-slate-700 text-white px-8 py-4 rounded-xl font-bold w-full shadow-xl hover:scale-[1.02] transition-transform">
                     Voltar à Loja
                 </button>
             </div>
@@ -593,13 +593,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         </div>
 
         {cartItems.length > 0 && checkoutStep !== 'success' && checkoutStep !== 'platform' && checkoutStep !== 'tutorial' && (
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
+          <div className="p-4 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-[#0f172a] shrink-0">
             <div className="flex justify-between text-gray-500 dark:text-gray-400 text-sm mb-2"><span>Subtotal</span><span>{formatCurrency(total)}</span></div>
             {discountAmount > 0 && (
                 <div className="flex justify-between text-green-600 dark:text-green-400 text-sm mb-2 font-medium"><span>Desconto</span><span>-{formatCurrency(discountAmount)}</span></div>
             )}
             <div className="flex justify-between text-gray-500 dark:text-gray-400 text-sm mb-4"><span>Portes</span><span>{shippingCost === 0 ? 'Grátis' : formatCurrency(shippingCost)}</span></div>
-            <div className="flex justify-between text-xl font-black text-gray-900 dark:text-white mb-6 border-t dark:border-gray-800 pt-4"><span>Total</span><span>{formatCurrency(finalTotal)}</span></div>
+            <div className="flex justify-between text-xl font-black text-gray-900 dark:text-white mb-6 border-t dark:border-slate-800 pt-4"><span>Total</span><span>{formatCurrency(finalTotal)}</span></div>
             <button onClick={handleProceed} className="w-full bg-primary text-white font-bold py-4 rounded-xl text-lg shadow-xl shadow-blue-100 dark:shadow-none hover:scale-[1.02] transition-transform">Continuar Compra</button>
           </div>
         )}
@@ -611,3 +611,4 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
+
