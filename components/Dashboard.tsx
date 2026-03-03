@@ -20,6 +20,7 @@ import ManualOrderModal from './ManualOrderModal';
 import OrderFulfillmentModal from './OrderFulfillmentModal';
 import ReportsTab from './ReportsTab';
 import SupportTicketModal from './SupportTicketModal';
+import AnalyticsModal from './AnalyticsModal';
 
 // --- HELPERS ---
 const getSafeItems = (items: any): (OrderItem | string)[] => {
@@ -53,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [isOnlineDetailsOpen, setIsOnlineDetailsOpen] = useState(false);
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
@@ -691,7 +693,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 onOpenRevenueModal={handleOpenRevenueModal} 
                 onOpenProfitModal={handleOpenProfitModal} 
                 onOpenCashbackManager={handleOpenCashbackManager} 
-                onOpenOnlineDetails={() => setIsOnlineDetailsOpen(true)} 
+                onOpenOnlineDetails={() => setIsAnalyticsModalOpen(true)} 
                 onOpenStockAlerts={(p) => checkAndProcessStockAlerts(p.publicProductId || null, p.name, 999)} 
                 copyToClipboard={copyToClipboard} 
                 searchTerm={inventorySearchTerm} 
@@ -1096,6 +1098,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               onClose={() => setSelectedTicket(null)} 
           />
       )}
+
+      <AnalyticsModal isOpen={isAnalyticsModalOpen} onClose={() => setIsAnalyticsModalOpen(false)} />
 
       {selectedUserDetails && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-indigo-600"/> Detalhes do Cliente</h3><button onClick={() => setSelectedUserDetails(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p><p className="text-xs text-gray-400 mt-1">Push Tokens: {selectedUserDetails.deviceTokens?.length || (selectedUserDetails.fcmToken ? 1 : 0)}</p></div></div><div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
       
