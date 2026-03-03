@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2 } from 'lucide-react';
+import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2, Scale } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -13,6 +13,9 @@ interface ProductListProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   processingProductIds?: number[];
+  compareList: number[];
+  onToggleCompare: (id: number) => void;
+  onOpenComparator: () => void;
 }
 
 const ProductList: React.FC<ProductListProps> = ({ 
@@ -24,7 +27,10 @@ const ProductList: React.FC<ProductListProps> = ({
     searchTerm = '',
     selectedCategory,
     onCategoryChange,
-    processingProductIds = []
+    processingProductIds = [],
+    compareList = [],
+    onToggleCompare,
+    onOpenComparator
 }) => {
   const [sortOption, setSortOption] = useState<'default' | 'price-asc' | 'price-desc'>('default');
   
@@ -196,6 +202,17 @@ const ProductList: React.FC<ProductListProps> = ({
             </div>
         </div>
 
+        {/* FLOATING COMPARATOR BUTTON */}
+        {compareList.length > 0 && (
+            <button 
+                onClick={onOpenComparator}
+                className="fixed bottom-6 left-6 z-50 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-2 animate-bounce-slow hover:scale-105 transition-transform border-2 border-white dark:border-gray-900"
+            >
+                <Scale size={20} />
+                Comparar ({compareList.length})
+            </button>
+        )}
+
         {filteredAndSortedProducts.length === 0 ? (
             <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm max-w-4xl mx-auto transition-colors">
                 <Search size={48} className="text-gray-400 mx-auto mb-4" />
@@ -244,9 +261,14 @@ const ProductList: React.FC<ProductListProps> = ({
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</div>
-                                        <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-500">
-                                            <Heart size={20} className={wishlist.includes(product.id) ? "fill-red-500 text-red-500" : ""} />
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleCompare(product.id); }} className={`p-1.5 rounded-full transition-colors ${compareList.includes(product.id) ? 'bg-primary text-white' : 'text-gray-300 hover:text-primary dark:text-gray-600'}`} title="Comparar">
+                                                <Scale size={18} />
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-500">
+                                                <Heart size={20} className={wishlist.includes(product.id) ? "fill-red-500 text-red-500" : ""} />
+                                            </button>
+                                        </div>
                                     </div>
                                     <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{product.name}</h3>
@@ -282,9 +304,14 @@ const ProductList: React.FC<ProductListProps> = ({
                         </div>
                     )}
                     
-                    <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/90 dark:bg-gray-900/80 shadow-sm hover:scale-110 transition-all">
-                        <Heart size={20} className={wishlist.includes(product.id) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'} />
-                    </button>
+                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="p-2 rounded-full bg-white/90 dark:bg-gray-900/80 shadow-sm hover:scale-110 transition-all group/btn">
+                            <Heart size={20} className={wishlist.includes(product.id) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500 group-hover/btn:text-red-500'} />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); onToggleCompare(product.id); }} className={`p-2 rounded-full shadow-sm hover:scale-110 transition-all group/btn ${compareList.includes(product.id) ? 'bg-primary text-white' : 'bg-white/90 dark:bg-gray-900/80 text-gray-400 dark:text-gray-500'}`} title="Comparar">
+                            <Scale size={20} className={compareList.includes(product.id) ? 'text-white' : 'group-hover/btn:text-primary'} />
+                        </button>
+                    </div>
 
                     <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block relative h-64 overflow-hidden bg-gray-100 dark:bg-gray-700">
                         <img src={product.image} alt={product.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
