@@ -27,6 +27,7 @@ import { useStockReservations } from './hooks/useStockReservations';
 import { usePendingOrders } from './hooks/usePendingOrders';
 import { notifyNewOrder } from './services/telegramNotifier.ts';
 import LoyaltyPage from './components/LoyaltyPage';
+import { trackVisit } from './services/analyticsService';
 
 // LAZY LOADING DO DASHBOARD
 // O código do Dashboard (gráficos, tabelas grandes, scanners) só é baixado se o utilizador for admin e clicar na rota.
@@ -60,6 +61,10 @@ const App: React.FC = () => {
           localStorage.setItem('theme', 'light');
       }
   }, [isDarkMode]);
+
+  useEffect(() => {
+      trackVisit();
+  }, []);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
