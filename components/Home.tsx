@@ -15,6 +15,9 @@ interface HomeProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   processingProductIds?: number[];
+  compareList: number[];
+  onToggleCompare: (id: number) => void;
+  onOpenComparator: () => void;
 }
 
 const Home: React.FC<HomeProps> = ({ 
@@ -26,7 +29,10 @@ const Home: React.FC<HomeProps> = ({
     searchTerm, 
     selectedCategory, 
     onCategoryChange,
-    processingProductIds = []
+    processingProductIds = [],
+    compareList = [],
+    onToggleCompare,
+    onOpenComparator
 }) => {
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -195,7 +201,20 @@ const Home: React.FC<HomeProps> = ({
           </div>
       </section>
 
-      <ProductList products={products} onAddToCart={onAddToCart} getStock={getStock} wishlist={wishlist} onToggleWishlist={onToggleWishlist} searchTerm={searchTerm} selectedCategory={selectedCategory} onCategoryChange={onCategoryChange} processingProductIds={processingProductIds} />
+      <ProductList 
+        products={products} 
+        onAddToCart={onAddToCart} 
+        getStock={getStock} 
+        wishlist={wishlist} 
+        onToggleWishlist={onToggleWishlist} 
+        searchTerm={searchTerm} 
+        selectedCategory={selectedCategory} 
+        onCategoryChange={onCategoryChange} 
+        processingProductIds={processingProductIds} 
+        compareList={compareList}
+        onToggleCompare={onToggleCompare}
+        onOpenComparator={onOpenComparator}
+      />
 
       {/* NEWSLETTER SECTION */}
       <section className="bg-secondary dark:bg-gray-900 text-white py-8 relative overflow-hidden mt-8 border-t border-transparent dark:border-gray-800 transition-colors duration-300">
