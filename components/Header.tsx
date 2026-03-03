@@ -1,7 +1,7 @@
 import React from 'react';
-import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X, Award, Moon, Sun, ChevronLeft } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, Menu, User as UserIcon, LogIn, LogOut, Search, X, Award, Moon, Sun, ChevronLeft, ArrowRight } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS } from '../constants';
-import { User } from '../types';
+import { User, Product } from '../types';
 
 interface HeaderProps {
   cartCount: number;
@@ -15,6 +15,7 @@ interface HeaderProps {
   onResetHome: () => void;
   isDarkMode?: boolean;
   onToggleTheme?: () => void;
+  products: Product[];
 }
 
 const LoyaltyProgressBar: React.FC<{ user: User }> = ({ user }) => {
@@ -66,9 +67,20 @@ const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   onResetHome,
   isDarkMode = false,
-  onToggleTheme
+  onToggleTheme,
+  products = []
 }) => {
   
+  const [showResults, setShowResults] = React.useState(false);
+  
+  const searchResults = React.useMemo(() => {
+      if (!searchTerm || searchTerm.length < 2) return [];
+      return products.filter(p => 
+          p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          p.description.toLowerCase().includes(searchTerm.toLowerCase())
+      ).slice(0, 5);
+  }, [searchTerm, products]);
+
   const handleNav = (path: string) => (e: React.MouseEvent) => {
     e.preventDefault();
     if (path === '/') {
@@ -172,12 +184,14 @@ const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-end gap-2 md:gap-4 flex-1">
             
             {/* Barra de Pesquisa (Desktop) */}
-            <div className="hidden md:flex relative w-40 lg:w-64 transition-all focus-within:w-64 lg:focus-within:w-80">
+            <div className="hidden md:flex relative w-40 lg:w-64 transition-all focus-within:w-64 lg:focus-within:w-80 group">
                 <input 
                     type="text"
                     placeholder="Pesquisar..."
                     value={searchTerm}
-                    onChange={(e) => onSearchChange(e.target.value)}
+                    onChange={(e) => { onSearchChange(e.target.value); setShowResults(true); }}
+                    onFocus={() => setShowResults(true)}
+                    onBlur={() => setTimeout(() => setShowResults(false), 200)}
                     className="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-base"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -188,6 +202,37 @@ const Header: React.FC<HeaderProps> = ({
                     >
                         <X size={14} />
                     </button>
+                )}
+
+                {/* SMART SEARCH DROPDOWN */}
+                {showResults && searchTerm.length >= 2 && searchResults.length > 0 && (
+                    <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-fade-in-down">
+                        <div className="max-h-[300px] overflow-y-auto">
+                            {searchResults.map(product => (
+                                <a 
+                                    key={product.id} 
+                                    href={`#product/${product.id}`} 
+                                    onClick={(e) => { e.preventDefault(); window.location.hash = `product/${product.id}`; setShowResults(false); onSearchChange(''); }}
+                                    className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700 last:border-0 group/item"
+                                >
+                                    <div className="w-10 h-10 bg-white rounded-lg p-1 flex items-center justify-center border border-gray-100 dark:border-gray-700 shrink-0">
+                                        <img src={product.image} alt={product.name} className="max-w-full max-h-full object-contain" />
+                                    </div>
+                                    <div className="flex-1 min-w-0 text-left">
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white truncate group-hover/item:text-primary transition-colors">{product.name}</p>
+                                        <p className="text-xs text-primary font-bold">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</p>
+                                    </div>
+                                    <ArrowRight size={14} className="text-gray-300 group-hover/item:text-primary opacity-0 group-hover/item:opacity-100 transition-all -translate-x-2 group-hover/item:translate-x-0" />
+                                </a>
+                            ))}
+                        </div>
+                        <button 
+                            onClick={() => { setShowResults(false); window.location.hash = '/'; setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                            className="w-full p-2 text-center text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 uppercase tracking-wider border-t border-gray-100 dark:border-gray-700"
+                        >
+                            Ver todos os resultados ({searchResults.length}+)
+                        </button>
+                    </div>
                 )}
             </div>
 
