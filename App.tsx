@@ -696,7 +696,7 @@ const App: React.FC = () => {
 
   if (authLoading || productsLoading || (isAdmin && stockLoading)) {
       return (
-          <div className="fixed inset-0 bg-white dark:bg-gray-900 flex flex-col items-center justify-center gap-4">
+          <div className="fixed inset-0 bg-white dark:bg-[#020617] flex flex-col items-center justify-center gap-4">
               <img src={LOGO_URL} alt={STORE_NAME} className="w-48 h-auto animate-pulse" />
               <Loader2 className="animate-spin text-primary" size={32} />
           </div>
@@ -704,11 +704,11 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen font-sans text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen font-sans text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-[#020617] transition-colors duration-300">
       {/* NOTIFICATION TOAST (FOREGROUND) */}
       {incomingNotification && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-blue-100 dark:border-gray-700 animate-slide-in p-4 flex gap-4 cursor-pointer" onClick={() => setIncomingNotification(null)}>
-              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-blue-100 dark:border-slate-700 animate-slide-in p-4 flex gap-4 cursor-pointer" onClick={() => setIncomingNotification(null)}>
+              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center flex-shrink-0">
                   <Bell className="text-primary dark:text-blue-300" size={24} />
               </div>
               <div className="flex-1">
@@ -748,6 +748,7 @@ const App: React.FC = () => {
         onResetHome={handleResetHome}
         isDarkMode={isDarkMode}
         onToggleTheme={toggleTheme}
+        products={dbProducts}
       />
 
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
