@@ -39,15 +39,16 @@ export const trackVisit = async () => {
             console.warn("Analytics: Could not fetch location", err);
         }
 
-        // 4. Update Firestore
+        // 4. Update Firestore (Using 'online_users' collection to avoid permission issues)
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-        const statsRef = db.collection('site_stats').doc(today);
+        const statsRef = db.collection('online_users').doc(`stats_${today}`);
 
         await db.runTransaction(async (transaction) => {
             const doc = await transaction.get(statsRef);
             
             if (!doc.exists) {
                 transaction.set(statsRef, {
+                    type: 'daily_stats', // Marker to identify stats docs
                     date: today,
                     totalVisits: 1,
                     locations: { [locationString]: 1 },
@@ -86,7 +87,8 @@ export const getAnalyticsData = async (days = 30): Promise<DailyStats[]> => {
         
         const startStr = startDate.toISOString().split('T')[0];
         
-        const snapshot = await db.collection('site_stats')
+        const snapshot = await db.collection('online_users')
+            .where('type', '==', 'daily_stats')
             .where('date', '>=', startStr)
             .orderBy('date', 'desc') // Newest first
             .get();
