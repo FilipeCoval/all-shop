@@ -48,7 +48,7 @@ const InstallPrompt: React.FC = () => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-[60] bg-white p-4 rounded-xl shadow-2xl border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in-up">
+    <div className="fixed bottom-4 left-4 right-4 z-[60] bg-white p-4 rounded-xl shadow-2xl border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in-up mb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center gap-3">
         <div className="bg-blue-100 p-2.5 rounded-xl text-primary shrink-0">
             <Smartphone size={24} />
