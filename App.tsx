@@ -18,6 +18,7 @@ import LoginModal from './components/LoginModal';
 import ResetPasswordModal from './components/ResetPasswordModal'; 
 import ClientArea from './components/ClientArea';
 import InstallPrompt from './components/InstallPrompt';
+import LuckyWheel from './components/LuckyWheel';
 import { ADMIN_EMAILS, STORE_NAME, LOYALTY_TIERS, LOGO_URL, INITIAL_PRODUCTS } from './constants';
 import { Product, CartItem, User, Order, Review, ProductVariant, UserTier, PointHistory, OrderItem } from './types';
 import { auth, db, firebase, messaging } from './services/firebaseConfig';
@@ -38,6 +39,7 @@ const App: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false); 
+  const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   
   // Notification Foreground State
   const [incomingNotification, setIncomingNotification] = useState<any>(null);
@@ -64,6 +66,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
       trackVisit();
+      
+      // Lucky Wheel Logic
+      /* 
+      const hasSpun = localStorage.getItem('lucky_wheel_spun');
+      if (!hasSpun) {
+          const timer = setTimeout(() => setShowLuckyWheel(true), 3000); // Show after 3s
+          return () => clearTimeout(timer);
+      }
+      */
   }, []);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
@@ -706,6 +717,7 @@ const App: React.FC = () => {
         onResetHome={handleResetHome}
         isDarkMode={isDarkMode}
         onToggleTheme={toggleTheme}
+        products={dbProducts}
       />
       
       {/* MENU MOBILE PROFISSIONAL (OVERLAY) */}
@@ -764,6 +776,7 @@ const App: React.FC = () => {
       </footer>
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cartItems={cartItems} onRemoveItem={removeFromCart} onUpdateQuantity={updateQuantity} total={cartTotal} onCheckout={handleCheckout} user={user} onOpenLogin={() => { setIsCartOpen(false); setIsLoginOpen(true); }} />
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={(u) => { setUser(u); setIsLoginOpen(false); }} />
+      <LuckyWheel isOpen={showLuckyWheel} onClose={() => setShowLuckyWheel(false)} user={user} onUpdateUser={handleUpdateUser} />
       {resetCode && <ResetPasswordModal oobCode={resetCode} onClose={() => setResetCode(null)} />}
       {route !== '#dashboard' && (
         <AIChat products={dbProducts} isOpen={isAIChatOpen} onToggle={setIsAIChatOpen} userOrders={orders} />
