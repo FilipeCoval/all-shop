@@ -593,7 +593,52 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleUpdateTicketStatus = async (ticketId: string, newStatus: string) => { try { await db.collection('support_tickets').doc(ticketId).update({ status: newStatus }); if(selectedTicket) setSelectedTicket({...selectedTicket, status: newStatus} as any); } catch (error) { alert("Erro ao atualizar ticket."); } };
   const handleDeleteTicket = async (ticketId: string) => { if(!window.confirm("Apagar ticket permanentemente?")) return; try { await db.collection('support_tickets').doc(ticketId).delete(); setSelectedTicket(null); } catch (error) { alert("Erro ao apagar."); } };
 
-  const filteredClients = useMemo(() => { if (!clientsSearchTerm) return allUsers; return allUsers.filter(u => u.name.toLowerCase().includes(clientsSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(clientsSearchTerm.toLowerCase()) ); }, [allUsers, clientsSearchTerm]);
+  const filteredClients = useMemo(() => { 
+      // 1. Começar com os utilizadores registados
+      const combinedClients: UserType[] = [...allUsers];
+      const registeredEmails = new Set(allUsers.map(u => u.email.toLowerCase().trim()));
+
+      // 2. Procurar nas encomendas por clientes convidados (sem conta registada)
+      const guestMap = new Map<string, UserType>();
+
+      allOrders.forEach(order => {
+          const email = order.shippingInfo.email.toLowerCase().trim();
+          
+          // Se este email NÃO pertence a um utilizador registado
+          if (email && !registeredEmails.has(email)) {
+              if (!guestMap.has(email)) {
+                  // Criar um perfil de "Convidado" temporário
+                  guestMap.set(email, {
+                      uid: `guest-${email}`,
+                      name: order.shippingInfo.name || 'Convidado',
+                      email: email,
+                      totalSpent: 0,
+                      tier: 'Bronze', // Convidados são sempre Bronze
+                      loyaltyPoints: 0,
+                      isGuest: true // Flag para identificar visualmente
+                  } as UserType);
+              }
+
+              // Atualizar totais do convidado
+              const guest = guestMap.get(email)!;
+              if (order.status !== 'Cancelado') {
+                  guest.totalSpent = (guest.totalSpent || 0) + order.total;
+              }
+          }
+      });
+
+      // 3. Adicionar convidados à lista final
+      combinedClients.push(...Array.from(guestMap.values()));
+
+      // 4. Filtragem por pesquisa
+      if (!clientsSearchTerm) return combinedClients;
+      
+      const lowerTerm = clientsSearchTerm.toLowerCase();
+      return combinedClients.filter(u => 
+          (u.name && u.name.toLowerCase().includes(lowerTerm)) || 
+          (u.email && u.email.toLowerCase().includes(lowerTerm))
+      ); 
+  }, [allUsers, allOrders, clientsSearchTerm]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
   const calculatedTotalSpent = useMemo(() => { if (!selectedUserDetails) return 0; return clientOrders.filter(o => o.status !== 'Cancelado').reduce((sum, order) => sum + (order.total || 0), 0); }, [clientOrders, selectedUserDetails]);
 
@@ -719,7 +764,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         
         {activeTab === 'clients' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center"><h3 className="font-bold text-gray-800">Gestão de Clientes ({allUsers.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-gray-900">{client.name}</td><td className="px-6 py-4 text-gray-600">{client.email}</td><td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center"><h3 className="font-bold text-gray-800">Gestão de Clientes ({filteredClients.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">{client.name} {client.isGuest && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] uppercase font-bold border border-gray-200">Convidado</span>}</td><td className="px-6 py-4 text-gray-600">{client.email}</td><td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
             </div>
         )}
 
