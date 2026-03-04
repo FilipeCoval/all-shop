@@ -18,6 +18,7 @@ export interface User {
   deviceTokens?: string[]; // NOVO: Lista de dispositivos ativos
   lastShareDate?: string; // Data da última partilha premiada (ISO Date string)
   birthday?: string; // Data de nascimento (ISO Date string ou YYYY-MM-DD)
+  isGuest?: boolean; // NOVO: Flag para identificar clientes convidados (sem conta)
 }
 
 export interface Address {
@@ -127,6 +128,7 @@ export interface Product {
   images?: string[];
   variantLabel?: string;
   weight?: number; // Peso em KG
+  specs?: Record<string, string | boolean>; // Especificações técnicas para comparação
 }
 
 export interface ProductVariant {
