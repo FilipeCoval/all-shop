@@ -4,7 +4,7 @@ import { Target, Heart, Users, Award } from 'lucide-react';
 
 const About: React.FC = () => {
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in dark:text-gray-100">
       {/* Header Banner */}
       <div className="bg-secondary text-white py-20 relative overflow-hidden">
          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80')] bg-cover bg-center opacity-20"></div>
@@ -20,11 +20,11 @@ const About: React.FC = () => {
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-6 relative">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6 relative">
                     A Nossa Missão
                     <span className="absolute bottom-0 left-0 w-20 h-1 bg-primary rounded-full"></span>
                 </h2>
-                <div className="space-y-4 text-gray-600 leading-relaxed text-justify">
+                <div className="space-y-4 text-gray-600 dark:text-gray-300 leading-relaxed text-justify">
                     <p>
                         A All-Shop nasceu de uma frustração comum: a dificuldade em encontrar equipamentos de streaming e gadgets de qualidade em Portugal, sem ter de esperar semanas por encomendas vindas de fora ou lidar com alfândegas.
                     </p>
@@ -54,9 +54,9 @@ const About: React.FC = () => {
       </div>
 
       {/* Values Section */}
-      <div className="bg-gray-50 py-16">
+      <div className="bg-gray-50 dark:bg-slate-900 py-16 transition-colors duration-300">
         <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">Porquê a All-Shop?</h2>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-12 text-center">Porquê a All-Shop?</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {[
                     { icon: Target, title: 'Curadoria', text: 'Não vendemos tudo. Vendemos o que funciona e tem qualidade comprovada.' },
@@ -64,12 +64,12 @@ const About: React.FC = () => {
                     { icon: Users, title: 'Proximidade', text: 'Atendimento humano via WhatsApp ou Telegram. Falamos a sua língua.' },
                     { icon: Award, title: 'Rapidez', text: 'Stock nacional. Encomendas enviadas rapidamente para chegar até si.' }
                 ].map((item, idx) => (
-                    <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center hover:transform hover:-translate-y-1 transition-all duration-300">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 text-primary mb-4">
+                    <div key={idx} className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 text-center hover:transform hover:-translate-y-1 transition-all duration-300 group">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/30 text-primary dark:text-blue-400 mb-4 group-hover:scale-110 transition-transform">
                             <item.icon size={32} />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
-                        <p className="text-gray-600">{item.text}</p>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{item.title}</h3>
+                        <p className="text-gray-600 dark:text-gray-400">{item.text}</p>
                     </div>
                 ))}
             </div>
