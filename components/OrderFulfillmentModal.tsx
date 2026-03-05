@@ -333,7 +333,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative transition-colors">
                 
                 {/* Scanner Overlay */}
                 {isScannerOpen && (
@@ -347,14 +347,14 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 )}
 
                 {/* Header */}
-                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex justify-between items-center transition-colors">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Package className="text-indigo-600" /> {isPickup ? `Processar Levantamento #${order.id}` : `Preparar Encomenda #${order.id}`}
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Package className="text-indigo-600 dark:text-indigo-400" /> {isPickup ? `Processar Levantamento #${order.id}` : `Preparar Encomenda #${order.id}`}
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">{isPickup ? 'Digitalize os seriais para confirmar a entrega ao cliente.' : 'Digitalize os números de série para confirmar a expedição.'}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{isPickup ? 'Digitalize os seriais para confirmar a entrega ao cliente.' : 'Digitalize os números de série para confirmar a expedição.'}</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors">
                         <X size={24} />
                     </button>
                 </div>
@@ -363,14 +363,14 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     
                     {/* Progress Bar */}
-                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800 transition-colors">
                         <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-bold text-blue-900 uppercase">{isPickup ? 'Progresso da Validação' : 'Progresso da Expedição'}</span>
-                            <span className="text-2xl font-bold text-blue-700">{progress.totalScanned} / {progress.totalNeeded}</span>
+                            <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase">{isPickup ? 'Progresso da Validação' : 'Progresso da Expedição'}</span>
+                            <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">{progress.totalScanned} / {progress.totalNeeded}</span>
                         </div>
-                        <div className="w-full bg-blue-200 rounded-full h-2.5">
+                        <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2.5">
                             <div 
-                                className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                                className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-500" 
                                 style={{ width: `${(progress.totalScanned / progress.totalNeeded) * 100}%` }}
                             ></div>
                         </div>
@@ -378,14 +378,14 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
                     {/* Tracking Number Input - Only show if NOT pickup */}
                     {!isPickup && (
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Número de Rastreio (Opcional)</label>
+                        <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Número de Rastreio (Opcional)</label>
                             <input 
                                 type="text" 
                                 value={trackingNumber}
                                 onChange={(e) => setTrackingNumber(e.target.value)}
                                 placeholder="Ex: EA123456789PT"
-                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
                             />
                         </div>
                     )}
@@ -402,7 +402,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                                 value={currentInput}
                                 onChange={(e) => setCurrentInput(e.target.value)}
                                 placeholder="Clique aqui e leia o código de barras / serial..."
-                                className="w-full pl-10 pr-4 py-3 border-2 border-indigo-100 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 outline-none font-mono shadow-sm transition-all"
+                                className="w-full pl-10 pr-4 py-3 border-2 border-indigo-100 dark:border-indigo-800 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 outline-none font-mono shadow-sm transition-all bg-white dark:bg-slate-900 text-gray-900 dark:text-white"
                             />
                         </form>
                         <button 
@@ -415,36 +415,36 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     </div>
 
                     {error && (
-                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r flex items-start gap-3 animate-shake">
-                            <AlertTriangle className="text-red-600 shrink-0" />
-                            <p className="text-red-700 font-medium">{error}</p>
+                        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-800 p-4 rounded-r flex items-start gap-3 animate-shake transition-colors">
+                            <AlertTriangle className="text-red-600 dark:text-red-400 shrink-0" />
+                            <p className="text-red-700 dark:text-red-400 font-medium">{error}</p>
                         </div>
                     )}
 
                     {/* Items List */}
                     <div className="space-y-4">
-                        <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider border-b pb-2">Itens da Encomenda</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-gray-200 text-sm uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">Itens da Encomenda</h3>
                         {orderItems.map((item) => {
                             const scannedCount = scannedItems.filter(s => s.orderItemId === item.uniqueId).length;
                             const isComplete = scannedCount >= item.needed;
                             const availableUnits = getAvailableUnitsForOrderItem(item.uniqueId);
 
                             return (
-                                <div key={item.uniqueId} className={`p-4 rounded-xl border transition-all ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                                <div key={item.uniqueId} className={`p-4 rounded-xl border transition-all ${isComplete ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700'}`}>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="font-bold text-gray-900">{item.name}</p>
-                                            {item.selectedVariant && <p className="text-sm text-gray-500">Variante: {item.selectedVariant}</p>}
+                                            <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
+                                            {item.selectedVariant && <p className="text-sm text-gray-500 dark:text-gray-400">Variante: {item.selectedVariant}</p>}
                                             <p className="text-xs text-gray-400 mt-1">ID: {item.productId}</p>
                                         </div>
                                         <div className="text-right flex flex-col items-end gap-2">
-                                            <span className={`text-xl font-bold ${isComplete ? 'text-green-600' : 'text-gray-600'}`}>
+                                            <span className={`text-xl font-bold ${isComplete ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
                                                 {scannedCount} / {item.needed}
                                             </span>
                                             {!isComplete && (
                                                 <button 
                                                     onClick={() => setShowManualSelection(showManualSelection === item.uniqueId ? null : item.uniqueId)}
-                                                    className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded flex items-center gap-1 border border-indigo-200"
+                                                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-2 py-1 rounded flex items-center gap-1 border border-indigo-200 dark:border-indigo-800 transition-colors"
                                                 >
                                                     <MousePointerClick size={12} /> Selecionar Manualmente
                                                 </button>
@@ -454,23 +454,23 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
                                     {/* Manual Selection Dropdown */}
                                     {showManualSelection === item.uniqueId && !isComplete && (
-                                        <div className="mt-3 bg-indigo-50 p-3 rounded-lg border border-indigo-100 animate-fade-in">
-                                            <p className="text-xs font-bold text-indigo-800 mb-2 uppercase">Unidades Disponíveis:</p>
+                                        <div className="mt-3 bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 animate-fade-in transition-colors">
+                                            <p className="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-2 uppercase">Unidades Disponíveis:</p>
                                             {availableUnits.length > 0 ? (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     {availableUnits.map((unit, idx) => (
                                                         <button 
                                                             key={idx}
                                                             onClick={() => handleManualSelect(unit.serial)}
-                                                            className="text-left bg-white hover:bg-indigo-100 p-2 rounded border border-indigo-100 text-xs transition-colors flex justify-between items-center group"
+                                                            className="text-left bg-white dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 p-2 rounded border border-indigo-100 dark:border-indigo-800 text-xs transition-colors flex justify-between items-center group"
                                                         >
-                                                            <span className="font-mono font-bold text-gray-700">{unit.serial}</span>
-                                                            <span className="text-[10px] text-gray-400 group-hover:text-indigo-500">{unit.batchName}</span>
+                                                            <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{unit.serial}</span>
+                                                            <span className="text-[10px] text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400">{unit.batchName}</span>
                                                         </button>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs text-red-500 italic">Nenhuma unidade disponível encontrada no inventário para este produto.</p>
+                                                <p className="text-xs text-red-500 dark:text-red-400 italic">Nenhuma unidade disponível encontrada no inventário para este produto.</p>
                                             )}
                                         </div>
                                     )}
@@ -478,7 +478,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                                     {/* Scanned Serials for this item */}
                                     <div className="mt-3 flex flex-wrap gap-2">
                                         {scannedItems.filter(s => s.orderItemId === item.uniqueId).map((scan, idx) => (
-                                            <span key={idx} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                                            <span key={idx} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 text-xs font-mono px-2 py-1 rounded shadow-sm flex items-center gap-1 transition-colors">
                                                 <CheckCircle size={10} className="text-green-500" />
                                                 {scan.serialNumber}
                                             </span>
@@ -491,10 +491,10 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                <div className="p-6 border-t border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 flex justify-end gap-3 transition-colors">
                     <button 
                         onClick={onClose}
-                        className="px-6 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+                        className="px-6 py-3 rounded-xl font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
                         disabled={isProcessing}
                     >
                         Cancelar
@@ -505,7 +505,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                         className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg flex items-center gap-2 transition-all ${
                             progress.isComplete 
                                 ? 'bg-green-600 hover:bg-green-700 hover:scale-105' 
-                                : 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-gray-400 dark:bg-slate-600 cursor-not-allowed'
                         }`}
                     >
                         {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCircle />}
