@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+// Force rebuild
 import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2, Scale } from 'lucide-react';
 import QuickViewModal from './QuickViewModal';
@@ -79,8 +80,8 @@ const ProductList: React.FC<ProductListProps> = ({
         const description = product.description || '';
         const category = product.category || 'Outros';
 
-        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = (name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (description || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = selectedCategory === 'Todas' || category === selectedCategory;
         return matchesSearch && matchesCategory;
       });
