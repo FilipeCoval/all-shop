@@ -108,6 +108,7 @@ const ManualOrderModal: React.FC<ManualOrderModalProps> = ({ isOpen, onClose, pu
             date: new Date().toISOString(),
             total: total,
             status: 'Pago',
+            stockDeducted: true,
             items: items.map(i => ({
                 productId: i.id,
                 name: i.name,
@@ -194,17 +195,17 @@ const ManualOrderModal: React.FC<ManualOrderModalProps> = ({ isOpen, onClose, pu
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
-                    <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><ClipboardEdit size={20} className="text-purple-600"/> Criar Encomenda Manual</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col transition-colors">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-10 transition-colors">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2"><ClipboardEdit size={20} className="text-purple-600 dark:text-purple-400"/> Criar Encomenda Manual</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><X size={24}/></button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                     {/* Produtos */}
-                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                        <h4 className="font-bold text-purple-900 text-sm mb-3">1. Adicionar Produtos</h4>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 transition-colors">
+                        <h4 className="font-bold text-purple-900 dark:text-purple-300 text-sm mb-3">1. Adicionar Produtos</h4>
                         <div className="relative mb-4">
-                            <select onChange={(e) => { addItem(e.target.value); e.target.value = ''; }} className="w-full p-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white appearance-none">
+                            <select onChange={(e) => { addItem(e.target.value); e.target.value = ''; }} className="w-full p-3 border border-purple-200 dark:border-purple-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white appearance-none transition-colors">
                                 <option value="">-- Pesquisar Produto --</option>
                                 {productsForSelect.map(p => (<option key={p.value} value={p.value}>{p.label}</option>))}
                             </select>
@@ -212,19 +213,19 @@ const ManualOrderModal: React.FC<ManualOrderModalProps> = ({ isOpen, onClose, pu
                         </div>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                             {items.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                                <div key={idx} className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-lg border border-purple-100 dark:border-purple-800 shadow-sm transition-colors">
                                     <div>
-                                        <p className="font-bold text-sm text-gray-800">{item.name}</p>
-                                        <p className="text-xs text-gray-500">{item.selectedVariant || 'Padrão'} | {formatCurrency(item.finalPrice)}</p>
+                                        <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{item.name}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{item.selectedVariant || 'Padrão'} | {formatCurrency(item.finalPrice)}</p>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                                            <button type="button" onClick={() => updateQuantity(`${item.id}|${item.selectedVariant}`, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 text-gray-600"><Minus size={12}/></button>
-                                            <span className="w-6 text-center text-sm font-bold">{item.quantity}</span>
-                                            <button type="button" onClick={() => updateQuantity(`${item.id}|${item.selectedVariant}`, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm hover:bg-gray-50 text-gray-600"><Plus size={12}/></button>
+                                        <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-1 transition-colors">
+                                            <button type="button" onClick={() => updateQuantity(`${item.id}|${item.selectedVariant}`, -1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-600 rounded shadow-sm hover:bg-gray-50 dark:hover:bg-slate-500 text-gray-600 dark:text-gray-300 transition-colors"><Minus size={12}/></button>
+                                            <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">{item.quantity}</span>
+                                            <button type="button" onClick={() => updateQuantity(`${item.id}|${item.selectedVariant}`, 1)} className="w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-600 rounded shadow-sm hover:bg-gray-50 dark:hover:bg-slate-500 text-gray-600 dark:text-gray-300 transition-colors"><Plus size={12}/></button>
                                         </div>
-                                        <p className="font-bold text-purple-700 w-16 text-right text-sm">{formatCurrency(item.finalPrice * item.quantity)}</p>
-                                        <button type="button" onClick={() => removeItem(`${item.id}|${item.selectedVariant}`)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
+                                        <p className="font-bold text-purple-700 dark:text-purple-400 w-16 text-right text-sm">{formatCurrency(item.finalPrice * item.quantity)}</p>
+                                        <button type="button" onClick={() => removeItem(`${item.id}|${item.selectedVariant}`)} className="text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
                             ))}
@@ -233,46 +234,46 @@ const ManualOrderModal: React.FC<ManualOrderModalProps> = ({ isOpen, onClose, pu
                     </div>
                     
                     {/* Dados Cliente */}
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <h4 className="font-bold text-gray-800 text-sm mb-3">2. Dados do Cliente</h4>
+                    <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
+                        <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-3">2. Dados do Cliente</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome</label><input type="text" required value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="Nome do Cliente" /></div>
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email (Opcional)</label><input type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="email@exemplo.com" /></div>
+                            <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome</label><input type="text" required value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors" placeholder="Nome do Cliente" /></div>
+                            <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Email (Opcional)</label><input type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors" placeholder="email@exemplo.com" /></div>
                         </div>
                         
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Método de Entrega</label>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 transition-colors">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Método de Entrega</label>
                             <div className="flex gap-4 mb-4">
-                                <button type="button" onClick={() => setDeliveryMethod('Shipping')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 flex items-center justify-center gap-2 transition-colors ${deliveryMethod === 'Shipping' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'}`}><Truck size={16}/> Envio CTT</button>
-                                <button type="button" onClick={() => setDeliveryMethod('Pickup')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 flex items-center justify-center gap-2 transition-colors ${deliveryMethod === 'Pickup' ? 'border-green-500 bg-green-50 text-green-600' : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'}`}><Store size={16}/> Levantamento</button>
+                                <button type="button" onClick={() => setDeliveryMethod('Shipping')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 flex items-center justify-center gap-2 transition-colors ${deliveryMethod === 'Shipping' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800'}`}><Truck size={16}/> Envio CTT</button>
+                                <button type="button" onClick={() => setDeliveryMethod('Pickup')} className={`flex-1 py-2 rounded-lg font-bold text-sm border-2 flex items-center justify-center gap-2 transition-colors ${deliveryMethod === 'Pickup' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800'}`}><Store size={16}/> Levantamento</button>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Morada / Notas</label>
-                                    <textarea required={deliveryMethod === 'Shipping'} value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg text-sm" rows={2} placeholder={deliveryMethod === 'Pickup' ? "Notas opcionais..." : "Morada completa"} />
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Morada / Notas</label>
+                                    <textarea required={deliveryMethod === 'Shipping'} value={shippingAddress} onChange={e => setShippingAddress(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors" rows={2} placeholder={deliveryMethod === 'Pickup' ? "Notas opcionais..." : "Morada completa"} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Custo Portes (€)</label>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Custo Portes (€)</label>
                                     <input 
                                         type="number" 
                                         step="0.01"
                                         value={shippingCost} 
                                         onChange={e => setShippingCost(parseFloat(e.target.value))} 
                                         disabled={deliveryMethod === 'Pickup'}
-                                        className={`w-full p-2 border border-gray-300 rounded-lg ${deliveryMethod === 'Pickup' ? 'bg-gray-100 text-gray-400' : 'bg-white'}`} 
+                                        className={`w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg transition-colors ${deliveryMethod === 'Pickup' ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500' : 'bg-white dark:bg-slate-900 text-gray-900 dark:text-white'}`} 
                                     />
-                                    {deliveryMethod === 'Pickup' && <p className="text-[10px] text-green-600 mt-1 font-bold">Grátis para levantamento.</p>}
+                                    {deliveryMethod === 'Pickup' && <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-bold">Grátis para levantamento.</p>}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-4"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Pagamento</label><select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg bg-white"><option value="MB Way">MB Way</option><option value="Transferência">Transferência Bancária</option><option value="Cobrança">À Cobrança</option><option value="Dinheiro">Dinheiro (Em Mão)</option></select></div>
+                        <div className="mt-4"><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Método de Pagamento</label><select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"><option value="MB Way">MB Way</option><option value="Transferência">Transferência Bancária</option><option value="Cobrança">À Cobrança</option><option value="Dinheiro">Dinheiro (Em Mão)</option></select></div>
                     </div>
                     
-                    <div className="flex justify-between items-center bg-gray-100 p-4 rounded-xl border border-gray-200">
-                        <span className="font-bold text-gray-600">Total Final:</span>
-                        <span className="font-bold text-xl text-gray-900">{formatCurrency(items.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0) + (deliveryMethod === 'Pickup' ? 0 : shippingCost))}</span>
+                    <div className="flex justify-between items-center bg-gray-100 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
+                        <span className="font-bold text-gray-600 dark:text-gray-400">Total Final:</span>
+                        <span className="font-bold text-xl text-gray-900 dark:text-white">{formatCurrency(items.reduce((acc, i) => acc + i.finalPrice * i.quantity, 0) + (deliveryMethod === 'Pickup' ? 0 : shippingCost))}</span>
                     </div>
 
                     <button type="submit" disabled={isSubmitting} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-70 disabled:scale-100">
