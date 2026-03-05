@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Order, InventoryProduct, OrderItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts';
@@ -124,14 +125,14 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header e Filtros */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
                 <div className="flex items-center gap-3 mb-4 md:mb-0">
-                    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+                    <div className="bg-indigo-100 dark:bg-indigo-900/20 p-2 rounded-lg text-indigo-600 dark:text-indigo-400 transition-colors">
                         <Calendar size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">Relatório Financeiro</h2>
-                        <p className="text-sm text-gray-500">Análise de lucros e despesas</p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white transition-colors">Relatório Financeiro</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors">Análise de lucros e despesas</p>
                     </div>
                 </div>
 
@@ -139,7 +140,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                     <select 
                         value={selectedMonth} 
                         onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                        className="p-2 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
                     >
                         <option value={-1}>Todo o Ano</option>
                         {Array.from({ length: 12 }, (_, i) => (
@@ -149,7 +150,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                     <select 
                         value={selectedYear} 
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                        className="p-2 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
                     >
                         {[2024, 2025, 2026].map(y => (
                             <option key={y} value={y}>{y}</option>
@@ -160,53 +161,53 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
                     <div className="flex justify-between items-start mb-2">
-                        <p className="text-sm font-bold text-gray-500 uppercase">Total Vendas</p>
-                        <div className="bg-green-100 p-1.5 rounded text-green-600"><DollarSign size={16}/></div>
+                        <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase transition-colors">Total Vendas</p>
+                        <div className="bg-green-100 dark:bg-green-900/20 p-1.5 rounded text-green-600 dark:text-green-400 transition-colors"><DollarSign size={16}/></div>
                     </div>
-                    <h3 className="text-2xl font-black text-gray-900">{formatCurrency(metrics.totalSales)}</h3>
-                    <p className="text-xs text-gray-400 mt-1">{monthlyOrders.length} encomendas</p>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white transition-colors">{formatCurrency(metrics.totalSales)}</h3>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 transition-colors">{monthlyOrders.length} encomendas</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
                     <div className="flex justify-between items-start mb-2">
-                        <p className="text-sm font-bold text-gray-500 uppercase">Custo Produtos</p>
-                        <div className="bg-blue-100 p-1.5 rounded text-blue-600"><Package size={16}/></div>
+                        <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase transition-colors">Custo Produtos</p>
+                        <div className="bg-blue-100 dark:bg-blue-900/20 p-1.5 rounded text-blue-600 dark:text-blue-400 transition-colors"><Package size={16}/></div>
                     </div>
-                    <h3 className="text-2xl font-black text-gray-900">{formatCurrency(metrics.totalProductCost)}</h3>
-                    <p className="text-xs text-gray-400 mt-1">Valor de compra do stock</p>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white transition-colors">{formatCurrency(metrics.totalProductCost)}</h3>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 transition-colors">Valor de compra do stock</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
                     <div className="flex justify-between items-start mb-2">
-                        <p className="text-sm font-bold text-gray-500 uppercase">Custo Envios</p>
-                        <div className="bg-orange-100 p-1.5 rounded text-orange-600"><Truck size={16}/></div>
+                        <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase transition-colors">Custo Envios</p>
+                        <div className="bg-orange-100 dark:bg-orange-900/20 p-1.5 rounded text-orange-600 dark:text-orange-400 transition-colors"><Truck size={16}/></div>
                     </div>
-                    <h3 className="text-2xl font-black text-gray-900">{formatCurrency(metrics.totalShippingCost)}</h3>
-                    <p className="text-xs text-gray-400 mt-1">Pago à transportadora</p>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white transition-colors">{formatCurrency(metrics.totalShippingCost)}</h3>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 transition-colors">Pago à transportadora</p>
                 </div>
 
-                <div className={`p-6 rounded-xl shadow-sm border ${metrics.netProfit >= 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-red-50 border-red-200'}`}>
+                <div className={`p-6 rounded-xl shadow-sm border transition-colors ${metrics.netProfit >= 0 ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'}`}>
                     <div className="flex justify-between items-start mb-2">
-                        <p className={`text-sm font-bold uppercase ${metrics.netProfit >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>Lucro Líquido</p>
-                        <div className={`p-1.5 rounded ${metrics.netProfit >= 0 ? 'bg-indigo-200 text-indigo-700' : 'bg-red-200 text-red-700'}`}>
+                        <p className={`text-sm font-bold uppercase transition-colors ${metrics.netProfit >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-red-600 dark:text-red-400'}`}>Lucro Líquido</p>
+                        <div className={`p-1.5 rounded transition-colors ${metrics.netProfit >= 0 ? 'bg-indigo-200 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'bg-red-200 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
                             {metrics.netProfit >= 0 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
                         </div>
                     </div>
-                    <h3 className={`text-2xl font-black ${metrics.netProfit >= 0 ? 'text-indigo-900' : 'text-red-900'}`}>{formatCurrency(metrics.netProfit)}</h3>
-                    <p className={`text-xs mt-1 font-bold ${metrics.netProfit >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>Margem: {metrics.margin.toFixed(1)}%</p>
+                    <h3 className={`text-2xl font-black transition-colors ${metrics.netProfit >= 0 ? 'text-indigo-900 dark:text-indigo-100' : 'text-red-900 dark:text-red-100'}`}>{formatCurrency(metrics.netProfit)}</h3>
+                    <p className={`text-xs mt-1 font-bold transition-colors ${metrics.netProfit >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-red-600 dark:text-red-400'}`}>Margem: {metrics.margin.toFixed(1)}%</p>
                 </div>
             </div>
 
             {/* Gráfico */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-96">
-                <h3 className="font-bold text-gray-800 mb-6">{selectedMonth === -1 ? 'Evolução Mensal' : 'Evolução Diária'}</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 h-96 transition-colors">
+                <h3 className="font-bold text-gray-800 dark:text-white mb-6 transition-colors">{selectedMonth === -1 ? 'Evolução Mensal' : 'Evolução Diária'}</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} tickFormatter={(val) => `€${val}`} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" className="stroke-gray-200 dark:stroke-slate-700" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} tickFormatter={(val) => `€${val}`} />
                         <Legend />
                         <Bar dataKey="Vendas" fill="#4F46E5" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Lucro" fill="#10B981" radius={[4, 4, 0, 0]} />
@@ -215,13 +216,13 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
             </div>
 
             {/* Tabela Detalhada */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-4 border-b border-gray-200">
-                    <h3 className="font-bold text-gray-800">Detalhe de Encomendas</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors">
+                <div className="p-4 border-b border-gray-200 dark:border-slate-700 transition-colors">
+                    <h3 className="font-bold text-gray-800 dark:text-white transition-colors">Detalhe de Encomendas</h3>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
+                        <thead className="bg-gray-50 dark:bg-slate-700 text-xs uppercase text-gray-500 dark:text-gray-300 font-semibold transition-colors">
                             <tr>
                                 <th className="px-6 py-4">Data</th>
                                 <th className="px-6 py-4">Encomenda</th>
@@ -231,10 +232,10 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                 <th className="px-6 py-4 text-right">Lucro</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700 transition-colors">
                             {monthlyOrders.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">Sem dados para este período.</td>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-gray-500">Sem dados para este período.</td>
                                 </tr>
                             ) : (
                                 monthlyOrders.map(order => {
@@ -247,13 +248,13 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                     const profit = order.total - prodCost - shipCost;
 
                                     return (
-                                        <tr key={order.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 text-gray-600">{new Date(order.date).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 font-medium text-gray-900">{order.id}</td>
-                                            <td className="px-6 py-4 font-bold text-gray-900">{formatCurrency(order.total)}</td>
-                                            <td className="px-6 py-4 text-red-500">-{formatCurrency(prodCost)}</td>
-                                            <td className="px-6 py-4 text-orange-500">-{formatCurrency(shipCost)}</td>
-                                            <td className={`px-6 py-4 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{new Date(order.date).toLocaleDateString()}</td>
+                                            <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{order.id}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{formatCurrency(order.total)}</td>
+                                            <td className="px-6 py-4 text-red-500 dark:text-red-400">-{formatCurrency(prodCost)}</td>
+                                            <td className="px-6 py-4 text-orange-500 dark:text-orange-400">-{formatCurrency(shipCost)}</td>
+                                            <td className={`px-6 py-4 text-right font-bold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                                 {formatCurrency(profit)}
                                             </td>
                                         </tr>
