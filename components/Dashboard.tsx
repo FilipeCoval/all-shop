@@ -10,8 +10,11 @@ import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Cou
 import { extractSerialNumberFromImage, generateProductContent } from '../services/geminiService';
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
+import ClientDetailsModal from './ClientDetailsModal';
 import ProfitCalculatorModal from './ProfitCalculatorModal';
+
 import BarcodeScanner from './BarcodeScanner';
+
 import OrderDetailsModal from './OrderDetailsModal';
 import KpiCard from './KpiCard';
 import InventoryTab from './InventoryTab';
@@ -124,19 +127,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [expandedCashbackAccounts, setExpandedCashbackAccounts] = useState<string[]>([]);
 
   const [selectedUserDetails, setSelectedUserDetails] = useState<UserType | null>(null);
-  const [clientOrders, setClientOrders] = useState<Order[]>([]);
-  const [isRecalculatingClient, setIsRecalculatingClient] = useState(false);
-  
-  // Manual Point Adjustment State
-  const [manualPointAmount, setManualPointAmount] = useState('');
-  const [manualPointReason, setManualPointReason] = useState('');
-  const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
-
-  const [isMerging, setIsMerging] = useState(false);
-  const [mergeSearchEmail, setMergeSearchEmail] = useState('');
-  const [foundDuplicate, setFoundDuplicate] = useState<UserType | null>(null);
-  const [duplicateOrdersCount, setDuplicateOrdersCount] = useState(0);
-  const [duplicateOrdersTotal, setDuplicateOrdersTotal] = useState(0);
   const [isSyncingStock, setIsSyncingStock] = useState(false);
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -166,7 +156,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     cashbackValue: '', cashbackStatus: 'NONE' as CashbackStatus, cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '',
     badges: [] as string[], newImageUrl: '', 
     images: [] as string[], features: [] as string[], newFeature: '', comingSoon: false,
-    weight: ''
+    weight: '', specs: {} as Record<string, string | boolean>, newSpecKey: '', newSpecValue: ''
   });
 
   const selectedPublicProductVariants = useMemo(() => { if (!formData.publicProductId) return []; const prod = publicProductsList.find(p => p.id === Number(formData.publicProductId)); return prod?.variants || []; }, [formData.publicProductId, publicProductsList]);
@@ -263,7 +253,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   }, [activeTab, isAdmin]);
   
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('stock_alerts').onSnapshot(snapshot => { const alerts: any[] = []; snapshot.forEach(doc => alerts.push({ id: doc.id, ...doc.data() })); setStockAlerts(alerts); }); return () => unsubscribe(); }, [isAdmin]);
-  useEffect(() => { const fetchClientData = async () => { if (selectedUserDetails) { const [userOrdersSnap, guestOrdersSnap] = await Promise.all([ db.collection("orders").where("userId", "==", selectedUserDetails.uid).get(), db.collection('orders').where('shippingInfo.email', '==', selectedUserDetails.email.toLowerCase()).where('userId', '==', null).get() ]); const allClientOrders: Order[] = []; userOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order)); guestOrdersSnap.forEach(doc => allClientOrders.push({ id: doc.id, ...doc.data() } as Order)); setClientOrders(allClientOrders); setMergeSearchEmail(selectedUserDetails.email); setFoundDuplicate(null); setDuplicateOrdersCount(0); setDuplicateOrdersTotal(0); } else { setClientOrders([]); } }; fetchClientData(); }, [selectedUserDetails]);
 
   // HANDLERS
   const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); return true; };
@@ -355,7 +344,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (currentSold >= qBought && qBought > 0) productStatus = 'SOLD'; 
       else if (currentSold > 0) productStatus = 'PARTIAL'; 
       
-      const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null, promoEndsAt: formData.promoEndsAt || null, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0 }; 
+      const payload: any = { name: formData.name, description: formData.description, category: formData.category, publicProductId: formData.publicProductId ? Number(formData.publicProductId) : null, variant: formData.variant || null, purchaseDate: formData.purchaseDate, supplierName: formData.supplierName, supplierOrderId: formData.supplierOrderId, quantityBought: qBought, quantitySold: currentSold, salesHistory: (existingProduct && Array.isArray(existingProduct.salesHistory)) ? existingProduct.salesHistory : [], purchasePrice: Number(formData.purchasePrice) || 0, targetSalePrice: formData.targetSalePrice ? Number(formData.targetSalePrice) : null, salePrice: currentSalePrice, originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null, promoEndsAt: formData.promoEndsAt || null, cashbackValue: Number(formData.cashbackValue) || 0, cashbackStatus: formData.cashbackStatus, cashbackPlatform: formData.cashbackPlatform, cashbackAccount: formData.cashbackAccount, cashbackExpectedDate: formData.cashbackExpectedDate, units: modalUnits, status: productStatus, badges: formData.badges, images: formData.images, features: formData.features, comingSoon: formData.comingSoon, weight: formData.weight ? parseFloat(formData.weight) : 0, specs: formData.specs }; 
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
       
       try { 
@@ -367,9 +356,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   // Generic Helpers
   const toggleBadge = (badge: string) => { setFormData(prev => { const badges = prev.badges || []; if (badges.includes(badge)) return { ...prev, badges: badges.filter(b => b !== badge) }; else return { ...prev, badges: [...badges, badge] }; }); };
-  const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, description: product.description || '', category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice ? product.salePrice.toString() : '', targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', originalPrice: product.originalPrice ? product.originalPrice.toString() : '', promoEndsAt: product.promoEndsAt || '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, cashbackPlatform: product.cashbackPlatform || '', cashbackAccount: product.cashbackAccount || '', cashbackExpectedDate: product.cashbackExpectedDate || '', badges: product.badges || [], images: product.images || [], newImageUrl: '', features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false, weight: product.weight ? product.weight.toString() : '' }); setModalUnits(product.units || []); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
-  const handleAddNew = () => { setEditingId(null); setFormData({ name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', originalPrice: '', promoEndsAt: '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false, weight: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
-  const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', originalPrice: parentProduct.originalPrice ? parentProduct.originalPrice.toString() : '', promoEndsAt: parentProduct.promoEndsAt || '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
+  const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, description: product.description || '', category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice ? product.salePrice.toString() : '', targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', originalPrice: product.originalPrice ? product.originalPrice.toString() : '', promoEndsAt: product.promoEndsAt || '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, cashbackPlatform: product.cashbackPlatform || '', cashbackAccount: product.cashbackAccount || '', cashbackExpectedDate: product.cashbackExpectedDate || '', badges: product.badges || [], images: product.images || [], newImageUrl: '', features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false, weight: product.weight ? product.weight.toString() : '', specs: product.specs || {}, newSpecKey: '', newSpecValue: '' }); setModalUnits(product.units || []); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
+  const handleAddNew = () => { setEditingId(null); setFormData({ name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', originalPrice: '', promoEndsAt: '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false, weight: '', specs: {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
+  const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', originalPrice: parentProduct.originalPrice ? parentProduct.originalPrice.toString() : '', promoEndsAt: parentProduct.promoEndsAt || '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '', specs: parentProduct.specs || {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
   const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
@@ -415,6 +404,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleMoveImage = (index: number, direction: 'left' | 'right') => { if ((direction === 'left' && index === 0) || (direction === 'right' && index === formData.images.length - 1)) return; const newImages = [...formData.images]; const targetIndex = direction === 'left' ? index - 1 : index + 1; [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setFormData(prev => ({ ...prev, images: newImages })); };
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
+
+  const handleAddSpec = () => {
+    if (formData.newSpecKey && formData.newSpecValue) {
+      setFormData(prev => ({
+        ...prev,
+        specs: { ...(prev.specs || {}), [prev.newSpecKey]: prev.newSpecValue },
+        newSpecKey: '',
+        newSpecValue: ''
+      }));
+    }
+  };
+
+  const handleRemoveSpec = (key: string) => {
+    setFormData(prev => {
+      const newSpecs = { ...(prev.specs || {}) };
+      delete newSpecs[key];
+      return { ...prev, specs: newSpecs };
+    });
+  };
   const handleSyncPublicStock = async (silent = false) => {
     if (products.length === 0) {
       if (!silent) alert("O inventário parece estar vazio ou ainda a carregar.");
@@ -503,47 +511,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   const handleToggleCoupon = async (coupon: Coupon) => { if(!coupon.id) return; try { await db.collection('coupons').doc(coupon.id).update({ isActive: !coupon.isActive }); } catch(e) { alert("Erro ao atualizar cupão."); } };
   const handleDeleteCoupon = async (id?: string) => { if (!id || !window.confirm("Apagar cupão permanentemente?")) return; try { await db.collection('coupons').doc(id).delete(); setCoupons(prevCoupons => prevCoupons.filter(coupon => coupon.id !== id)); } catch (e) { alert("Erro ao apagar o cupão."); console.error("Delete coupon error:", e); } };
-  const handleRecalculateClientData = async () => {}; // Placeholder
-  
-  const handleManualPointAdjustment = async () => {
-    if (!selectedUserDetails || !manualPointAmount || !manualPointReason) return;
-    const amount = parseInt(manualPointAmount);
-    if (isNaN(amount) || amount === 0) return alert("Valor inválido.");
-
-    setIsAdjustingPoints(true);
-    try {
-        const newHistory: PointHistory = {
-            id: `manual-${Date.now()}`,
-            date: new Date().toISOString(),
-            amount: amount,
-            reason: manualPointReason
-        };
-
-        await db.collection('users').doc(selectedUserDetails.uid).update({
-            loyaltyPoints: firebase.firestore.FieldValue.increment(amount),
-            pointsHistory: firebase.firestore.FieldValue.arrayUnion(newHistory)
-        });
-
-        // Update local state
-        setSelectedUserDetails(prev => prev ? {
-            ...prev,
-            loyaltyPoints: (prev.loyaltyPoints || 0) + amount,
-            pointsHistory: [newHistory, ...(prev.pointsHistory || [])]
-        } : null);
-
-        setManualPointAmount('');
-        setManualPointReason('');
-        alert("Pontos atualizados com sucesso!");
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao atualizar pontos.");
-    } finally {
-        setIsAdjustingPoints(false);
-    }
-  };
-
-  const handleSearchDuplicate = async () => {}; // Placeholder
-  const handleConfirmMerge = async () => {}; // Placeholder
   const handleOpenInvestedModal = () => { setDetailsModalData({ title: "Detalhe do Investimento", data: products.map(p => ({ id: p.id, name: p.name, qty: p.quantityBought, cost: p.purchasePrice, total: p.quantityBought * p.purchasePrice })).filter(i => i.total > 0).sort((a,b) => b.total - a.total), total: stats.totalInvested, columns: [{ header: "Produto", accessor: "name" }, { header: "Qtd. Comprada", accessor: "qty" }, { header: "Custo Unit.", accessor: (i) => formatCurrency(i.cost) }, { header: "Total", accessor: (i) => formatCurrency(i.total) }] }); };
   const handleOpenRevenueModal = () => { setDetailsModalData({ title: "Receita Realizada", data: products.flatMap(p => (p.salesHistory || []).map(s => ({ id: s.id, name: p.name, date: s.date, qty: s.quantity, val: s.quantity * s.unitPrice }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), total: stats.realizedRevenue, columns: [{ header: "Data", accessor: (i) => new Date(i.date).toLocaleDateString() }, { header: "Produto", accessor: "name" }, { header: "Qtd", accessor: "qty" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
   const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const cogs = p.quantitySold * p.purchasePrice; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
@@ -596,13 +563,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const filteredClients = useMemo(() => { 
       // 1. Começar com os utilizadores registados
       const combinedClients: UserType[] = [...allUsers];
-      const registeredEmails = new Set(allUsers.map(u => u.email.toLowerCase().trim()));
+      const registeredEmails = new Set(allUsers.map(u => (u.email || '').toLowerCase().trim()));
 
       // 2. Procurar nas encomendas por clientes convidados (sem conta registada)
       const guestMap = new Map<string, UserType>();
 
       allOrders.forEach(order => {
-          const email = order.shippingInfo.email.toLowerCase().trim();
+          const email = (order.shippingInfo?.email || '').toLowerCase().trim();
           
           // Se este email NÃO pertence a um utilizador registado
           if (email && !registeredEmails.has(email)) {
@@ -640,72 +607,71 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       ); 
   }, [allUsers, allOrders, clientsSearchTerm]);
   const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
-  const calculatedTotalSpent = useMemo(() => { if (!selectedUserDetails) return 0; return clientOrders.filter(o => o.status !== 'Cancelado').reduce((sum, order) => sum + (order.total || 0), 0); }, [clientOrders, selectedUserDetails]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 pb-20 animate-fade-in relative">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-gray-100 pb-20 animate-fade-in relative">
       {showToast && (
-          <div className="fixed top-24 right-4 bg-white shadow-xl rounded-xl border border-blue-100 p-4 z-[60] max-w-sm animate-slide-in-right flex items-start gap-4">
-              <div className="bg-green-100 p-2 rounded-full text-green-600"><CheckCircle size={24} /></div>
+          <div className="fixed top-24 right-4 bg-white dark:bg-slate-800 shadow-xl rounded-xl border border-blue-100 dark:border-slate-700 p-4 z-[60] max-w-sm animate-slide-in-right flex items-start gap-4">
+              <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full text-green-600 dark:text-green-400"><CheckCircle size={24} /></div>
               <div>
-                  <h4 className="font-bold text-gray-900">Nova Encomenda!</h4>
-                  <p className="text-sm text-gray-600">{showToast.shippingInfo?.name} acabou de comprar.</p>
-                  <p className="text-sm font-bold text-indigo-600 mt-1">{formatCurrency(showToast.total)}</p>
+                  <h4 className="font-bold text-gray-900 dark:text-white">Nova Encomenda!</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{showToast.shippingInfo?.name} acabou de comprar.</p>
+                  <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-1">{formatCurrency(showToast.total)}</p>
               </div>
-              <button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+              <button onClick={() => setShowToast(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18}/></button>
           </div>
       )}
 
       {/* Header, Tabs, etc are same as previous Dashboard.tsx */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-30 shadow-sm transition-colors duration-300">
         {/* ... (Header content) ... */}
         <div className="container mx-auto px-4 flex flex-col md:flex-row md:h-20 items-center justify-between gap-4 md:gap-0 py-4 md:py-0">
           <div className="flex items-center gap-3 w-full justify-between md:w-auto">
               <div className="flex items-center gap-3">
-                <div className="bg-indigo-600 p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
-                <h1 className="text-xl font-bold text-gray-900">Backoffice</h1>
+                <div className="bg-indigo-600 dark:bg-indigo-500 p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">Backoffice</h1>
               </div>
               
               {/* TOGGLE SOUND & MOBILE MENU */}
               <div className="flex items-center gap-2">
                 <button 
                     onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
-                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'}`}
                     title={isSoundEnabled ? "Silenciar notificações" : "Ativar som de encomendas"}
                 >
                     {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 </button>
 
                 <div className="md:hidden relative">
-                    <button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button>
+                    <button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button>
                 </div>
-                 <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full md:hidden" title="Voltar à Loja"><Home size={20} /></button>
+                 <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full md:hidden" title="Voltar à Loja"><Home size={20} /></button>
               </div>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             {/* TABS E RESTO DO HEADER MANTIDOS */}
-            <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 p-1 rounded-lg gap-1 md:gap-0 overflow-x-auto">
-                <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Package size={16} /> Inventário</button>
-                <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><ShoppingCart size={16} /> Encomendas</button>
-                <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Users size={16} /> Clientes</button>
-                <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Headphones size={16} /> Suporte</button>
-                <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><TicketPercent size={16} /> Cupões</button>
-                <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Megaphone size={16} /> Marketing</button>
-                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><BarChart2 size={16} /> Relatórios</button>
+            <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 dark:bg-slate-800 p-1 rounded-lg gap-1 md:gap-0 overflow-x-auto transition-colors">
+                <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Package size={16} /> Inventário</button>
+                <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><ShoppingCart size={16} /> Encomendas</button>
+                <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Users size={16} /> Clientes</button>
+                <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Headphones size={16} /> Suporte</button>
+                <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><TicketPercent size={16} /> Cupões</button>
+                <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Megaphone size={16} /> Marketing</button>
+                <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><BarChart2 size={16} /> Relatórios</button>
             </div>
             
             {/* DESKTOP SOUND TOGGLE (Visible on Desktop) */}
             <div className="hidden md:flex items-center gap-2">
                 <button 
                     onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
-                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'}`}
                     title={isSoundEnabled ? "Silenciar Campainha" : "Ativar Campainha de Encomendas"}
                 >
                     {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 </button>
                 
-                <div className="relative"><button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button></div>
-                <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full" title="Voltar à Loja"><Home size={20} /></button>
+                <div className="relative"><button onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full relative transition-colors"><Bell size={20} />{notifications.length > 0 && <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">{notifications.length}</span>}</button></div>
+                <button onClick={() => window.location.hash = '/'} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full" title="Voltar à Loja"><Home size={20} /></button>
             </div>
           </div>
         </div>
@@ -763,8 +729,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         )}
         
         {activeTab === 'clients' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center"><h3 className="font-bold text-gray-800">Gestão de Clientes ({filteredClients.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50"><td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">{client.name} {client.isGuest && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] uppercase font-bold border border-gray-200">Convidado</span>}</td><td className="px-6 py-4 text-gray-600">{client.email}</td><td className="px-6 py-4">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden animate-fade-in transition-colors">
+                <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-gray-800 dark:text-white">Gestão de Clientes ({filteredClients.length})</h3><div className="relative"><input type="text" placeholder="Pesquisar cliente..." value={clientsSearchTerm} onChange={e => setClientsSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/></div></div><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase"><tr><th className="px-6 py-4">Nome</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Total Gasto</th><th className="px-6 py-4">Nível</th><th className="px-6 py-4">AllPoints</th><th className="px-6 py-4 text-right">Ações</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-sm">{filteredClients.map(client => (<tr key={client.uid} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"><td className="px-6 py-4 font-bold text-gray-900 dark:text-white flex items-center gap-2">{client.name} {client.isGuest && <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-600 text-gray-500 dark:text-gray-300 text-[10px] uppercase font-bold border border-gray-200 dark:border-slate-500">Convidado</span>}</td><td className="px-6 py-4 text-gray-600 dark:text-gray-300">{client.email}</td><td className="px-6 py-4 text-gray-900 dark:text-gray-100">{formatCurrency(client.totalSpent || 0)}</td><td className="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">{client.tier || 'Bronze'}</td><td className="px-6 py-4 font-bold text-blue-600 dark:text-blue-400">{client.loyaltyPoints || 0}</td><td className="px-6 py-4 text-right"><button onClick={() => setSelectedUserDetails(client)} className="text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:underline">Ver Detalhes</button></td></tr>))}</tbody></table></div>
             </div>
         )}
 
@@ -786,35 +752,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Formulário de Envio REAL */}
-                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Send size={20} className="text-blue-600"/> Enviar Nova Notificação</h3>
+                    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2"><Send size={20} className="text-blue-600 dark:text-blue-400"/> Enviar Nova Notificação</h3>
                         
                         <form onSubmit={handleSendPush} className="space-y-5">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Título da Notificação</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Título da Notificação</label>
                                 <input 
                                     type="text" 
                                     required 
                                     placeholder="Ex: Promoção Relâmpago ⚡️" 
                                     value={pushForm.title}
                                     onChange={e => setPushForm({...pushForm, title: e.target.value})}
-                                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white"
                                 />
                             </div>
                             
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Mensagem</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Mensagem</label>
                                 <textarea 
                                     required 
                                     rows={3}
                                     placeholder="Ex: Descontos até 50% em TV Boxes só hoje!" 
                                     value={pushForm.body}
                                     onChange={e => setPushForm({...pushForm, body: e.target.value})}
-                                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                    className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white"
                                 />
                             </div>
 
-                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                            <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl border border-gray-200 dark:border-slate-600">
                                 <label className="flex items-center gap-3 cursor-pointer">
                                     <input 
                                         type="radio" 
@@ -825,14 +791,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                         className="w-5 h-5 text-blue-600"
                                     />
                                     <div>
-                                        <span className="font-bold text-gray-900 block">Enviar para TODOS</span>
-                                        <span className="text-xs text-gray-500">Alcança todos os utilizadores com notificações ativas.</span>
+                                        <span className="font-bold text-gray-900 dark:text-white block">Enviar para TODOS</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">Alcança todos os utilizadores com notificações ativas.</span>
                                     </div>
                                 </label>
                             </div>
 
                             {pushResult && (
-                                <div className={`p-4 rounded-xl flex items-start gap-3 ${pushResult.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                <div className={`p-4 rounded-xl flex items-start gap-3 ${pushResult.success ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'}`}>
                                     {pushResult.success ? <CheckCircle size={20} className="mt-0.5"/> : <AlertCircle size={20} className="mt-0.5"/>}
                                     <p className="text-sm font-medium">{pushResult.msg}</p>
                                 </div>
@@ -849,21 +815,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     </div>
 
                     <div className="space-y-6">
-                        <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100">
-                            <h4 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><Info size={18}/> Como funciona?</h4>
-                            <p className="text-sm text-indigo-800 leading-relaxed mb-4">
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                            <h4 className="font-bold text-indigo-900 dark:text-indigo-300 mb-4 flex items-center gap-2"><Info size={18}/> Como funciona?</h4>
+                            <p className="text-sm text-indigo-800 dark:text-indigo-400 leading-relaxed mb-4">
                                 Esta funcionalidade usa uma API segura para comunicar com o Firebase. Quando clica em enviar:
                             </p>
-                            <ol className="list-decimal pl-5 space-y-2 text-sm text-indigo-800">
+                            <ol className="list-decimal pl-5 space-y-2 text-sm text-indigo-800 dark:text-indigo-400">
                                 <li>O sistema recolhe todos os tokens de todos os utilizadores (PC, Android, iPhone).</li>
                                 <li>Remove duplicados para não enviar 2x para o mesmo aparelho.</li>
                                 <li>Envia a mensagem instantaneamente.</li>
                             </ol>
                         </div>
 
-                        <div className="bg-white p-6 rounded-xl border border-gray-200">
-                            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Sparkles size={18} className="text-yellow-500"/> Dicas de Conversão</h4>
-                            <ul className="space-y-3 text-sm text-gray-600">
+                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-200 dark:border-slate-700">
+                            <h4 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><Sparkles size={18} className="text-yellow-500"/> Dicas de Conversão</h4>
+                            <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
                                 <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Seja breve:</strong> Títulos curtos funcionam melhor.</li>
                                 <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Use Emojis:</strong> Aumentam a taxa de abertura. 🚀</li>
                                 <li className="flex gap-2"><CheckCircle size={16} className="text-green-500 shrink-0"/> <strong>Call to Action:</strong> Diga o que fazer (ex: "Toque para ver").</li>
@@ -879,31 +845,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {activeTab === 'coupons' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
                 {/* Create Coupon Card */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit space-y-6">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 h-fit space-y-6 transition-colors">
                     <div>
-                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600" /> Novo Cupão</h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Plus size={20} className="text-green-600 dark:text-green-400" /> Novo Cupão</h3>
                         <form onSubmit={handleAddCoupon} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Código</label>
-                                <input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 rounded uppercase font-bold tracking-wider" placeholder="NATAL20" />
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Código</label>
+                                <input type="text" required value={newCoupon.code} onChange={e => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded uppercase font-bold tracking-wider bg-white dark:bg-slate-900 text-gray-900 dark:text-white" placeholder="NATAL20" />
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Tipo</label>
-                                    <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 rounded">
+                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Tipo</label>
+                                    <select value={newCoupon.type} onChange={e => setNewCoupon({...newCoupon, type: e.target.value as any})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-white">
                                         <option value="PERCENTAGE">Percentagem (%)</option>
                                         <option value="FIXED">Valor Fixo (€)</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Valor</label>
-                                    <input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" />
+                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Valor</label>
+                                    <input type="number" required min="1" value={newCoupon.value} onChange={e => setNewCoupon({...newCoupon, value: Number(e.target.value)})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-white" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Produto Específico (Opcional)</label>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Produto Específico (Opcional)</label>
                                 <select 
-                                    className="w-full p-2 border border-gray-300 rounded text-sm" 
+                                    className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" 
                                     value={newCoupon.validProductId || ''} 
                                     onChange={(e) => setNewCoupon({...newCoupon, validProductId: e.target.value ? Number(e.target.value) : undefined})}
                                 >
@@ -914,22 +880,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Mínimo Compra (€)</label>
-                                <input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 rounded" />
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Mínimo Compra (€)</label>
+                                <input type="number" min="0" value={newCoupon.minPurchase} onChange={e => setNewCoupon({...newCoupon, minPurchase: Number(e.target.value)})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-white" />
                             </div>
-                            <button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Criar Cupão</button>
+                            <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded transition-colors">Criar Cupão</button>
                         </form>
                     </div>
 
                     {/* Simple Coupon Calculator */}
-                    <div className="pt-6 border-t border-gray-100">
-                        <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><Calculator size={16} /> Calculadora de Promoção</h4>
+                    <div className="pt-6 border-t border-gray-100 dark:border-slate-700">
+                        <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-3 flex items-center gap-2"><Calculator size={16} /> Calculadora de Promoção</h4>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                            <input type="number" placeholder="Preço Original" className="p-2 border rounded text-xs" value={couponCalcOriginal} onChange={e => setCouponCalcOriginal(e.target.value)} />
-                            <input type="number" placeholder="Preço Final" className="p-2 border rounded text-xs" value={couponCalcTarget} onChange={e => setCouponCalcTarget(e.target.value)} />
+                            <input type="number" placeholder="Preço Original" className="p-2 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={couponCalcOriginal} onChange={e => setCouponCalcOriginal(e.target.value)} />
+                            <input type="number" placeholder="Preço Final" className="p-2 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={couponCalcTarget} onChange={e => setCouponCalcTarget(e.target.value)} />
                         </div>
                         {couponCalcResult && (
-                            <div className="bg-blue-50 p-3 rounded text-xs text-blue-800">
+                            <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded text-xs text-blue-800 dark:text-blue-300">
                                 Para vender a <strong>{formatCurrency(parseFloat(couponCalcTarget))}</strong>, crie um cupão de:
                                 <ul className="list-disc pl-4 mt-1 font-bold">
                                     <li>Valor Fixo: {formatCurrency(couponCalcResult.fixed)}</li>
@@ -941,29 +907,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 </div>
 
                 <div className="md:col-span-2 space-y-4">
-                    {isCouponsLoading ? <p>A carregar...</p> : coupons.map(c => {
+                    {isCouponsLoading ? <p className="text-gray-500 dark:text-gray-400">A carregar...</p> : coupons.map(c => {
                         const productRestriction = c.validProductId ? publicProductsList.find(p => p.id === c.validProductId)?.name : null;
                         return (
-                            <div key={c.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between ${c.isActive ? 'border-gray-200' : 'border-red-100 bg-red-50 opacity-75'}`}>
+                            <div key={c.id} className={`bg-white dark:bg-slate-800 p-4 rounded-xl border flex items-center justify-between transition-colors ${c.isActive ? 'border-gray-200 dark:border-slate-700' : 'border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 opacity-75'}`}>
                                 <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}><TicketPercent size={24} /></div>
+                                    <div className={`p-3 rounded-lg ${c.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}><TicketPercent size={24} /></div>
                                     <div>
-                                        <h4 className="font-bold text-lg tracking-wider">{c.code}</h4>
-                                        <p className="text-sm text-gray-600">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p>
-                                        {productRestriction && <p className="text-xs text-purple-600 font-bold mt-0.5">Exclusivo: {productRestriction}</p>}
-                                        <p className="text-xs text-gray-400 mt-1">Usado {c.usageCount} vezes</p>
+                                        <h4 className="font-bold text-lg tracking-wider text-gray-900 dark:text-white">{c.code}</h4>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300">{c.type === 'PERCENTAGE' ? `${c.value}% Desconto` : `${formatCurrency(c.value)} Desconto`}{c.minPurchase > 0 && ` (Min. ${formatCurrency(c.minPurchase)})`}</p>
+                                        {productRestriction && <p className="text-xs text-purple-600 dark:text-purple-400 font-bold mt-0.5">Exclusivo: {productRestriction}</p>}
+                                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Usado {c.usageCount} vezes</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    <button onClick={() => handleToggleCoupon(c)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'}`}>
                                         {c.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}{c.isActive ? 'Ativo' : 'Inativo'}
                                     </button>
-                                    <button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18} /></button>
+                                    <button onClick={() => handleDeleteCoupon(c.id)} className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400"><Trash2 size={18} /></button>
                                 </div>
                             </div>
                         );
                     })}
-                    {coupons.length === 0 && <p className="text-center text-gray-500 mt-10">Não há cupões criados.</p>}
+                    {coupons.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 mt-10">Não há cupões criados.</p>}
                 </div>
             </div>
         )}
@@ -976,8 +942,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {activeTab === 'support' && (
             <div className="space-y-6 animate-fade-in">
                 {/* ... (Keep existing support content) ... */}
-                <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><Headphones className="text-indigo-600"/> Tickets de Suporte</h3>
+                <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition-colors">
+                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2"><Headphones className="text-indigo-600 dark:text-indigo-400"/> Tickets de Suporte</h3>
                     <div className="flex gap-2">
                         <span className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-xs font-bold border border-red-100">Abertos: {tickets.filter(t => t.status === 'Aberto').length}</span>
                         <span className="bg-yellow-50 text-yellow-600 px-3 py-1 rounded-lg text-xs font-bold border border-yellow-100">Em Análise: {tickets.filter(t => t.status === 'Em Análise').length}</span>
@@ -985,10 +951,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left whitespace-nowrap">
-                            <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                            <thead className="bg-gray-50 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase transition-colors">
                                 <tr>
                                     <th className="px-6 py-4">ID</th>
                                     <th className="px-6 py-4">Cliente</th>
@@ -999,26 +965,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                     <th className="px-6 py-4 text-right">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 text-sm">
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-sm transition-colors">
                                 {isTicketsLoading ? (<tr><td colSpan={7} className="text-center py-8"><Loader2 className="animate-spin mx-auto text-indigo-500"/></td></tr>) : 
-                                tickets.length === 0 ? (<tr><td colSpan={7} className="text-center py-8 text-gray-500">Sem tickets de suporte.</td></tr>) :
+                                tickets.length === 0 ? (<tr><td colSpan={7} className="text-center py-8 text-gray-500 dark:text-gray-400">Sem tickets de suporte.</td></tr>) :
                                 tickets.map(ticket => (
-                                    <tr key={ticket.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedTicket(ticket)}>
-                                        <td className="px-6 py-4 font-bold text-gray-700">{ticket.id}</td>
+                                    <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors" onClick={() => setSelectedTicket(ticket)}>
+                                        <td className="px-6 py-4 font-bold text-gray-700 dark:text-gray-300">{ticket.id}</td>
                                         <td className="px-6 py-4">
-                                            <p className="font-bold text-gray-900">{ticket.customerName}</p>
-                                            <p className="text-xs text-gray-500">{ticket.customerEmail}</p>
+                                            <p className="font-bold text-gray-900 dark:text-white">{ticket.customerName}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{ticket.customerEmail}</p>
                                         </td>
-                                        <td className="px-6 py-4 truncate max-w-xs">{ticket.subject}</td>
-                                        <td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs font-medium">{ticket.category}</span></td>
+                                        <td className="px-6 py-4 truncate max-w-xs text-gray-700 dark:text-gray-300">{ticket.subject}</td>
+                                        <td className="px-6 py-4"><span className="bg-gray-100 dark:bg-slate-600 px-2 py-1 rounded text-xs font-medium text-gray-700 dark:text-gray-200">{ticket.category}</span></td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold ${ticket.status === 'Aberto' ? 'bg-red-100 text-red-700' : ticket.status === 'Em Análise' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${ticket.status === 'Aberto' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : ticket.status === 'Em Análise' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'}`}>
                                                 {ticket.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-500">{new Date(ticket.createdAt).toLocaleDateString()}</td>
+                                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(ticket.createdAt).toLocaleDateString()}</td>
                                         <td className="px-6 py-4 text-right">
-                                            <button className="text-indigo-600 font-bold text-xs hover:underline">Ver</button>
+                                            <button className="text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:underline">Ver</button>
                                         </td>
                                     </tr>
                                 ))}
@@ -1045,7 +1011,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           />
       )}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
-      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10"><h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100"><h3 className="text-sm font-bold text-blue-900 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 uppercase mb-1 bg-yellow-100 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white font-bold" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white border-blue-300' : 'bg-gray-100 text-gray-500'}`}/><div className="text-[10px] text-gray-500 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4"><div>
+      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30"><h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 dark:text-white uppercase mb-1 bg-yellow-100 dark:bg-yellow-900/40 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800 font-bold text-gray-900 dark:text-white" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}/><div className="text-[10px] text-gray-500 dark:text-gray-400 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 space-y-4"><div>
       
       <div className="flex justify-between items-center mb-1">
           <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4>
@@ -1059,7 +1025,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           </button>
       </div>
       
-      <textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}<div className="flex gap-2"><div className="relative flex-1"><input type="url" placeholder="Cole o link da imagem (ex: imgur.com/...)" className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" value={formData.newImageUrl} onChange={e => setFormData({...formData, newImageUrl: e.target.value})} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" title="Upload do PC">{isUploading && uploadProgress === null ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}</button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/></div><button type="button" onClick={handleAddImage} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors">Adicionar</button></div>{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div> <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div> <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm flex items-center gap-2"><Wallet size={16}/> Detalhes do Cashback</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plataforma</label><input placeholder="Ex: Temu" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackPlatform} onChange={e => setFormData({...formData, cashbackPlatform: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conta Usada</label><input placeholder="email@exemplo.com" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackAccount} onChange={e => setFormData({...formData, cashbackAccount: e.target.value})} /></div></div><div className="mt-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Prevista (Opcional)</label><input type="date" className="w-full md:w-1/2 p-2 border border-yellow-200 rounded" value={formData.cashbackExpectedDate} onChange={e => setFormData({...formData, cashbackExpectedDate: e.target.value})} /></div></div> <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm"><div><h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4><p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p></div><button type="button" onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} /></button></div> <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6"><h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4><div className="flex flex-wrap gap-2">{['NOVIDADE', 'MAIS VENDIDO', 'PROMOÇÃO', 'ESSENCIAL'].map(badge => (<button key={badge} type="button" onClick={() => toggleBadge(badge)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${formData.badges.includes(badge) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{badge} {formData.badges.includes(badge) && <CheckCircle size={10} className="inline ml-1" />}</button>))}</div><p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p></div> <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div> <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div><div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div> <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4"><h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4><p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p><div className="flex gap-2"><input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button></div>{generatedCodes.length > 0 && (<div className="mt-4 pt-4 border-t border-gray-200"><div className="flex justify-between items-center mb-2"><h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5><button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button></div><div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">{generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}</div><button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button></div>)}</div> 
+      <textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}<div className="flex gap-2"><div className="relative flex-1"><input type="url" placeholder="Cole o link da imagem (ex: imgur.com/...)" className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" value={formData.newImageUrl} onChange={e => setFormData({...formData, newImageUrl: e.target.value})} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" title="Upload do PC">{isUploading && uploadProgress === null ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}</button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/></div><button type="button" onClick={handleAddImage} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors">Adicionar</button></div>{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div>
+<div className="mt-4">
+    <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><Settings size={16} /> Especificações Técnicas (Comparador)</h4>
+    {formData.specs && Object.keys(formData.specs).length > 0 && (
+        <div className="space-y-2 mb-3">
+            {Object.entries(formData.specs).map(([key, value]) => (
+                <div key={key} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm">
+                    <span className="font-bold text-gray-600">{key}:</span>
+                    <span className="flex-1 text-gray-800">{value.toString()}</span>
+                    <button type="button" onClick={() => handleRemoveSpec(key)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                </div>
+            ))}
+        </div>
+    )}
+    <div className="flex gap-2">
+        <input type="text" placeholder="Característica (Ex: RAM)" className="w-1/3 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newSpecKey} onChange={e => setFormData({...formData, newSpecKey: e.target.value})} />
+        <input type="text" placeholder="Valor (Ex: 8GB)" className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newSpecValue} onChange={e => setFormData({...formData, newSpecValue: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSpec())} />
+        <button type="button" onClick={handleAddSpec} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 rounded-lg font-bold transition-colors">+</button>
+    </div>
+</div>
+</div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div> <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div> <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm flex items-center gap-2"><Wallet size={16}/> Detalhes do Cashback</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plataforma</label><input placeholder="Ex: Temu" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackPlatform} onChange={e => setFormData({...formData, cashbackPlatform: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conta Usada</label><input placeholder="email@exemplo.com" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackAccount} onChange={e => setFormData({...formData, cashbackAccount: e.target.value})} /></div></div><div className="mt-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Prevista (Opcional)</label><input type="date" className="w-full md:w-1/2 p-2 border border-yellow-200 rounded" value={formData.cashbackExpectedDate} onChange={e => setFormData({...formData, cashbackExpectedDate: e.target.value})} /></div></div> <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm"><div><h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4><p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p></div><button type="button" onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} /></button></div> <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6"><h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4><div className="flex flex-wrap gap-2">{['NOVIDADE', 'MAIS VENDIDO', 'PROMOÇÃO', 'ESSENCIAL'].map(badge => (<button key={badge} type="button" onClick={() => toggleBadge(badge)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${formData.badges.includes(badge) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{badge} {formData.badges.includes(badge) && <CheckCircle size={10} className="inline ml-1" />}</button>))}</div><p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p></div> <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div> <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div><div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div> <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4"><h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4><p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p><div className="flex gap-2"><input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button></div>{generatedCodes.length > 0 && (<div className="mt-4 pt-4 border-t border-gray-200"><div className="flex justify-between items-center mb-2"><h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5><button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button></div><div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">{generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}</div><button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button></div>)}</div> 
       {/* SEÇÃO DE PROMOÇÕES (NOVA) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100">
           <div>
@@ -1081,29 +1067,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       {/* (Fim Seção Promoções) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div> <div className="border-t pt-4 border-gray-100"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Scale size={16} /> Logística & Peso</h4><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Peso Unitário (kg)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400 text-xs font-bold">KG</span><input type="number" step="0.001" className="w-full pl-10 p-3 border border-gray-300 rounded-lg" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} placeholder="Ex: 0.350" /></div><p className="text-[10px] text-gray-500 mt-1">Essencial para calcular portes de envio automáticos no futuro.</p></div></div> {editingId && (<div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? (<div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => (<tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>))}</tbody></table></div>) : (<p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>)}</div>)} <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>)}
       {/* Sale Modal */}
-      {isSaleModalOpen && selectedProductForSale && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0"><h3 className="font-bold text-gray-900 flex items-center gap-2"><DollarSign size={20} className="text-green-600"/> Registar Venda / Baixa</h3><button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button></div><form onSubmit={handleSaleSubmit} className="p-6 space-y-6"><div className="bg-gray-50 p-4 rounded-xl border border-gray-200"><p className="text-xs font-bold text-gray-500 uppercase">Produto</p><p className="font-bold text-gray-900">{selectedProductForSale.name}</p><p className="text-xs text-blue-600">{selectedProductForSale.variant}</p></div><div><label className="block text-sm font-bold text-gray-700 mb-1">Passo 1: Encomenda Online (Obrigatório)</label><select required value={linkedOrderId} onChange={(e) => setLinkedOrderId(e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 outline-none transition-colors ${orderMismatchWarning ? 'border-red-300 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-green-500'}`}><option value="">-- Selecione uma encomenda --</option>{pendingOrders.map(o => (<option key={o.id} value={o.id}>{o.id} - {o.shippingInfo?.name} ({formatCurrency(o.total)})</option>))}</select></div>{orderMismatchWarning && (<div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded animate-shake flex items-start gap-2"><ShieldAlert size={20} className="shrink-0 mt-0.5" /><div><p className="font-bold text-sm">PRODUTO ERRADO!</p><p className="text-xs">{orderMismatchWarning}</p></div></div>)}{linkedOrderId && !orderMismatchWarning && (<div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4 animate-fade-in-down space-y-4"><h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 border-b border-blue-200 pb-2"><FileText size={14}/> Conferência de Valores</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-600 mb-1">Preço Venda (Real)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 rounded bg-white text-sm font-bold text-gray-800" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})}/></div><div><label className="block text-xs font-bold text-gray-600 mb-1">Portes Envio (Cliente)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 rounded bg-white text-sm text-gray-800" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})}/></div></div><div className="border-t border-blue-200 pt-4"><h4 className="text-sm font-bold text-blue-900 uppercase flex items-center gap-2 mb-3"><ShieldCheck size={14}/> Verificação de Segurança</h4><div className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${securityCheckPassed ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-200'}`}>{securityCheckPassed ? (<><CheckCircle size={32} className="text-green-600"/><div className="text-center"><p className="font-bold text-green-800">Produto Confirmado!</p><p className="text-xs text-green-700">Pode finalizar a venda.</p></div></>) : (<><div className="w-full flex gap-2"><button type="button" onClick={() => { setScannerMode('verify_product'); setIsScannerOpen(true); }} className="bg-gray-800 text-white p-2 rounded-lg hover:bg-black transition-colors"><Camera size={20}/></button><input type="text" placeholder="Escanear produto para libertar..." className="flex-1 p-2 border border-gray-300 rounded-lg text-sm text-center font-mono uppercase focus:ring-2 focus:ring-red-500 outline-none" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleVerifyProduct((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}/></div><p className="text-xs text-red-600 font-bold flex items-center gap-1"><Lock size={12}/> Venda Bloqueada: Confirme o produto físico.</p></>)}</div></div></div>)}{selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (<div><label className="block text-sm font-bold text-gray-700 mb-2">Selecionar Unidades (S/N) a vender</label><div className="flex gap-2 mb-2"><button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="bg-gray-200 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-300"><Camera size={14}/> Escanear S/N</button><select value={manualUnitSelect} onChange={(e) => { if(e.target.value) handleSelectUnitForSale(e.target.value); setManualUnitSelect(''); }} className="flex-1 p-2 border border-gray-300 rounded-lg text-xs"><option value="">-- Selecionar Manualmente --</option>{selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (<option key={u.id} value={u.id}>{u.id}</option>))}</select></div><div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-50 rounded-lg border border-gray-200">{selectedUnitsForSale.map(sn => (<div key={sn} className="bg-white border border-green-200 text-green-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-1 shadow-sm">{sn} <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(s => s !== sn))} className="text-red-400 hover:text-red-600"><X size={12}/></button></div>))}{selectedUnitsForSale.length === 0 && <span className="text-gray-400 text-xs italic">Nenhuma unidade selecionada.</span>}</div><p className="text-xs text-gray-500 mt-1">Quantidade será calculada com base nas unidades selecionadas.</p></div>) : (<div><label className="block text-sm font-bold text-gray-700 mb-1">Quantidade</label><input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required value={saleForm.quantity} onChange={(e) => setSaleForm({...saleForm, quantity: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" /></div>)}<button type="submit" disabled={!!orderMismatchWarning || !securityCheckPassed} className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning || !securityCheckPassed ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-green-600 hover:bg-green-700 text-white'}`}>{!securityCheckPassed ? <Lock size={18}/> : <CheckCircle size={18}/>} {orderMismatchWarning ? 'Bloqueado: Produto Errado' : !securityCheckPassed ? 'Bloqueado: Verificação Pendente' : 'Confirmar Venda'}</button></form></div></div>)}
-      {detailsModalData && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center"><h3 className="text-xl font-bold text-gray-900">{detailsModalData.title}</h3><button onClick={() => setDetailsModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-0"><table className="w-full text-left text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500 sticky top-0"><tr>{detailsModalData.columns.map((col, idx) => <th key={idx} className="px-6 py-3">{col.header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{detailsModalData.data.map((item, rowIdx) => (<tr key={rowIdx} className="hover:bg-gray-50">{detailsModalData.columns.map((col, colIdx) => (<td key={colIdx} className="px-6 py-3">{typeof col.accessor === 'function' ? col.accessor(item) : item[col.accessor]}</td>))}</tr>))}</tbody></table></div><div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-between items-center"><span className="font-bold text-gray-500">TOTAL</span><span className="text-xl font-bold text-gray-900">{formatCurrency(detailsModalData.total)}</span></div></div></div>)}
+      {isSaleModalOpen && selectedProductForSale && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 transition-colors"><h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2"><DollarSign size={20} className="text-green-600 dark:text-green-400"/> Registar Venda / Baixa</h3><button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24}/></button></div><form onSubmit={handleSaleSubmit} className="p-6 space-y-6"><div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700"><p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Produto</p><p className="font-bold text-gray-900 dark:text-white">{selectedProductForSale.name}</p><p className="text-xs text-blue-600 dark:text-blue-400">{selectedProductForSale.variant}</p></div><div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Passo 1: Encomenda Online (Obrigatório)</label><select required value={linkedOrderId} onChange={(e) => setLinkedOrderId(e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 outline-none transition-colors dark:bg-slate-800 dark:text-white ${orderMismatchWarning ? 'border-red-300 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-300 dark:border-slate-600 focus:ring-green-500'}`}><option value="">-- Selecione uma encomenda --</option>{pendingOrders.map(o => (<option key={o.id} value={o.id}>{o.id} - {o.shippingInfo?.name} ({formatCurrency(o.total)})</option>))}</select></div>{orderMismatchWarning && (<div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded animate-shake flex items-start gap-2"><ShieldAlert size={20} className="shrink-0 mt-0.5" /><div><p className="font-bold text-sm">PRODUTO ERRADO!</p><p className="text-xs">{orderMismatchWarning}</p></div></div>)}{linkedOrderId && !orderMismatchWarning && (<div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30 p-4 animate-fade-in-down space-y-4"><h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2 border-b border-blue-200 dark:border-blue-800/30 pb-2"><FileText size={14}/> Conferência de Valores</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Preço Venda (Real)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-sm font-bold text-gray-800 dark:text-white" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})}/></div><div><label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Portes Envio (Cliente)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-sm text-gray-800 dark:text-white" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})}/></div></div><div className="border-t border-blue-200 dark:border-blue-800/30 pt-4"><h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2 mb-3"><ShieldCheck size={14}/> Verificação de Segurança</h4><div className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${securityCheckPassed ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'}`}>{securityCheckPassed ? (<><CheckCircle size={32} className="text-green-600 dark:text-green-400"/><div className="text-center"><p className="font-bold text-green-800 dark:text-green-300">Produto Confirmado!</p><p className="text-xs text-green-700 dark:text-green-400">Pode finalizar a venda.</p></div></>) : (<><div className="w-full flex gap-2"><button type="button" onClick={() => { setScannerMode('verify_product'); setIsScannerOpen(true); }} className="bg-gray-800 dark:bg-slate-700 text-white p-2 rounded-lg hover:bg-black dark:hover:bg-slate-600 transition-colors"><Camera size={20}/></button><input type="text" placeholder="Escanear produto para libertar..." className="flex-1 p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-center font-mono uppercase focus:ring-2 focus:ring-red-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleVerifyProduct((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}/></div><p className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-1"><Lock size={12}/> Venda Bloqueada: Confirme o produto físico.</p></>)}</div></div></div>)}{selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (<div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Selecionar Unidades (S/N) a vender</label><div className="flex gap-2 mb-2"><button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="bg-gray-200 dark:bg-slate-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-white"><Camera size={14}/> Escanear S/N</button><select value={manualUnitSelect} onChange={(e) => { if(e.target.value) handleSelectUnitForSale(e.target.value); setManualUnitSelect(''); }} className="flex-1 p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-white"><option value="">-- Selecionar Manualmente --</option>{selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (<option key={u.id} value={u.id}>{u.id}</option>))}</select></div><div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">{selectedUnitsForSale.map(sn => (<div key={sn} className="bg-white dark:bg-slate-700 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-xs font-mono px-2 py-1 rounded flex items-center gap-1 shadow-sm">{sn} <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(s => s !== sn))} className="text-red-400 hover:text-red-600"><X size={12}/></button></div>))}{selectedUnitsForSale.length === 0 && <span className="text-gray-400 text-xs italic">Nenhuma unidade selecionada.</span>}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Quantidade será calculada com base nas unidades selecionadas.</p></div>) : (<div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Quantidade</label><input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required value={saleForm.quantity} onChange={(e) => setSaleForm({...saleForm, quantity: e.target.value})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" /></div>)}<button type="submit" disabled={!!orderMismatchWarning || !securityCheckPassed} className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning || !securityCheckPassed ? 'bg-gray-400 dark:bg-slate-600 cursor-not-allowed text-gray-200 dark:text-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}`}>{!securityCheckPassed ? <Lock size={18}/> : <CheckCircle size={18}/>} {orderMismatchWarning ? 'Bloqueado: Produto Errado' : !securityCheckPassed ? 'Bloqueado: Verificação Pendente' : 'Confirmar Venda'}</button></form></div></div>)}
+      {detailsModalData && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 transition-colors"><h3 className="text-xl font-bold text-gray-900 dark:text-white">{detailsModalData.title}</h3><button onClick={() => setDetailsModalData(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-0"><table className="w-full text-left text-sm"><thead className="bg-gray-50 dark:bg-slate-800 text-xs uppercase text-gray-500 dark:text-gray-400 sticky top-0 transition-colors"><tr>{detailsModalData.columns.map((col, idx) => <th key={idx} className="px-6 py-3">{col.header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-800">{detailsModalData.data.map((item, rowIdx) => (<tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-700 dark:text-gray-300">{detailsModalData.columns.map((col, colIdx) => (<td key={colIdx} className="px-6 py-3">{typeof col.accessor === 'function' ? col.accessor(item) : item[col.accessor]}</td>))}</tr>))}</tbody></table></div><div className="p-6 border-t border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 rounded-b-2xl flex justify-between items-center transition-colors"><span className="font-bold text-gray-500 dark:text-gray-400">TOTAL</span><span className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(detailsModalData.total)}</span></div></div></div>)}
       {isScannerOpen && (<BarcodeScanner mode={(scannerMode === 'add_unit' || scannerMode === 'sell_unit' || scannerMode === 'verify_product') ? 'serial' : 'product'} onClose={() => setIsScannerOpen(false)} onCodeSubmit={(code) => { if (scannerMode === 'add_unit') { handleAddUnit(code); setIsScannerOpen(false); } else if (scannerMode === 'sell_unit') { handleSelectUnitForSale(code); setIsScannerOpen(false); } else if (scannerMode === 'search') { setInventorySearchTerm(code); setIsScannerOpen(false); } else if (scannerMode === 'verify_product') { handleVerifyProduct(code); setIsScannerOpen(false); }}} />)}
       
       {/* NOTIFICATION MODAL UPDATED */}
       {notificationModalData && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transition-colors">
                 <div className="bg-green-600 p-6 text-white flex justify-between items-center">
                     <h3 className="font-bold text-xl flex items-center gap-2"><Mail size={24}/> Notificar Clientes</h3>
                     <button onClick={() => setNotificationModalData(null)} className="p-1 hover:bg-white/20 rounded-full"><X size={24}/></button>
                 </div>
                 <div className="p-6 space-y-6">
-                    <div className="flex items-start gap-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
-                        <div className="bg-white p-2 rounded-full text-blue-600 shadow-sm"><Users size={20}/></div>
+                    <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 transition-colors">
+                        <div className="bg-white dark:bg-blue-800 p-2 rounded-full text-blue-600 dark:text-blue-300 shadow-sm"><Users size={20}/></div>
                         <div>
-                            <p className="text-blue-900 font-bold">Interesse Detetado</p>
-                            <p className="text-sm text-blue-800 mt-1">Existem <strong>{notificationModalData.alertsToDelete.length} emails</strong> na lista de espera. Destes, <strong>{notificationModalData.targetUserIds.length}</strong> têm a app instalada e podem receber notificação Push.</p>
+                            <p className="text-blue-900 dark:text-blue-300 font-bold">Interesse Detetado</p>
+                            <p className="text-sm text-blue-800 dark:text-blue-400 mt-1">Existem <strong>{notificationModalData.alertsToDelete.length} emails</strong> na lista de espera. Destes, <strong>{notificationModalData.targetUserIds.length}</strong> têm a app instalada e podem receber notificação Push.</p>
                         </div>
                     </div>
 
                     <div className="space-y-3">
-                        <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2"><Smartphone size={16}/> Opção 1: Notificação Push (Recomendado)</h4>
+                        <h4 className="font-bold text-gray-800 dark:text-white text-sm uppercase flex items-center gap-2"><Smartphone size={16}/> Opção 1: Notificação Push (Recomendado)</h4>
                         <button 
                             onClick={handleSendPushToWaitingList}
                             disabled={isSendingPush || notificationModalData.targetUserIds.length === 0}
@@ -1116,24 +1102,99 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         </button>
                     </div>
 
-                    <div className="border-t pt-4 space-y-3">
-                        <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2"><Mail size={16}/> Opção 2: Email Manual (Backup)</h4>
-                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded text-xs text-yellow-800 mb-2">Copie os dados abaixo e envie do seu email.</div>
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Emails (BCC)</label><div className="flex gap-2"><input readOnly value={notificationModalData.bcc} className="w-full p-2 bg-gray-50 border rounded text-xs" /><button onClick={() => handleCopyToClipboard(notificationModalData.bcc, 'emails')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs">{copySuccess === 'emails' ? 'Copiado!' : 'Copiar'}</button></div></div>
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assunto</label><div className="flex gap-2"><input readOnly value={notificationModalData.subject} className="w-full p-2 bg-gray-50 border rounded text-xs" /><button onClick={() => handleCopyToClipboard(notificationModalData.subject, 'subject')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs">{copySuccess === 'subject' ? 'Copiado!' : 'Copiar'}</button></div></div>
-                        <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mensagem</label><div className="flex gap-2 items-start"><textarea readOnly value={notificationModalData.body} className="w-full h-24 p-2 bg-gray-50 border rounded text-xs resize-none" /><button onClick={() => handleCopyToClipboard(notificationModalData.body, 'body')} className="bg-gray-200 hover:bg-gray-300 p-2 rounded text-gray-700 font-bold text-xs h-full">{copySuccess === 'body' ? 'Copiado!' : 'Copiar'}</button></div></div>
+                    <div className="border-t border-gray-100 dark:border-slate-800 pt-4 space-y-3">
+                        <h4 className="font-bold text-gray-800 dark:text-white text-sm uppercase flex items-center gap-2"><Mail size={16}/> Opção 2: Email Manual (Backup)</h4>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-3 rounded text-xs text-yellow-800 dark:text-yellow-300 mb-2 transition-colors">Copie os dados abaixo e envie do seu email.</div>
+                        <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Emails (BCC)</label><div className="flex gap-2"><input readOnly value={notificationModalData.bcc} className="w-full p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-xs text-gray-900 dark:text-white" /><button onClick={() => handleCopyToClipboard(notificationModalData.bcc, 'emails')} className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 p-2 rounded text-gray-700 dark:text-gray-300 font-bold text-xs transition-colors">{copySuccess === 'emails' ? 'Copiado!' : 'Copiar'}</button></div></div>
+                        <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Assunto</label><div className="flex gap-2"><input readOnly value={notificationModalData.subject} className="w-full p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-xs text-gray-900 dark:text-white" /><button onClick={() => handleCopyToClipboard(notificationModalData.subject, 'subject')} className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 p-2 rounded text-gray-700 dark:text-gray-300 font-bold text-xs transition-colors">{copySuccess === 'subject' ? 'Copiado!' : 'Copiar'}</button></div></div>
+                        <div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mensagem</label><div className="flex gap-2 items-start"><textarea readOnly value={notificationModalData.body} className="w-full h-24 p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-xs resize-none text-gray-900 dark:text-white" /><button onClick={() => handleCopyToClipboard(notificationModalData.body, 'body')} className="bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 p-2 rounded text-gray-700 dark:text-gray-300 font-bold text-xs h-full transition-colors">{copySuccess === 'body' ? 'Copiado!' : 'Copiar'}</button></div></div>
                     </div>
 
-                    <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                        <button onClick={() => setNotificationModalData(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                        <button onClick={handleClearSentAlerts} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2"><CheckCircle size={18} /> Limpar Lista de Espera</button>
+                    <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3">
+                        <button onClick={() => setNotificationModalData(null)} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancelar</button>
+                        <button onClick={handleClearSentAlerts} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2 transition-colors"><CheckCircle size={18} /> Limpar Lista de Espera</button>
                     </div>
                 </div>
             </div>
         </div>
       )}
       
-      {isCashbackManagerOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Wallet size={20} className="text-yellow-600"/> Gestor Financeiro de Cashback</h3><button onClick={() => setIsCashbackManagerOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 bg-gray-50"><div className="flex gap-2 mb-6"><button onClick={() => setCashbackManagerFilter('PENDING')} className={`px-4 py-2 rounded-lg font-bold text-sm ${cashbackManagerFilter === 'PENDING' ? 'bg-yellow-500 text-white shadow' : 'bg-white text-gray-600 border'}`}>A Receber</button><button onClick={() => setCashbackManagerFilter('ALL')} className={`px-4 py-2 rounded-lg font-bold text-sm ${cashbackManagerFilter === 'ALL' ? 'bg-gray-800 text-white shadow' : 'bg-white text-gray-600 border'}`}>Histórico Completo</button></div><div className="space-y-4">{(Object.entries(groupedCashback) as [string, { total: number, items: InventoryProduct[] }][]).map(([account, data]) => { const isExpanded = expandedCashbackAccounts.includes(account); return (<div key={account} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm"><div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleCashbackAccount(account)}><div className="flex items-center gap-4"><div className="bg-blue-50 p-2 rounded-full text-blue-600"><AtSign size={20} /></div><div><h4 className="font-bold text-gray-900">{account}</h4><p className="text-xs text-gray-500">{data.items[0]?.cashbackPlatform || 'Plataforma Desconhecida'} • {data.items.length} itens</p></div></div><div className="flex items-center gap-4"><span className="text-xl font-bold text-gray-900">{formatCurrency(data.total)}</span>{isExpanded ? <ChevronDown size={20} className="text-gray-400"/> : <ChevronRight size={20} className="text-gray-400"/>}</div></div>{isExpanded && (<div className="border-t border-gray-100 bg-gray-50 p-4"><table className="w-full text-left text-sm mb-4"><thead className="text-xs text-gray-500 uppercase bg-gray-100"><tr><th>Produto</th><th>Data Compra</th><th>Previsão</th><th>Valor</th><th>Estado</th></tr></thead><tbody className="divide-y divide-gray-200">{data.items.map(item => (<tr key={item.id}><td className="py-2 pr-2 font-medium">{item.name} <span className="text-xs text-gray-500 block">{item.variant}</span></td><td className="py-2 text-gray-500 text-xs">{new Date(item.purchaseDate).toLocaleDateString()}</td><td className="py-2 text-gray-500 text-xs font-bold">{item.cashbackExpectedDate ? new Date(item.cashbackExpectedDate).toLocaleDateString() : '-'}</td><td className="py-2 font-bold">{formatCurrency(item.cashbackValue)}</td><td className="py-2"><span className={`text-[10px] px-2 py-1 rounded font-bold ${item.cashbackStatus === 'RECEIVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.cashbackStatus === 'RECEIVED' ? 'Recebido' : 'Pendente'}</span></td></tr>))}</tbody></table>{cashbackManagerFilter === 'PENDING' && (<div className="flex justify-end"><button onClick={() => handleMarkBatchReceived(data.items)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-colors"><CheckCircle size={16}/> Marcar {formatCurrency(data.total)} como Recebido</button></div>)}</div>)}</div>); })}{Object.keys(groupedCashback).length === 0 && <div className="text-center py-12 text-gray-500">Nenhum registo de cashback encontrado.</div>}</div></div></div></div>)}
+      {isCashbackManagerOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col transition-colors">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-10 transition-colors">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2"><Wallet size={20} className="text-yellow-600 dark:text-yellow-400"/> Gestor Financeiro de Cashback</h3>
+                    <button onClick={() => setIsCashbackManagerOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><X size={24}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-slate-950 transition-colors">
+                    <div className="flex gap-2 mb-6">
+                        <button onClick={() => setCashbackManagerFilter('PENDING')} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${cashbackManagerFilter === 'PENDING' ? 'bg-yellow-500 text-white shadow' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700'}`}>A Receber</button>
+                        <button onClick={() => setCashbackManagerFilter('ALL')} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${cashbackManagerFilter === 'ALL' ? 'bg-gray-800 dark:bg-slate-700 text-white shadow' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700'}`}>Histórico Completo</button>
+                    </div>
+                    <div className="space-y-4">
+                        {(Object.entries(groupedCashback) as [string, { total: number, items: InventoryProduct[] }][]).map(([account, data]) => {
+                            const isExpanded = expandedCashbackAccounts.includes(account);
+                            return (
+                                <div key={account} className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm transition-colors">
+                                    <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors" onClick={() => toggleCashbackAccount(account)}>
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-full text-blue-600 dark:text-blue-400"><AtSign size={20} /></div>
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 dark:text-white">{account}</h4>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{data.items[0]?.cashbackPlatform || 'Plataforma Desconhecida'} • {data.items.length} itens</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(data.total)}</span>
+                                            {isExpanded ? <ChevronDown size={20} className="text-gray-400"/> : <ChevronRight size={20} className="text-gray-400"/>}
+                                        </div>
+                                    </div>
+                                    {isExpanded && (
+                                        <div className="border-t border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50 p-4 transition-colors">
+                                            <table className="w-full text-left text-sm mb-4">
+                                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-100 dark:bg-slate-800">
+                                                    <tr>
+                                                        <th className="p-2 rounded-l">Produto</th>
+                                                        <th className="p-2">Data Compra</th>
+                                                        <th className="p-2">Previsão</th>
+                                                        <th className="p-2">Valor</th>
+                                                        <th className="p-2 rounded-r">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                                                    {data.items.map(item => (
+                                                        <tr key={item.id} className="hover:bg-gray-100 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <td className="py-2 pr-2 font-medium text-gray-900 dark:text-white">{item.name} <span className="text-xs text-gray-500 dark:text-gray-400 block">{item.variant}</span></td>
+                                                            <td className="py-2 text-gray-500 dark:text-gray-400 text-xs">{new Date(item.purchaseDate).toLocaleDateString()}</td>
+                                                            <td className="py-2 text-gray-500 dark:text-gray-400 text-xs font-bold">{item.cashbackExpectedDate ? new Date(item.cashbackExpectedDate).toLocaleDateString() : '-'}</td>
+                                                            <td className="py-2 font-bold text-gray-900 dark:text-white">{formatCurrency(item.cashbackValue)}</td>
+                                                            <td className="py-2">
+                                                                <span className={`text-[10px] px-2 py-1 rounded font-bold ${item.cashbackStatus === 'RECEIVED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'}`}>
+                                                                    {item.cashbackStatus === 'RECEIVED' ? 'Recebido' : 'Pendente'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            {cashbackManagerFilter === 'PENDING' && (
+                                                <div className="flex justify-end">
+                                                    <button onClick={() => handleMarkBatchReceived(data.items)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-colors">
+                                                        <CheckCircle size={16}/> Marcar {formatCurrency(data.total)} como Recebido
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {Object.keys(groupedCashback).length === 0 && <div className="text-center py-12 text-gray-500 dark:text-gray-400">Nenhum registo de cashback encontrado.</div>}
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
       
       {selectedTicket && user && (
           <SupportTicketModal 
@@ -1146,134 +1207,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       <AnalyticsModal isOpen={isAnalyticsModalOpen} onClose={() => setIsAnalyticsModalOpen(false)} />
 
-      {selectedUserDetails && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10"><h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><UserIcon size={20} className="text-indigo-600"/> Detalhes do Cliente</h3><button onClick={() => setSelectedUserDetails(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-6 space-y-6"><div className="flex items-center gap-4"><div className="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center text-2xl font-bold">{selectedUserDetails.name.charAt(0)}</div><div><h4 className="font-bold text-xl">{selectedUserDetails.name}</h4><p className="text-sm text-gray-500">{selectedUserDetails.email}</p><p className="text-xs text-gray-400 mt-1">Push Tokens: {selectedUserDetails.deviceTokens?.length || (selectedUserDetails.fcmToken ? 1 : 0)}</p></div></div><div className="grid grid-cols-3 gap-4 text-center"><div><p className="text-xs text-gray-500 font-bold uppercase">Total Gasto</p><p className="font-bold text-sm mt-1">{formatCurrency(calculatedTotalSpent)}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">Nível</p><p className="font-bold text-sm mt-1">{selectedUserDetails.tier || 'Bronze'}</p></div><div><p className="text-xs text-gray-500 font-bold uppercase">AllPoints</p><p className="font-bold text-blue-600 text-sm mt-1">{selectedUserDetails.loyaltyPoints || 0}</p></div></div>
-      
-      {/* Histórico de Encomendas */}
-      <div className="pt-6 border-t border-gray-100">
-          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-blue-500"/> Histórico de Encomendas ({clientOrders.length})</h4>
-          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-60 overflow-y-auto">
-              <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-100 text-gray-500 font-semibold uppercase sticky top-0">
-                      <tr>
-                          <th className="p-3">Data</th>
-                          <th className="p-3">ID</th>
-                          <th className="p-3">Estado</th>
-                          <th className="p-3 text-right">Total</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                      {clientOrders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(order => (
-                          <tr key={order.id} className="hover:bg-white transition-colors">
-                              <td className="p-3">{new Date(order.date).toLocaleDateString()}</td>
-                              <td className="p-3 font-mono text-gray-500">#{order.id.slice(-6)}</td>
-                              <td className="p-3">
-                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                                      order.status === 'Entregue' ? 'bg-green-100 text-green-700' :
-                                      order.status === 'Cancelado' ? 'bg-red-100 text-red-700' :
-                                      'bg-yellow-100 text-yellow-700'
-                                  }`}>
-                                      {order.status}
-                                  </span>
-                              </td>
-                              <td className="p-3 text-right font-bold">{formatCurrency(order.total)}</td>
-                          </tr>
-                      ))}
-                      {clientOrders.length === 0 && (
-                          <tr><td colSpan={4} className="p-4 text-center text-gray-400 italic">Sem encomendas registadas.</td></tr>
-                      )}
-                  </tbody>
-              </table>
-          </div>
-      </div>
-
-      {/* Histórico de Pontos */}
-      <div className="pt-6 border-t border-gray-100">
-          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><TicketPercent size={16} className="text-purple-500"/> Histórico de Pontos</h4>
-          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-60 overflow-y-auto">
-              <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-100 text-gray-500 font-semibold uppercase sticky top-0">
-                      <tr>
-                          <th className="p-3">Data</th>
-                          <th className="p-3">Motivo</th>
-                          <th className="p-3 text-right">Valor</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                      {(selectedUserDetails.pointsHistory || []).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((history, idx) => (
-                          <tr key={history.id || idx} className="hover:bg-white transition-colors">
-                              <td className="p-3">{new Date(history.date).toLocaleDateString()}</td>
-                              <td className="p-3 text-gray-700">{history.reason}</td>
-                              <td className={`p-3 text-right font-bold ${history.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {history.amount > 0 ? '+' : ''}{history.amount}
-                              </td>
-                          </tr>
-                      ))}
-                       {(!selectedUserDetails.pointsHistory || selectedUserDetails.pointsHistory.length === 0) && (
-                          <tr><td colSpan={3} className="p-4 text-center text-gray-400 italic">Sem histórico de pontos.</td></tr>
-                      )}
-                  </tbody>
-              </table>
-          </div>
-      </div>
-
-      <div className="pt-6 border-t border-dashed">
-    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Combine size={16} className="text-orange-500"/> Ferramentas de Gestão</h4>
-    
-    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-4">
-        <p className="text-sm font-bold text-orange-900">1. Recalcular Dados de Lealdade</p>
-        <p className="text-xs text-orange-800 -mt-2">Use esta função para corrigir o "Total Gasto", nível e pontos, com base em todas as encomendas associadas a este cliente.</p>
-        <button onClick={handleRecalculateClientData} disabled={isRecalculatingClient} className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2">{isRecalculatingClient ? <Loader2 className="animate-spin" /> : <><RefreshCw size={14}/> Sincronizar Agora</>}</button>
-    </div>
-
-    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4 mt-4">
-        <p className="text-sm font-bold text-gray-800">2. Fundir Contas Duplicadas</p>
-        <div className="flex gap-2">
-            <input type="email" value={mergeSearchEmail} onChange={(e) => setMergeSearchEmail(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded text-sm" placeholder="Email da conta a fundir" />
-            <button onClick={handleSearchDuplicate} className="bg-gray-700 text-white px-4 rounded font-bold text-sm hover:bg-gray-800">Procurar</button>
-        </div>
-        {foundDuplicate && (
-            <div className="bg-white p-4 rounded border border-orange-300 animate-fade-in space-y-2">
-                <h5 className="font-bold text-sm">Conta duplicada encontrada:</h5>
-                <p className="text-xs"><strong>Nome:</strong> {foundDuplicate.name}</p>
-                <p className="text-xs"><strong>UID:</strong> {foundDuplicate.uid}</p>
-                <p className="text-xs"><strong>Pontos a transferir:</strong> {foundDuplicate.loyaltyPoints || 0}</p>
-                <p className="text-xs"><strong>Total gasto a somar:</strong> {formatCurrency(duplicateOrdersTotal || 0)}</p>
-                <p className="text-xs"><strong>Encomendas a reatribuir:</strong> {duplicateOrdersCount}</p>
-                <button onClick={handleConfirmMerge} disabled={isMerging} className="w-full mt-2 bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">{isMerging ? <Loader2 className="animate-spin" /> : <><AlertTriangle size={14}/> Confirmar Fusão</>}</button>
-            </div>
-        )}
-    </div>
-
-    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4 mt-4">
-        <p className="text-sm font-bold text-blue-900">3. Atribuição Manual de Pontos</p>
-        <p className="text-xs text-blue-800 -mt-2">Adicione ou remova pontos manualmente (ex: compensação por atraso).</p>
-        <div className="grid grid-cols-2 gap-2">
-            <input 
-                type="number" 
-                placeholder="Pontos (+/-)" 
-                value={manualPointAmount} 
-                onChange={e => setManualPointAmount(e.target.value)} 
-                className="p-2 border border-blue-300 rounded text-sm"
-            />
-            <input 
-                type="text" 
-                placeholder="Motivo (ex: Atraso)" 
-                value={manualPointReason} 
-                onChange={e => setManualPointReason(e.target.value)} 
-                className="p-2 border border-blue-300 rounded text-sm"
-            />
-        </div>
-        <button 
-            onClick={handleManualPointAdjustment} 
-            disabled={isAdjustingPoints || !manualPointAmount || !manualPointReason} 
-            className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-            {isAdjustingPoints ? <Loader2 className="animate-spin" size={14} /> : <><Coins size={14}/> Atualizar Pontos</>}
-        </button>
-    </div>
-</div></div></div></div>)}
+      {selectedUserDetails && (
+        <ClientDetailsModal 
+            user={selectedUserDetails}
+            orders={allOrders}
+            onClose={() => setSelectedUserDetails(null)}
+            onUpdateUser={(userId, data) => {
+                setAllUsers(prev => prev.map(u => u.uid === userId ? { ...u, ...data } : u));
+                setSelectedUserDetails(prev => prev ? { ...prev, ...data } : null);
+            }}
+        />
+      )}
     </div>
   );
 };
 
 export default Dashboard;
+
