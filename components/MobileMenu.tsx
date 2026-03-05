@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Search, User, LogIn, LogOut, Sun, Moon, ShoppingBag } from 'lucide-react';
 import { STORE_NAME, LOGO_URL } from '../constants';
-import { User as UserType } from '../types';
+import { User as UserType, Product } from '../types';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -14,12 +14,30 @@ interface MobileMenuProps {
   onResetHome: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
+  products: Product[];
 }
 
 const MobileMenu: React.FC<MobileMenuProps> = ({ 
     isOpen, onClose, user, onOpenLogin, onLogout, searchTerm, onSearchChange, onResetHome,
-    isDarkMode, onToggleTheme
+    isDarkMode, onToggleTheme, products
 }) => {
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [showResults, setShowResults] = useState(false);
+
+  useEffect(() => {
+    if (searchTerm.length >= 2 && products) {
+        const results = products.filter(product => 
+            (product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (product.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (product.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+        ).slice(0, 5);
+        setSearchResults(results);
+        setShowResults(true);
+    } else {
+        setSearchResults([]);
+        setShowResults(false);
+    }
+  }, [searchTerm, products]);
   
   const handleNav = (path: string) => {
     window.location.hash = path;
@@ -85,6 +103,37 @@ const MobileMenu: React.FC<MobileMenuProps> = ({
               className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary outline-none transition-all shadow-sm"
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            
+            {/* SMART SEARCH RESULTS */}
+            {showResults && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-fade-in">
+                    {searchResults.map(product => (
+                        <a 
+                            key={product.id} 
+                            href={`#product/${product.id}`} 
+                            onClick={() => { onClose(); }}
+                            className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700 last:border-0"
+                        >
+                            <img src={product.image} alt={product.name} className="w-10 h-10 object-contain bg-gray-50 dark:bg-gray-900 rounded-md p-1" />
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{product.name}</h4>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-primary font-bold">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.price)}</span>
+                                    {product.originalPrice && product.originalPrice > product.price && (
+                                        <span className="text-[10px] text-gray-400 line-through">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.originalPrice)}</span>
+                                    )}
+                                </div>
+                            </div>
+                        </a>
+                    ))}
+                    <button 
+                        onClick={() => { handleNav('/'); setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                        className="w-full p-3 text-center text-xs font-bold text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        Ver todos os resultados
+                    </button>
+                </div>
+            )}
           </div>
 
           <nav className="flex flex-col space-y-1">
