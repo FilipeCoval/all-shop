@@ -76,8 +76,8 @@ const Header: React.FC<HeaderProps> = ({
   const searchResults = React.useMemo(() => {
       if (!searchTerm || searchTerm.length < 2) return [];
       return products.filter(p => 
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          p.description.toLowerCase().includes(searchTerm.toLowerCase())
+          (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+          (p.description || '').toLowerCase().includes(searchTerm.toLowerCase())
       ).slice(0, 5);
   }, [searchTerm, products]);
 
