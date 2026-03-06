@@ -382,11 +382,11 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
             <nav className="bg-white dark:bg-[#0f172a] rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden flex flex-col">
                 {[
                     { id: 'overview', icon: LayoutDashboard, label: 'Visão Geral' },
+                    { id: 'profile', icon: UserIcon, label: 'Meu Perfil' },
                     { id: 'orders', icon: Package, label: 'Encomendas' },
-                    { id: 'support', icon: Headphones, label: 'Suporte' },
                     { id: 'points', icon: Coins, label: 'Loja de Pontos' },
                     { id: 'wishlist', icon: Heart, label: 'Favoritos' },
-                    { id: 'profile', icon: UserIcon, label: 'Meu Perfil' }
+                    { id: 'support', icon: Headphones, label: 'Suporte' }
                 ].map(item => (
                     <button 
                         key={item.id}
@@ -843,3 +843,4 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 };
 
 export default ClientArea;
+
