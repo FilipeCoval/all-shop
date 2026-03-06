@@ -574,11 +574,14 @@ const App: React.FC = () => {
 
   const handleCheckout = async (newOrder: Order): Promise<boolean> => {
       try {
+          // Limpar dados para evitar erros de 'undefined' no Firebase
+          const cleanOrder = JSON.parse(JSON.stringify(newOrder));
+          
           const batch = db.batch();
           
           // 1. Guardar a encomenda
-          const orderRef = db.collection("orders").doc(newOrder.id);
-          batch.set(orderRef, newOrder);
+          const orderRef = db.collection("orders").doc(cleanOrder.id);
+          batch.set(orderRef, cleanOrder);
 
           // 2. Limpar reservas do carrinho
           const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
@@ -812,4 +815,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
