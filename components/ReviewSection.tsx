@@ -124,7 +124,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
     const newReview: Review = {
       id: Date.now().toString(),
       productId,
-      userId: currentUser?.uid,
+      userId: currentUser?.uid || null,
       userName: userName || 'Cliente Anónimo',
       rating,
       comment,
@@ -153,7 +153,8 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, reviews = [], 
         }
     }
 
-    onAddReview(newReview);
+    const cleanReview = JSON.parse(JSON.stringify(newReview));
+    onAddReview(cleanReview);
     
     setTimeout(() => {
         // Reset Form
