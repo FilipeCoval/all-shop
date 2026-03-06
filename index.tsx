@@ -1,6 +1,7 @@
 
 import React, { Component, ReactNode, ErrorInfo } from 'react';
 import ReactDOM from 'react-dom/client';
+import './src/index.css';
 import App from './App';
 
 // --- ROUTER GUARD PARA URLS LIMPOS ---
