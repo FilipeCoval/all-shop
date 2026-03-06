@@ -274,7 +274,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     // Preparar dados finais 
-    const finalUserInfo = { ...userInfo, deliveryMethod };
+    const finalUserInfo: any = { ...userInfo, deliveryMethod };
+    
+    // Remover valores undefined que causam erro no Firebase
+    Object.keys(finalUserInfo).forEach(key => {
+        if (finalUserInfo[key] === undefined) {
+            delete finalUserInfo[key];
+        }
+    });
+
     if (deliveryMethod === 'Pickup') {
         finalUserInfo.street = "Levantamento na Loja (All-Shop)";
         finalUserInfo.city = "Leiria";
@@ -292,9 +300,14 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         shippingInfo: finalUserInfo,
         userId: user?.uid || null,
         storeShippingCost: 5.40, // Valor por defeito do custo de envio para a loja
-        discountValue: discountAmount > 0 ? discountAmount : undefined,
-        couponCode: appliedCoupon ? appliedCoupon.code : undefined
     };
+
+    if (discountAmount > 0) {
+        newOrder.discountValue = discountAmount;
+    }
+    if (appliedCoupon) {
+        newOrder.couponCode = appliedCoupon.code;
+    }
 
     let msg = `🛍️ Pedido ${currentOrderId}\n`;
     msg += `Método: ${deliveryMethod === 'Pickup' ? '🏪 Levantamento em Loja (Leiria)' : '🚚 Envio CTT'}\n`;
@@ -611,4 +624,3 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
-
