@@ -7,14 +7,27 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased transition-colors duration-300;
+    @apply bg-slate-50 text-gray-900 antialiased transition-colors duration-300;
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
   html.dark body {
     @apply bg-slate-950 text-white;
   }
 }
 
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+html.dark ::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
 @layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
   }
