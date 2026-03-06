@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { Order, InventoryProduct, OrderItem } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip } from 'recharts';
 import { Calendar, DollarSign, TrendingUp, TrendingDown, Truck, Package, Download } from 'lucide-react';
 
 interface ReportsTabProps {
@@ -208,11 +207,32 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" className="stroke-gray-200 dark:stroke-slate-700" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
                         <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} tickFormatter={(val) => `€${val}`} />
+                        <Tooltip 
+                            contentStyle={{ 
+                                backgroundColor: 'var(--tooltip-bg, #fff)', 
+                                borderColor: 'var(--tooltip-border, #e5e7eb)', 
+                                borderRadius: '8px', 
+                                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                                color: 'var(--tooltip-text, #111827)'
+                            }}
+                        />
                         <Legend />
                         <Bar dataKey="Vendas" fill="#4F46E5" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Lucro" fill="#10B981" radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
+                <style>{`
+                    :root {
+                        --tooltip-bg: #fff;
+                        --tooltip-border: #e5e7eb;
+                        --tooltip-text: #111827;
+                    }
+                    .dark {
+                        --tooltip-bg: #1e293b;
+                        --tooltip-border: #334155;
+                        --tooltip-text: #f3f4f6;
+                    }
+                `}</style>
             </div>
 
             {/* Tabela Detalhada */}
