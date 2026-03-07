@@ -38,6 +38,7 @@ interface InventoryTabProps {
   onOpenCashbackManager: () => void;
   onOpenOnlineDetails: () => void;
   onOpenStockAlerts: (product: InventoryProduct) => void;
+
   copyToClipboard: (text: string) => boolean;
   searchTerm: string;
   onSearchChange: (term: string) => void;
@@ -56,6 +57,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
   onAddNew,
   onOpenInvestedModal, onOpenRevenueModal, onOpenProfitModal, onOpenCashbackManager, onOpenOnlineDetails,
   onOpenStockAlerts,
+
   copyToClipboard,
   searchTerm, onSearchChange
 }) => {
@@ -287,7 +289,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                                 )}
                                                 
                                                 <button onClick={() => onEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
-                                                    <Edit2 size={14} /> Editar Loja
+                                                    <Edit2 size={14} /> Editar Lote
                                                 </button>
                                                 <button onClick={() => onCreateVariant(mainItem)} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
                                                     <Layers size={16} />
@@ -476,3 +478,4 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
 };
 
 export default InventoryTab;
+
