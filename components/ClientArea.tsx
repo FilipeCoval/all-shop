@@ -539,7 +539,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 <div className="hidden sm:flex items-center gap-2 -space-x-4">
                                     {getSafeItems(order.items).slice(0, 3).map((item, idx) => (
                                         <div key={idx} className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full border-2 border-white dark:border-slate-700 shadow flex items-center justify-center overflow-hidden">
-                                            <img src={typeof item === 'object' ? item.image : LOGO_URL} alt="" className="w-full h-full object-cover"/>
+                                            <img src={typeof item === 'object' ? (item.image || publicProducts.find(p => p.id === item.productId)?.image || LOGO_URL) : LOGO_URL} alt="" className="w-full h-full object-cover"/>
                                         </div>
                                     ))}
                                 </div>
@@ -645,7 +645,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                         <div className="space-y-3">
                                           {getSafeItems(order.items).map((item, idx) => (
                                             <div key={idx} className="flex items-start gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-                                                <img src={typeof item === 'object' ? item.image : LOGO_URL} className="w-16 h-16 object-cover rounded-md bg-gray-100 dark:bg-gray-700" />
+                                                <img src={typeof item === 'object' ? (item.image || publicProducts.find(p => p.id === item.productId)?.image || LOGO_URL) : LOGO_URL} className="w-16 h-16 object-cover rounded-md bg-gray-100 dark:bg-gray-700" />
                                                 <div className="flex-1">
                                                     <p className="font-bold text-sm text-gray-800 dark:text-white">{typeof item === 'object' ? item.name : item}</p>
                                                     {typeof item === 'object' && item.selectedVariant && <p className="text-xs text-gray-500 dark:text-gray-400">{item.selectedVariant}</p>}
