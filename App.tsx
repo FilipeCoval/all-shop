@@ -507,7 +507,7 @@ const App: React.FC = () => {
                 return item;
             });
           }
-          return [...prev, { ...product, price: finalPrice, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
+          return [...prev, { ...product, price: finalPrice, image: variant?.image || product.image, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
         });
         setIsCartOpen(true);
     } catch (err) {
