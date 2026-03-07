@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
   Plus, Search, Edit2, Trash2, X, Sparkles, Link as LinkIcon,
-  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer, Volume2, VolumeX, BellRing, Wand2
+  History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer, Volume2, VolumeX, BellRing, Wand2, Star
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket, ProductVariant } from '../types';
@@ -367,42 +367,132 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setEditingStoreProduct({ ...editingStoreProduct, variants: newVariants });
   };
 
-  const handleStoreProductImageUpload = async (file: File, variantIndex: number | null) => {
-      if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-          alert("A imagem é demasiado grande. Máximo 2MB.");
-          return;
+  // Helper para gravar produto da loja automaticamente
+  const saveStoreProductToDb = async (product: Product) => {
+      try {
+          // Remover campos undefined para evitar erro no Firestore
+          const cleanProduct = JSON.parse(JSON.stringify(product));
+          await db.collection('products_public').doc(product.id.toString()).set(cleanProduct);
+          setPublicProductsList(prev => prev.map(p => p.id === product.id ? product : p));
+      } catch (error) {
+          console.error("Erro ao gravar automaticamente:", error);
+          alert("Erro ao gravar alterações. Verifique a sua ligação.");
+      }
+  };
+
+  const handleStoreProductImageUpload = async (files: FileList | null, target: 'main' | 'gallery' | number) => {
+      if (!files || files.length === 0) return;
+      
+      // Validar tamanho (5MB)
+      for (let i = 0; i < files.length; i++) {
+          if (files[i].size > 5 * 1024 * 1024) {
+              alert(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
+              return;
+          }
       }
 
-      const storageRef = storage.ref();
-      const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
-      const uploadTask = fileRef.put(file);
-
       setUploadProgress(0);
+      const newImageUrls: string[] = [];
+      let completedUploads = 0;
 
-      uploadTask.on('state_changed', 
-          (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-          }, 
-          (error) => {
-              console.error("Upload error:", error);
-              alert("Erro ao carregar imagem.");
-              setUploadProgress(null);
-          }, 
-          async () => {
-              const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-              setUploadProgress(null);
-              
-              if (editingStoreProduct) {
-                  if (variantIndex !== null) {
-                      handleStoreProductVariantChange(variantIndex, 'image', downloadURL);
-                  } else {
-                      setEditingStoreProduct(prev => prev ? ({ ...prev, image: downloadURL }) : null);
+      Array.from(files).forEach(file => {
+          const storageRef = storage.ref();
+          const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
+          const uploadTask = fileRef.put(file);
+
+          uploadTask.on('state_changed', 
+              (snapshot) => {
+                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                  setUploadProgress(progress);
+              }, 
+              (error) => {
+                  console.error("Upload error:", error);
+                  alert("Erro ao carregar imagem.");
+              }, 
+              async () => {
+                  const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                  newImageUrls.push(downloadURL);
+                  completedUploads++;
+
+                  if (completedUploads === files.length) {
+                      setUploadProgress(null);
+                      
+                      setEditingStoreProduct(prev => {
+                          if (!prev) return null;
+                          
+                          const currentImages = prev.images || [];
+                          const uniqueNewImages = newImageUrls.filter(url => !currentImages.includes(url));
+                          const updatedImages = [...currentImages, ...uniqueNewImages];
+                          
+                          let updates: any = { images: updatedImages };
+
+                          if (target === 'main') {
+                              updates.image = newImageUrls[0];
+                          } else if (typeof target === 'number') {
+                              const newVariants = [...(prev.variants || [])];
+                              if (newVariants[target]) {
+                                  newVariants[target] = { ...newVariants[target], image: newImageUrls[0] };
+                                  updates.variants = newVariants;
+                              }
+                          } else if (target === 'gallery') {
+                              if (!prev.image && newImageUrls.length > 0) {
+                                  updates.image = newImageUrls[0];
+                              }
+                          }
+
+                          const updatedProduct = { ...prev, ...updates };
+                          saveStoreProductToDb(updatedProduct); // Auto-save
+                          return updatedProduct;
+                      });
                   }
               }
+          );
+      });
+  };
+
+  const handleSetMainImage = (url: string) => {
+      setEditingStoreProduct(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, image: url };
+          saveStoreProductToDb(updated); // Auto-save
+          return updated;
+      });
+  };
+
+  const handleSetVariantImage = (variantIndex: number, url: string) => {
+      setEditingStoreProduct(prev => {
+          if (!prev) return null;
+          const newVariants = [...(prev.variants || [])];
+          if (newVariants[variantIndex]) {
+              newVariants[variantIndex] = { ...newVariants[variantIndex], image: url };
           }
-      );
+          const updated = { ...prev, variants: newVariants };
+          saveStoreProductToDb(updated); // Auto-save
+          return updated;
+      });
+  };
+
+  const handleDeleteGalleryImage = (url: string) => {
+      if (!confirm("Tem a certeza que quer apagar esta imagem?")) return;
+      
+      setEditingStoreProduct(prev => {
+          if (!prev) return null;
+          const newImages = (prev.images || []).filter(img => img !== url);
+          
+          let newMainImage = prev.image;
+          if (prev.image === url) {
+              newMainImage = newImages.length > 0 ? newImages[0] : '';
+          }
+          
+          const newVariants = (prev.variants || []).map(v => ({
+              ...v,
+              image: v.image === url ? '' : v.image
+          }));
+          
+          const updated = { ...prev, images: newImages, image: newMainImage, variants: newVariants };
+          saveStoreProductToDb(updated); // Auto-save
+          return updated;
+      });
   };
 
   const handleSaveStoreProduct = async () => {
@@ -1200,6 +1290,96 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     </div>
                     
                     <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-slate-700 shadow-sm">
+                        
+                        {/* Galeria de Imagens */}
+                        <div className="mb-6 pb-6 border-b border-gray-100 dark:border-slate-700">
+                            <div className="flex justify-between items-center mb-3">
+                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase flex items-center gap-2"><ImageIcon size={14}/> Galeria de Imagens</label>
+                                <button 
+                                    type="button"
+                                    onClick={() => document.getElementById('gallery-upload')?.click()}
+                                    className="text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
+                                >
+                                    <Upload size={14}/> Adicionar Fotos
+                                </button>
+                                <input 
+                                    type="file" 
+                                    id="gallery-upload" 
+                                    multiple 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={(e) => handleStoreProductImageUpload(e.target.files, 'gallery')}
+                                />
+                            </div>
+                            
+                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 overflow-visible">
+                                {editingStoreProduct.images?.map((img, idx) => (
+                                    <div key={idx} className={`relative group aspect-square rounded-lg border overflow-visible bg-gray-50 dark:bg-slate-900 ${editingStoreProduct.image === img ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-200 dark:border-slate-700'}`}>
+                                        <img src={img} className="w-full h-full object-cover rounded-lg" />
+                                        
+                                        {/* Actions Overlay */}
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-1 rounded-lg">
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleSetMainImage(img)}
+                                                className={`p-1.5 rounded-full shadow-sm transition-transform hover:scale-110 ${editingStoreProduct.image === img ? 'bg-yellow-400 text-white' : 'bg-white/20 text-white hover:bg-yellow-400'}`}
+                                                title="Definir como Principal"
+                                            >
+                                                <Star size={14} fill={editingStoreProduct.image === img ? "currentColor" : "none"} />
+                                            </button>
+                                            
+                                            <div className="relative group/variant">
+                                                <button type="button" className="p-1.5 rounded-full bg-white/20 text-white hover:bg-blue-500 shadow-sm transition-transform hover:scale-110" title="Associar a Variante">
+                                                    <Layers size={14} />
+                                                </button>
+                                                {/* Dropdown on hover - Fixed positioning to ensure visibility */}
+                                                <div className="absolute left-full top-0 ml-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-2xl py-1 hidden group-hover/variant:block z-[100] max-h-64 overflow-y-auto text-xs border border-gray-200 dark:border-slate-700">
+                                                    <div className="px-3 py-2 font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 sticky top-0">Associar a:</div>
+                                                    {editingStoreProduct.variants?.map((v, vIdx) => (
+                                                        <button 
+                                                            key={vIdx}
+                                                            type="button"
+                                                            onClick={() => handleSetVariantImage(vIdx, img)}
+                                                            className="block w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-slate-700 truncate text-gray-700 dark:text-gray-200"
+                                                        >
+                                                            {v.name}
+                                                        </button>
+                                                    ))}
+                                                    {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
+                                                        <div className="px-3 py-2 text-gray-400 italic">Sem variantes</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleDeleteGalleryImage(img)}
+                                                className="p-1.5 rounded-full bg-white/20 text-white hover:bg-red-500 shadow-sm transition-transform hover:scale-110"
+                                                title="Apagar"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+
+                                        {/* Badges */}
+                                        {editingStoreProduct.image === img && (
+                                            <div className="absolute top-1 left-1 bg-blue-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm">CAPA</div>
+                                        )}
+                                    </div>
+                                ))}
+                                
+                                {/* Empty State / Add Button in Grid */}
+                                <button 
+                                    type="button"
+                                    onClick={() => document.getElementById('gallery-upload')?.click()}
+                                    className="aspect-square rounded-lg border-2 border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors bg-gray-50 dark:bg-slate-800/50 group"
+                                >
+                                    <Plus size={24} className="group-hover:scale-110 transition-transform" />
+                                    <span className="text-[10px] font-bold mt-1">Add</span>
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Layout Horizontal: Imagem Esquerda, Texto Direita */}
                         <div className="flex flex-col md:flex-row gap-6 mb-6">
                             {/* Imagem Principal - Mais Larga */}
@@ -1314,8 +1494,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                             className="hidden" 
                             accept="image/*" 
                             onChange={(e) => {
-                                if (e.target.files?.[0]) {
-                                    handleStoreProductImageUpload(e.target.files[0], activeStoreVariantIndex);
+                                if (e.target.files && e.target.files.length > 0) {
+                                    const target = activeStoreVariantIndex === null ? 'main' : activeStoreVariantIndex;
+                                    handleStoreProductImageUpload(e.target.files, target);
                                 }
                                 e.target.value = '';
                             }}
