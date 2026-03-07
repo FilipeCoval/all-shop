@@ -284,10 +284,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                 const itemPrice = isObject ? (item as OrderItem).price : 0;
                 const itemVariant = isObject && (item as OrderItem).selectedVariant ? `(${(item as OrderItem).selectedVariant})` : '';
                 const itemSerials = isObject && (item as OrderItem).serialNumbers;
+                const itemImage = isObject ? ((item as OrderItem).image || inventoryProducts.find(p => p.publicProductId === (item as OrderItem).productId)?.images?.[0] || LOGO_URL) : LOGO_URL;
                 
                 return (
                     <div key={idx} className="flex justify-between items-center text-sm p-3 bg-gray-50 dark:bg-slate-800 rounded-lg transition-colors">
                         <div className="flex items-center gap-3">
+                            <img src={itemImage} alt={itemName} className="w-10 h-10 object-cover rounded-md bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600" />
                             <span className="bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold text-xs w-6 h-6 flex items-center justify-center rounded-full">{itemQty}x</span>
                             <div>
                                 <p className="font-medium text-gray-800 dark:text-gray-200">{itemName} {itemVariant}</p>
