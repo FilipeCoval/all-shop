@@ -45,7 +45,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2. Recolher Tokens (Lógica Robusta Multi-Device & Segmentação)
         if (target === 'admins') {
-            console.log("Targeting admins (scan mode)...");
             // Caso Especial: Enviar para ADMINS
             // Lista de emails de admin (Sincronizada com firestore.rules)
             const ADMIN_EMAILS = [
@@ -57,20 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Buscar TODOS os utilizadores e filtrar em memória para evitar problemas de Case Sensitivity
             // Nota: Em produção com milhares de users, deve-se usar um campo 'normalizedEmail' ou 'isAdmin' na BD.
             const allUsersSnap = await db.collection('users').get();
-            console.log(`Scanning ${allUsersSnap.size} users for admins...`);
             
             allUsersSnap.forEach(doc => {
                 const userData = doc.data();
                 if (userData.email && ADMIN_EMAILS.includes(userData.email.trim().toLowerCase())) {
-                    console.log(`Found admin: ${userData.email}`);
                     if (userData.deviceTokens && Array.isArray(userData.deviceTokens)) {
-                        console.log(`Found ${userData.deviceTokens.length} device tokens.`);
                         tokens.push(...userData.deviceTokens);
                     } else if (userData.fcmToken) {
-                        console.log(`Found legacy fcmToken.`);
                         tokens.push(userData.fcmToken);
-                    } else {
-                        console.log("No tokens found for this admin.");
                     }
                 }
             });
@@ -147,8 +140,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const response = await admin.messaging().sendEachForMulticast(messagePayload);
 
-        // 4. Limpeza de Tokens Inválidos (Log)
+        // 4. Limpeza de Tokens Inválidos (Log detalhado)
+        const failedTokens: string[] = [];
         if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    failedTokens.push(tokens[idx]);
+                    console.error(`Falha no envio para token ${tokens[idx]}:`, resp.error);
+                }
+            });
             console.log(`Falha no envio para ${response.failureCount} tokens.`);
         }
 
@@ -156,7 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             success: true, 
             sentCount: response.successCount, 
             failureCount: response.failureCount,
-            totalTargets: tokens.length
+            totalTargets: tokens.length,
+            failedTokens: failedTokens // Retornar tokens que falharam
         });
 
     } catch (error: any) {
