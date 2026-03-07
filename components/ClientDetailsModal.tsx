@@ -183,6 +183,8 @@ const ClientDetailsModal: React.FC<ClientDetailsModalProps> = ({ user, orders, o
         }
     };
 
+    if (!user) return null;
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transition-colors">
@@ -192,10 +194,10 @@ const ClientDetailsModal: React.FC<ClientDetailsModalProps> = ({ user, orders, o
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white dark:bg-slate-900 transition-colors">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-primary dark:text-blue-400 rounded-full flex items-center justify-center text-2xl font-bold transition-colors">{user.name.charAt(0)}</div>
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-primary dark:text-blue-400 rounded-full flex items-center justify-center text-2xl font-bold transition-colors">{user.name?.charAt(0) || '?'}</div>
                         <div>
-                            <h4 className="font-bold text-xl text-gray-900 dark:text-white">{user.name}</h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                            <h4 className="font-bold text-xl text-gray-900 dark:text-white">{user.name || 'Cliente'}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{user.email || 'Sem email'}</p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Push Tokens: {user.deviceTokens?.length || (user.fcmToken ? 1 : 0)}</p>
                         </div>
                     </div>
