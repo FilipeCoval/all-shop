@@ -296,7 +296,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         total: finalTotal,
         status: 'Processamento',
         stockDeducted: false,
-        items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', addedAt: new Date().toISOString() })),
+        items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', image: i.image, addedAt: new Date().toISOString() })),
         shippingInfo: finalUserInfo,
         userId: user?.uid || null,
         storeShippingCost: 5.40, // Valor por defeito do custo de envio para a loja
@@ -624,3 +624,4 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
+
