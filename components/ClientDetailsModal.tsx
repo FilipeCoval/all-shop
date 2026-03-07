@@ -30,7 +30,7 @@ const ClientDetailsModal: React.FC<ClientDetailsModalProps> = ({ user, orders, o
     const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
 
     // Derived Data
-    const clientOrders = useMemo(() => orders.filter(o => o.userId === user.uid || o.shippingInfo.email === user.email), [orders, user]);
+    const clientOrders = useMemo(() => (orders || []).filter(o => o && (o.userId === user.uid || o.shippingInfo?.email === user.email)), [orders, user]);
     const calculatedTotalSpent = useMemo(() => clientOrders.filter(o => o.status !== 'Cancelado' && o.status !== 'Devolvido').reduce((acc, o) => acc + o.total, 0), [clientOrders]);
     const averageOrderValue = useMemo(() => clientOrders.length > 0 ? calculatedTotalSpent / clientOrders.length : 0, [calculatedTotalSpent, clientOrders]);
 
