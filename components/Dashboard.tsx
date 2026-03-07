@@ -290,7 +290,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       try {
           const response = await fetch('/api/send-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pushForm) });
           const data = await response.json();
-          if (response.ok && data.success) { setPushResult({ success: true, msg: `Sucesso! Enviado para ${data.sentCount} dispositivos. (${data.failureCount} falhas)` }); setPushForm({ title: '', body: '', target: 'all', image: '' }); } else { setPushResult({ success: false, msg: data.error || data.details || 'Erro desconhecido ao enviar.' }); }
+          if (response.ok && data.success) { 
+              let msg = `Sucesso! Enviado para ${data.sentCount} dispositivos.`;
+              if (data.failureCount > 0) msg += ` (${data.failureCount} falhas: ${data.failedTokens.join(', ')})`;
+              setPushResult({ success: true, msg }); 
+              setPushForm({ title: '', body: '', target: 'all', image: '' }); 
+          } else { 
+              setPushResult({ success: false, msg: data.error || data.details || 'Erro desconhecido ao enviar.' }); 
+          }
       } catch (err) { console.error(err); setPushResult({ success: false, msg: 'Erro de comunicação com o servidor.' }); } finally { setIsSendingPush(false); }
   };
 
@@ -300,7 +307,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       try {
           const response = await fetch('/api/send-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Produto Disponível! 📦', body: `${notificationModalData.productName} acabou de chegar ao stock! Compre antes que esgote.`, target: 'segment', userIds: notificationModalData.targetUserIds, link: `https://www.all-shop.net/#product/${notificationModalData.productId}` }) });
           const data = await response.json();
-          if(data.success) { alert(`Enviado para ${data.sentCount} utilizadores interessados!`); } else { alert("Erro ao enviar: " + (data.error || 'Desconhecido')); }
+          if(data.success) { 
+              let msg = `Enviado para ${data.sentCount} utilizadores interessados!`;
+              if (data.failureCount > 0) msg += ` (${data.failureCount} falhas).`;
+              alert(msg);
+          } else { alert("Erro ao enviar: " + (data.error || 'Desconhecido')); }
       } catch (e) { alert("Erro de comunicação."); } finally { setIsSendingPush(false); }
   };
 
