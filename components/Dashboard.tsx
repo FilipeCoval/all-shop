@@ -6,7 +6,7 @@ import {
   History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer, Volume2, VolumeX, BellRing, Wand2
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket } from '../types';
+import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket, ProductVariant } from '../types';
 import { extractSerialNumberFromImage, generateProductContent } from '../services/geminiService';
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
@@ -22,6 +22,7 @@ import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
 import OrderFulfillmentModal from './OrderFulfillmentModal';
 import ReportsTab from './ReportsTab';
+
 import SupportTicketModal from './SupportTicketModal';
 import AnalyticsModal from './AnalyticsModal';
 
@@ -45,7 +46,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products'>('inventory');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -188,6 +189,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       return groups;
   }, [products, cashbackManagerFilter]);
+
+
+  const [editingStoreProduct, setEditingStoreProduct] = useState<Product | null>(null);
+  const [activeStoreVariantIndex, setActiveStoreVariantIndex] = useState<number | null>(null);
+
+
 
   // EFFECTS
   useEffect(() => { if (activeTab === 'support' && isAdmin) { setIsTicketsLoading(true); const unsubscribe = db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot(snapshot => { setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket))); setIsTicketsLoading(false); }); return () => unsubscribe(); } }, [activeTab, isAdmin]);
@@ -332,6 +339,86 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setIsGeneratingContent(false);
   };
 
+  // Store Product Management Helpers
+  const handleStoreProductVariantChange = (index: number, field: keyof ProductVariant, value: any) => {
+      if (!editingStoreProduct) return;
+      const newVariants = [...(editingStoreProduct.variants || [])];
+      newVariants[index] = { ...newVariants[index], [field]: value };
+      setEditingStoreProduct({ ...editingStoreProduct, variants: newVariants });
+  };
+
+  const handleAddStoreProductVariant = () => {
+      if (!editingStoreProduct) return;
+      const newVariant: ProductVariant = {
+          name: 'Nova Opção',
+          price: editingStoreProduct.price,
+          image: ''
+      };
+      setEditingStoreProduct({ 
+          ...editingStoreProduct, 
+          variants: [...(editingStoreProduct.variants || []), newVariant] 
+      });
+  };
+
+  const handleRemoveStoreProductVariant = (index: number) => {
+      if (!editingStoreProduct) return;
+      const newVariants = [...(editingStoreProduct.variants || [])];
+      newVariants.splice(index, 1);
+      setEditingStoreProduct({ ...editingStoreProduct, variants: newVariants });
+  };
+
+  const handleStoreProductImageUpload = async (file: File, variantIndex: number | null) => {
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+          alert("A imagem é demasiado grande. Máximo 2MB.");
+          return;
+      }
+
+      const storageRef = storage.ref();
+      const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
+      const uploadTask = fileRef.put(file);
+
+      setUploadProgress(0);
+
+      uploadTask.on('state_changed', 
+          (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+          }, 
+          (error) => {
+              console.error("Upload error:", error);
+              alert("Erro ao carregar imagem.");
+              setUploadProgress(null);
+          }, 
+          async () => {
+              const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+              setUploadProgress(null);
+              
+              if (editingStoreProduct) {
+                  if (variantIndex !== null) {
+                      handleStoreProductVariantChange(variantIndex, 'image', downloadURL);
+                  } else {
+                      setEditingStoreProduct(prev => prev ? ({ ...prev, image: downloadURL }) : null);
+                  }
+              }
+          }
+      );
+  };
+
+  const handleSaveStoreProduct = async () => {
+      if (!editingStoreProduct) return;
+      // setIsLoading(true); // We don't have access to isLoading here easily, maybe create local loading state or use isUploading
+      // But we can just use alert for now.
+      try {
+          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(editingStoreProduct);
+          setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
+          alert('Produto da loja atualizado!');
+      } catch (error) {
+          console.error("Erro ao guardar produto:", error);
+          alert('Erro ao guardar as alterações.');
+      }
+  };
+
   const handleProductSubmit = async (e: React.FormEvent) => { 
       e.preventDefault(); 
       if (selectedPublicProductVariants.length > 0 && !formData.variant) return alert("Selecione a variante."); 
@@ -356,7 +443,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   // Generic Helpers
   const toggleBadge = (badge: string) => { setFormData(prev => { const badges = prev.badges || []; if (badges.includes(badge)) return { ...prev, badges: badges.filter(b => b !== badge) }; else return { ...prev, badges: [...badges, badge] }; }); };
-  const handleEdit = (product: InventoryProduct) => { setEditingId(product.id); setFormData({ name: product.name, description: product.description || '', category: product.category, publicProductId: product.publicProductId ? product.publicProductId.toString() : '', variant: product.variant || '', purchaseDate: product.purchaseDate, supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), salePrice: product.salePrice ? product.salePrice.toString() : '', targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', originalPrice: product.originalPrice ? product.originalPrice.toString() : '', promoEndsAt: product.promoEndsAt || '', cashbackValue: product.cashbackValue.toString(), cashbackStatus: product.cashbackStatus, cashbackPlatform: product.cashbackPlatform || '', cashbackAccount: product.cashbackAccount || '', cashbackExpectedDate: product.cashbackExpectedDate || '', badges: product.badges || [], images: product.images || [], newImageUrl: '', features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false, weight: product.weight ? product.weight.toString() : '', specs: product.specs || {}, newSpecKey: '', newSpecValue: '' }); setModalUnits(product.units || []); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
+  const handleEdit = (product: InventoryProduct) => { 
+    setEditingId(product.id); 
+    setFormData({ 
+        name: product.name, description: product.description || '', category: product.category, 
+        publicProductId: product.publicProductId ? product.publicProductId.toString() : '', 
+        variant: product.variant || '', purchaseDate: product.purchaseDate, 
+        supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '', 
+        quantityBought: product.quantityBought.toString(), purchasePrice: product.purchasePrice.toString(), 
+        salePrice: product.salePrice ? product.salePrice.toString() : '', 
+        targetSalePrice: product.targetSalePrice ? product.targetSalePrice.toString() : '', 
+        originalPrice: product.originalPrice ? product.originalPrice.toString() : '', 
+        promoEndsAt: product.promoEndsAt || '', cashbackValue: product.cashbackValue.toString(), 
+        cashbackStatus: product.cashbackStatus, cashbackPlatform: product.cashbackPlatform || '', 
+        cashbackAccount: product.cashbackAccount || '', cashbackExpectedDate: product.cashbackExpectedDate || '', 
+        badges: product.badges || [], images: product.images || [], newImageUrl: '', 
+        features: product.features || [], newFeature: '', comingSoon: product.comingSoon || false, 
+        weight: product.weight ? product.weight.toString() : '', specs: product.specs || {}, 
+        newSpecKey: '', newSpecValue: '' 
+    }); 
+    
+    if (product.publicProductId) {
+        const publicProd = publicProductsList.find(p => p.id === Number(product.publicProductId));
+        if (publicProd) setEditingStoreProduct(publicProd);
+        else setEditingStoreProduct(null);
+    } else {
+        setEditingStoreProduct(null);
+    }
+
+    setModalUnits(product.units || []); 
+    setGeneratedCodes([]); 
+    setIsPublicIdEditable(false); 
+    setIsModalOpen(true); 
+  };
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', originalPrice: '', promoEndsAt: '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false, weight: '', specs: {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', originalPrice: parentProduct.originalPrice ? parentProduct.originalPrice.toString() : '', promoEndsAt: parentProduct.promoEndsAt || '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '', specs: parentProduct.specs || {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
@@ -397,7 +516,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   };
   
   // Other small handlers (rest of file remains)
-  const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { const selectedId = e.target.value; setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); if (selectedId) { const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); if (publicProd) setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); } };
+  const handlePublicProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => { 
+    const selectedId = e.target.value; 
+    setFormData(prev => ({ ...prev, publicProductId: selectedId, variant: '' })); 
+    if (selectedId) { 
+        const publicProd = publicProductsList.find(p => p.id === Number(selectedId)); 
+        if (publicProd) {
+            setFormData(prev => ({ ...prev, publicProductId: selectedId, name: publicProd.name, category: publicProd.category })); 
+            setEditingStoreProduct(publicProd);
+        } else {
+            setEditingStoreProduct(null);
+        }
+    } else {
+        setEditingStoreProduct(null);
+    }
+  };
   const handleAddImage = () => { if (formData.newImageUrl && formData.newImageUrl.trim()) { setFormData(prev => ({ ...prev, images: [...prev.images, prev.newImageUrl.trim()], newImageUrl: '' })); } };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploading(true); setUploadProgress(0); const storageRef = storage.ref(`products/${Date.now()}_${file.name}`); const uploadTask = storageRef.put(file); uploadTask.on('state_changed', (snapshot) => { const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; setUploadProgress(progress); }, (error) => { console.error("Upload error:", error); alert("Erro ao fazer upload da imagem."); setIsUploading(false); setUploadProgress(null); }, async () => { const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); setIsUploading(false); setUploadProgress(null); if (fileInputRef.current) fileInputRef.current.value = ''; }); };
   const handleRemoveImage = (indexToRemove: number) => { setFormData(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== indexToRemove) })); };
@@ -652,6 +785,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             {/* TABS E RESTO DO HEADER MANTIDOS */}
             <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 dark:bg-slate-800 p-1 rounded-lg gap-1 md:gap-0 overflow-x-auto transition-colors">
                 <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Package size={16} /> Inventário</button>
+
                 <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><ShoppingCart size={16} /> Encomendas</button>
                 <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Users size={16} /> Clientes</button>
                 <button onClick={() => setActiveTab('support')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'support' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Headphones size={16} /> Suporte</button>
@@ -709,8 +843,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 copyToClipboard={copyToClipboard} 
                 searchTerm={inventorySearchTerm} 
                 onSearchChange={setInventorySearchTerm}
+
             />
         )}
+
+
         
         {activeTab === 'orders' && (
             <OrdersTab 
@@ -1011,7 +1148,140 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           />
       )}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
-      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30"><h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p></div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 dark:text-white uppercase mb-1 bg-yellow-100 dark:bg-yellow-900/40 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800 font-bold text-gray-900 dark:text-white" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}/><div className="text-[10px] text-gray-500 dark:text-gray-400 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 space-y-4"><div>
+      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30"><h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p>{formData.publicProductId && editingStoreProduct && (
+    <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
+        <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2">
+                <Globe size={16}/> Gestão Loja Online
+            </h4>
+            <button 
+                type="button" 
+                onClick={handleSaveStoreProduct}
+                className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
+            >
+                <Save size={12}/> Guardar Alterações na Loja
+            </button>
+        </div>
+        
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-blue-100 dark:border-slate-700 space-y-4 shadow-sm">
+            {/* Imagem Principal */}
+            <div className="flex gap-4 items-start">
+                <div className="relative group w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
+                    {editingStoreProduct.image ? (
+                        <img src={editingStoreProduct.image} className="w-full h-full object-contain p-1" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={24}/></div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                            type="button"
+                            onClick={() => { setActiveStoreVariantIndex(null); document.getElementById('store-product-file-input')?.click(); }}
+                            className="text-white p-2 hover:scale-110 transition-transform bg-black/50 rounded-full"
+                            title="Alterar Imagem Principal"
+                        >
+                            <Upload size={16} />
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                    <div>
+                        <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Produto (Loja)</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-sm font-bold text-gray-900 dark:text-white"
+                            value={editingStoreProduct.name}
+                            onChange={e => setEditingStoreProduct({...editingStoreProduct, name: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Descrição (Loja)</label>
+                        <textarea 
+                            rows={2}
+                            className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-xs text-gray-900 dark:text-white"
+                            value={editingStoreProduct.description}
+                            onChange={e => setEditingStoreProduct({...editingStoreProduct, description: e.target.value})}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Variantes */}
+            <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded border border-gray-100 dark:border-slate-700">
+                <div className="flex justify-between items-center mb-2">
+                    <h5 className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1"><Layers size={12}/> Variantes & Imagens</h5>
+                    <button 
+                        type="button" 
+                        onClick={handleAddStoreProductVariant}
+                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                    >
+                        + Adicionar Opção
+                    </button>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {editingStoreProduct.variants?.map((variant, idx) => (
+                        <div key={idx} className="flex gap-2 items-center bg-white dark:bg-slate-800 p-2 rounded border border-gray-200 dark:border-slate-600 shadow-sm">
+                            <div className="relative group w-10 h-10 bg-gray-50 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
+                                {variant.image ? (
+                                    <img src={variant.image} className="w-full h-full object-contain p-0.5" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={12}/></div>
+                                )}
+                                <button 
+                                    type="button"
+                                    onClick={() => { setActiveStoreVariantIndex(idx); document.getElementById('store-product-file-input')?.click(); }}
+                                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+                                >
+                                    <Upload size={10} />
+                                </button>
+                            </div>
+                            <div className="flex-1 grid grid-cols-2 gap-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="Nome (ex: Azul)"
+                                    className="w-full p-1.5 border border-gray-300 dark:border-slate-600 rounded text-xs bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
+                                    value={variant.name}
+                                    onChange={e => handleStoreProductVariantChange(idx, 'name', e.target.value)}
+                                />
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    placeholder="Preço"
+                                    className="w-full p-1.5 border border-gray-300 dark:border-slate-600 rounded text-xs bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
+                                    value={variant.price}
+                                    onChange={e => handleStoreProductVariantChange(idx, 'price', Number(e.target.value))}
+                                />
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => handleRemoveStoreProductVariant(idx)}
+                                className="text-gray-400 hover:text-red-500 p-1"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
+                        <p className="text-center text-xs text-gray-400 italic py-2">Sem variantes. O produto é único.</p>
+                    )}
+                </div>
+            </div>
+            
+            <input 
+                type="file" 
+                id="store-product-file-input"
+                className="hidden" 
+                accept="image/*" 
+                onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                        handleStoreProductImageUpload(e.target.files[0], activeStoreVariantIndex);
+                    }
+                    e.target.value = '';
+                }}
+            />
+        </div>
+    </div>
+)}</div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 dark:text-white uppercase mb-1 bg-yellow-100 dark:bg-yellow-900/40 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800 font-bold text-gray-900 dark:text-white" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}/><div className="text-[10px] text-gray-500 dark:text-gray-400 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> {!formData.publicProductId && (<div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 space-y-4"><div>
       
       <div className="flex justify-between items-center mb-1">
           <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4>
@@ -1045,7 +1315,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         <button type="button" onClick={handleAddSpec} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 rounded-lg font-bold transition-colors">+</button>
     </div>
 </div>
-</div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div> <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div> <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm flex items-center gap-2"><Wallet size={16}/> Detalhes do Cashback</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plataforma</label><input placeholder="Ex: Temu" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackPlatform} onChange={e => setFormData({...formData, cashbackPlatform: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conta Usada</label><input placeholder="email@exemplo.com" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackAccount} onChange={e => setFormData({...formData, cashbackAccount: e.target.value})} /></div></div><div className="mt-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Prevista (Opcional)</label><input type="date" className="w-full md:w-1/2 p-2 border border-yellow-200 rounded" value={formData.cashbackExpectedDate} onChange={e => setFormData({...formData, cashbackExpectedDate: e.target.value})} /></div></div> <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm"><div><h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4><p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p></div><button type="button" onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} /></button></div> <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6"><h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4><div className="flex flex-wrap gap-2">{['NOVIDADE', 'MAIS VENDIDO', 'PROMOÇÃO', 'ESSENCIAL'].map(badge => (<button key={badge} type="button" onClick={() => toggleBadge(badge)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${formData.badges.includes(badge) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{badge} {formData.badges.includes(badge) && <CheckCircle size={10} className="inline ml-1" />}</button>))}</div><p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p></div> <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div> <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div><div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div> <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4"><h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4><p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p><div className="flex gap-2"><input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button></div>{generatedCodes.length > 0 && (<div className="mt-4 pt-4 border-t border-gray-200"><div className="flex justify-between items-center mb-2"><h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5><button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button></div><div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">{generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}</div><button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button></div>)}</div> 
+</div>)} <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome do Lote</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label><select className="w-full p-3 border border-gray-300 rounded-lg" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}><option>TV Box</option><option>Cabos</option><option>Acessórios</option><option>Outros</option></select></div></div> <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200"><div className="md:col-span-2"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Globe size={16} /> Rastreabilidade do Fornecedor</h4><p className="text-[10px] text-gray-500 mb-3">Preencha para saber a origem deste produto em caso de garantia.</p></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Fornecedor (Ex: Temu)</label><input type="text" placeholder="Temu, AliExpress, Amazon..." className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierName} onChange={e => setFormData({...formData, supplierName: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Encomenda Origem</label><input type="text" placeholder="Ex: PO-2023-9999" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.supplierOrderId} onChange={e => setFormData({...formData, supplierOrderId: e.target.value})} /></div></div> <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Compra</label><input required type="date" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd. Comprada</label><input required type="number" min="1" className="w-full p-3 border border-gray-300 rounded-lg" value={formData.quantityBought} onChange={e => setFormData({...formData, quantityBought: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Compra (Unitário)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input required type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg" value={formData.purchasePrice} onChange={e => setFormData({...formData, purchasePrice: e.target.value})} /></div></div></div> <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100"><h4 className="font-bold text-yellow-800 mb-3 text-sm flex items-center gap-2"><Wallet size={16}/> Detalhes do Cashback</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Total</label><input type="number" step="0.01" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackValue} onChange={e => setFormData({...formData, cashbackValue: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label><select className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackStatus} onChange={e => setFormData({...formData, cashbackStatus: e.target.value as any})}><option value="NONE">Sem Cashback</option><option value="PENDING">Pendente</option><option value="RECEIVED">Recebido</option></select></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plataforma</label><input placeholder="Ex: Temu" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackPlatform} onChange={e => setFormData({...formData, cashbackPlatform: e.target.value})} /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conta Usada</label><input placeholder="email@exemplo.com" type="text" className="w-full p-2 border border-yellow-200 rounded" value={formData.cashbackAccount} onChange={e => setFormData({...formData, cashbackAccount: e.target.value})} /></div></div><div className="mt-2"><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Prevista (Opcional)</label><input type="date" className="w-full md:w-1/2 p-2 border border-yellow-200 rounded" value={formData.cashbackExpectedDate} onChange={e => setFormData({...formData, cashbackExpectedDate: e.target.value})} /></div></div> <div className="bg-white p-4 rounded-xl border border-purple-200 mb-6 flex items-center justify-between shadow-sm"><div><h4 className="font-bold text-purple-900 text-sm flex items-center gap-2"><CalendarClock size={16} /> Modo Pré-Lançamento (Em Breve)</h4><p className="text-[10px] text-gray-500 mt-1">Se ativo, o botão de compra muda para "Em Breve" e não permite encomendas, mesmo com stock.</p></div><button type="button" onClick={() => setFormData({...formData, comingSoon: !formData.comingSoon})} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.comingSoon ? 'bg-purple-600' : 'bg-gray-200'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${formData.comingSoon ? 'translate-x-6' : 'translate-x-1'}`} /></button></div> <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mb-6"><h4 className="font-bold text-purple-900 text-sm mb-3 flex items-center gap-2"><Tag size={16} /> Etiquetas de Marketing</h4><div className="flex flex-wrap gap-2">{['NOVIDADE', 'MAIS VENDIDO', 'PROMOÇÃO', 'ESSENCIAL'].map(badge => (<button key={badge} type="button" onClick={() => toggleBadge(badge)} className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${formData.badges.includes(badge) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'}`}>{badge} {formData.badges.includes(badge) && <CheckCircle size={10} className="inline ml-1" />}</button>))}</div><p className="text-[10px] text-purple-700 mt-2">Selecione as etiquetas para destacar este produto na loja online.</p></div> <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 mb-4"><label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Variante / Opção (Opcional)</label><input type="text" placeholder="Ex: Azul, XL, 64GB" className="w-full p-3 border border-indigo-200 rounded-lg text-indigo-900 font-bold" value={formData.variant} onChange={e => setFormData({...formData, variant: e.target.value})} /><p className="text-[10px] text-indigo-600 mt-1">Preencha apenas se este produto for uma opção específica (ex: Cor ou Tamanho).</p></div> <div className="bg-green-50/50 p-5 rounded-xl border border-green-100"><h3 className="text-sm font-bold text-green-900 uppercase mb-4 flex items-center gap-2"><QrCode size={16} /> Unidades Individuais / Nº de Série</h3><div className="flex gap-2 mb-4"><button type="button" onClick={() => { setScannerMode('add_unit'); setIsScannerOpen(true); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Camera size={16}/> Escanear Unidade</button></div><div className="flex gap-2 items-center text-xs text-gray-500 mb-4"><span className="font-bold">OU</span><input value={manualUnitCode} onChange={e => setManualUnitCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); } }} type="text" placeholder="Inserir código manualmente" className="flex-1 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={() => { if(manualUnitCode.trim()) handleAddUnit(manualUnitCode.trim()); setManualUnitCode(''); }} className="bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><Plus size={16} /></button></div><div><p className="text-xs font-bold text-gray-600 mb-2">{modalUnits.length} / {formData.quantityBought || 0} unidades registadas</p><div className="flex flex-wrap gap-2">{modalUnits.map(unit => <div key={unit.id} className="bg-white border border-gray-200 text-gray-700 text-xs font-mono px-2 py-1 rounded flex items-center gap-2"><span>{unit.id}</span><button type="button" onClick={() => handleRemoveUnit(unit.id)} className="text-red-400 hover:text-red-600"><X size={12} /></button></div>)}</div></div></div> <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-4"><h4 className="text-sm font-bold text-gray-800 mb-3">Gerador de Etiquetas Internas</h4><p className="text-[10px] text-gray-500 mb-3">Use para produtos sem código de barras. Os códigos gerados são adicionados automaticamente a este lote.</p><div className="flex gap-2"><input type="number" min="1" value={generateQty} onChange={(e) => setGenerateQty(Number(e.target.value))} className="w-20 p-2 border border-gray-300 rounded-lg" /><button type="button" onClick={handleGenerateCodes} className="flex-1 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-800 transition-colors">Gerar e Adicionar</button></div>{generatedCodes.length > 0 && (<div className="mt-4 pt-4 border-t border-gray-200"><div className="flex justify-between items-center mb-2"><h5 className="font-bold text-xs text-gray-600">{generatedCodes.length} Códigos na Fila de Impressão:</h5><button type="button" onClick={() => setGeneratedCodes([])} className="text-xs text-red-500 hover:underline">Limpar Fila</button></div><div className="max-h-24 overflow-y-auto bg-white p-2 rounded border border-gray-200 space-y-1">{generatedCodes.map(code => <p key={code} className="text-xs font-mono text-gray-800">{code}</p>)}</div><button type="button" onClick={handlePrintLabels} className="w-full mt-3 bg-indigo-500 text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-600"><Printer size={16}/> Imprimir Etiquetas</button></div>)}</div> 
       {/* SEÇÃO DE PROMOÇÕES (NOVA) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 border-gray-100">
           <div>
@@ -1206,6 +1476,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       )}
 
       <AnalyticsModal isOpen={isAnalyticsModalOpen} onClose={() => setIsAnalyticsModalOpen(false)} />
+
+
 
       {selectedUserDetails && (
         <ClientDetailsModal 
