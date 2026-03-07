@@ -1148,140 +1148,206 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           />
       )}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
-      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6"> <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30"><h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2"><LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Produto da Loja</label><select className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" value={formData.publicProductId} onChange={handlePublicProductSelect}><option value="">-- Nenhum (Apenas Backoffice) --</option>{publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p>{formData.publicProductId && editingStoreProduct && (
-    <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
-        <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2">
-                <Globe size={16}/> Gestão Loja Online
-            </h4>
-            <button 
-                type="button" 
-                onClick={handleSaveStoreProduct}
-                className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
-            >
-                <Save size={12}/> Guardar Alterações na Loja
-            </button>
-        </div>
-        
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-blue-100 dark:border-slate-700 space-y-4 shadow-sm">
-            {/* Imagem Principal */}
-            <div className="flex gap-4 items-start">
-                <div className="relative group w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
-                    {editingStoreProduct.image ? (
-                        <img src={editingStoreProduct.image} className="w-full h-full object-contain p-1" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={24}/></div>
-                    )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button 
-                            type="button"
-                            onClick={() => { setActiveStoreVariantIndex(null); document.getElementById('store-product-file-input')?.click(); }}
-                            className="text-white p-2 hover:scale-110 transition-transform bg-black/50 rounded-full"
-                            title="Alterar Imagem Principal"
-                        >
-                            <Upload size={16} />
-                        </button>
-                    </div>
-                </div>
-                <div className="flex-1 space-y-2">
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Produto (Loja)</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-sm font-bold text-gray-900 dark:text-white"
-                            value={editingStoreProduct.name}
-                            onChange={e => setEditingStoreProduct({...editingStoreProduct, name: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Descrição (Loja)</label>
-                        <textarea 
-                            rows={2}
-                            className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-xs text-gray-900 dark:text-white"
-                            value={editingStoreProduct.description}
-                            onChange={e => setEditingStoreProduct({...editingStoreProduct, description: e.target.value})}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Variantes */}
-            <div className="bg-gray-50 dark:bg-slate-900/50 p-3 rounded border border-gray-100 dark:border-slate-700">
-                <div className="flex justify-between items-center mb-2">
-                    <h5 className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1"><Layers size={12}/> Variantes & Imagens</h5>
-                    <button 
-                        type="button" 
-                        onClick={handleAddStoreProductVariant}
-                        className="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+      {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6">        <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30">
+            <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2">
+                <LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Produto da Loja</label>
+                    <select 
+                        className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        value={formData.publicProductId} 
+                        onChange={handlePublicProductSelect}
                     >
-                        + Adicionar Opção
-                    </button>
+                        <option value="">-- Nenhum (Apenas Backoffice) --</option>
+                        {publicProductsList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Ao selecionar, o nome e categoria são preenchidos automaticamente.</p>
                 </div>
                 
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {editingStoreProduct.variants?.map((variant, idx) => (
-                        <div key={idx} className="flex gap-2 items-center bg-white dark:bg-slate-800 p-2 rounded border border-gray-200 dark:border-slate-600 shadow-sm">
-                            <div className="relative group w-10 h-10 bg-gray-50 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
-                                {variant.image ? (
-                                    <img src={variant.image} className="w-full h-full object-contain p-0.5" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={12}/></div>
-                                )}
+                {selectedPublicProductVariants.length > 0 && (
+                    <div className="animate-fade-in-down">
+                        <label className="block text-xs font-bold text-gray-900 dark:text-white uppercase mb-1 bg-yellow-100 dark:bg-yellow-900/40 w-fit px-1 rounded">Passo 2: Escolha a Variante</label>
+                        <select 
+                            className="w-full p-3 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800 font-bold text-gray-900 dark:text-white"
+                            value={formData.variant} 
+                            onChange={(e) => setFormData({...formData, variant: e.target.value})}
+                            required
+                        >
+                            <option value="">-- Selecione uma Opção --</option>
+                            {selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}
+                        </select>
+                        <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p>
+                    </div>
+                )}
+            </div>
+
+            {formData.publicProductId && editingStoreProduct && (
+                <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2">
+                            <Globe size={16}/> Gestão Loja Online
+                        </h4>
+                        <button 
+                            type="button" 
+                            onClick={handleSaveStoreProduct}
+                            className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
+                        >
+                            <Save size={12}/> Guardar Alterações na Loja
+                        </button>
+                    </div>
+                    
+                    <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-slate-700 shadow-sm">
+                        {/* Layout Horizontal: Imagem Esquerda, Texto Direita */}
+                        <div className="flex flex-col md:flex-row gap-6 mb-6">
+                            {/* Imagem Principal - Mais Larga */}
+                            <div className="w-full md:w-1/3 max-w-[250px] shrink-0">
+                                <div className="relative group w-full aspect-video bg-gray-100 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                                    {editingStoreProduct.image ? (
+                                        <img src={editingStoreProduct.image} className="w-full h-full object-contain p-2" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={32}/></div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setActiveStoreVariantIndex(null); document.getElementById('store-product-file-input')?.click(); }}
+                                            className="text-white p-3 hover:scale-110 transition-transform bg-black/50 rounded-full"
+                                            title="Alterar Imagem Principal"
+                                        >
+                                            <Upload size={20} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Campos de Texto - Preenchem o resto */}
+                            <div className="flex-1 space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Produto (Loja)</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-lg font-bold text-gray-900 dark:text-white"
+                                        value={editingStoreProduct.name}
+                                        onChange={e => setEditingStoreProduct({...editingStoreProduct, name: e.target.value})}
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Descrição (Loja)</label>
+                                    <textarea 
+                                        rows={4}
+                                        className="w-full h-full min-h-[100px] p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-sm text-gray-900 dark:text-white resize-none"
+                                        value={editingStoreProduct.description}
+                                        onChange={e => setEditingStoreProduct({...editingStoreProduct, description: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Variantes - Abaixo, largura total */}
+                        <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-lg border border-gray-100 dark:border-slate-700">
+                            <div className="flex justify-between items-center mb-3">
+                                <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2"><Layers size={16}/> Variantes & Imagens</h5>
                                 <button 
-                                    type="button"
-                                    onClick={() => { setActiveStoreVariantIndex(idx); document.getElementById('store-product-file-input')?.click(); }}
-                                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+                                    type="button" 
+                                    onClick={handleAddStoreProductVariant}
+                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
                                 >
-                                    <Upload size={10} />
+                                    + Adicionar Opção
                                 </button>
                             </div>
-                            <div className="flex-1 grid grid-cols-2 gap-2">
-                                <input 
-                                    type="text" 
-                                    placeholder="Nome (ex: Azul)"
-                                    className="w-full p-1.5 border border-gray-300 dark:border-slate-600 rounded text-xs bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
-                                    value={variant.name}
-                                    onChange={e => handleStoreProductVariantChange(idx, 'name', e.target.value)}
-                                />
-                                <input 
-                                    type="number" 
-                                    step="0.01"
-                                    placeholder="Preço"
-                                    className="w-full p-1.5 border border-gray-300 dark:border-slate-600 rounded text-xs bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
-                                    value={variant.price}
-                                    onChange={e => handleStoreProductVariantChange(idx, 'price', Number(e.target.value))}
-                                />
+                            
+                            <div className="space-y-2">
+                                {editingStoreProduct.variants?.map((variant, idx) => (
+                                    <div key={idx} className="flex gap-3 items-center bg-white dark:bg-slate-800 p-2 rounded border border-gray-200 dark:border-slate-600 shadow-sm">
+                                        <div className="relative group w-12 h-12 bg-gray-50 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
+                                            {variant.image ? (
+                                                <img src={variant.image} className="w-full h-full object-contain p-0.5" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={14}/></div>
+                                            )}
+                                            <button 
+                                                type="button"
+                                                onClick={() => { setActiveStoreVariantIndex(idx); document.getElementById('store-product-file-input')?.click(); }}
+                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+                                            >
+                                                <Upload size={12} />
+                                            </button>
+                                        </div>
+                                        <div className="flex-1 grid grid-cols-2 gap-3">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Nome (ex: Azul)"
+                                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-sm bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
+                                                value={variant.name}
+                                                onChange={e => handleStoreProductVariantChange(idx, 'name', e.target.value)}
+                                            />
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                placeholder="Preço"
+                                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-sm bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
+                                                value={variant.price}
+                                                onChange={e => handleStoreProductVariantChange(idx, 'price', Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleRemoveStoreProductVariant(idx)}
+                                            className="text-gray-400 hover:text-red-500 p-2"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
+                                    <p className="text-center text-xs text-gray-400 italic py-2">Sem variantes. O produto é único.</p>
+                                )}
                             </div>
-                            <button 
-                                type="button" 
-                                onClick={() => handleRemoveStoreProductVariant(idx)}
-                                className="text-gray-400 hover:text-red-500 p-1"
-                            >
-                                <Trash2 size={14} />
-                            </button>
                         </div>
-                    ))}
-                    {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
-                        <p className="text-center text-xs text-gray-400 italic py-2">Sem variantes. O produto é único.</p>
-                    )}
+                        
+                        <input 
+                            type="file" 
+                            id="store-product-file-input"
+                            className="hidden" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                    handleStoreProductImageUpload(e.target.files[0], activeStoreVariantIndex);
+                                }
+                                e.target.value = '';
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2">
+                        <LinkIcon size={12}/> Ligação Manual (Avançado)
+                    </label>
+                    <button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                        {isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}
+                    </button>
+                </div>
+                <div className="flex gap-2 items-center">
+                    <input 
+                        type="text" 
+                        value={formData.publicProductId} 
+                        onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} 
+                        disabled={!isPublicIdEditable}
+                        placeholder="ID numérico do produto público"
+                        className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}
+                    />
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 w-full">
+                        Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.
+                    </div>
                 </div>
             </div>
-            
-            <input 
-                type="file" 
-                id="store-product-file-input"
-                className="hidden" 
-                accept="image/*" 
-                onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                        handleStoreProductImageUpload(e.target.files[0], activeStoreVariantIndex);
-                    }
-                    e.target.value = '';
-                }}
-            />
-        </div>
-    </div>
-)}</div>{selectedPublicProductVariants.length > 0 && <div className="animate-fade-in-down"><label className="block text-xs font-bold text-gray-900 dark:text-white uppercase mb-1 bg-yellow-100 dark:bg-yellow-900/40 w-fit px-1 rounded">Passo 2: Escolha a Variante</label><select className="w-full p-3 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800 font-bold text-gray-900 dark:text-white" value={formData.variant} onChange={(e) => setFormData({...formData, variant: e.target.value})} required><option value="">-- Selecione uma Opção --</option>{selectedPublicProductVariants.map((v, idx) => <option key={idx} value={v.name}>{v.name}</option>)}</select><p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 font-medium">⚠ Obrigatório: Este produto tem várias opções.</p></div>}</div><div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30"><div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase flex items-center gap-2"><LinkIcon size={12}/> Ligação Manual (Avançado)</label><button type="button" onClick={() => setIsPublicIdEditable(!isPublicIdEditable)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">{isPublicIdEditable ? <Unlock size={10}/> : <Lock size={10}/>} {isPublicIdEditable ? 'Bloquear' : 'Editar ID'}</button></div><div className="flex gap-2 items-center"><input type="text" value={formData.publicProductId} onChange={(e) => setFormData({...formData, publicProductId: e.target.value})} disabled={!isPublicIdEditable} placeholder="ID numérico do produto público" className={`w-full p-2 border rounded-lg text-sm font-mono ${isPublicIdEditable ? 'bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-700 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}/><div className="text-[10px] text-gray-500 dark:text-gray-400 w-full">Para agrupar variantes (ex: cores), use o mesmo ID Público em todos.</div></div></div></div> {!formData.publicProductId && (<div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 space-y-4"><div>
+        </div> {!formData.publicProductId && (<div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 space-y-4"><div>
       
       <div className="flex justify-between items-center mb-1">
           <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><AlignLeft size={16} /> Descrição Completa</h4>
@@ -1495,4 +1561,3 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
-
