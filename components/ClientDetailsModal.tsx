@@ -213,7 +213,9 @@ const ClientDetailsModal: React.FC<ClientDetailsModalProps> = ({ user, orders, o
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 {favoriteProducts.map((prod, idx) => (
                                     <div key={idx} className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg border border-gray-200 dark:border-slate-700 flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center font-bold text-xs text-gray-500 border border-gray-200 dark:border-slate-600">#{idx + 1}</div>
+                                        <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-md flex items-center justify-center font-bold text-xs text-gray-500 border border-gray-200 dark:border-slate-600 overflow-hidden shrink-0">
+                                            {prod.image ? <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" /> : `#${idx + 1}`}
+                                        </div>
                                         <div className="overflow-hidden">
                                             <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{prod.name}</p>
                                             <p className="text-[10px] text-gray-500 dark:text-gray-400">{prod.count} unidades compradas</p>
