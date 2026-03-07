@@ -32,11 +32,23 @@ export const notifyNewOrder = async (order: Order, customerName: string, targetC
 
 
     // Layout Estilo Fatura
+    const shipping = order.shippingInfo;
+    const addressLine = `${shipping.street}, ${shipping.doorNumber}${shipping.addressExtra ? ` (${shipping.addressExtra})` : ''}`;
+    const zipCity = `${shipping.zip} ${shipping.city}`;
+
     const message = `
 ⚡️ *NOVA VENDA CONFIRMADA* ⚡️
 
 👤 *Cliente:* ${customerName}
+📞 *Tel:* ${shipping.phone}
 🆔 *Ref:* ${order.id}
+
+🏠 *Dados de Entrega:*
+${addressLine}
+${zipCity}
+
+🚚 *Método:* ${shipping.deliveryMethod === 'Pickup' ? 'Levantamento em Loja' : 'Envio'}
+💳 *Pagamento:* ${shipping.paymentMethod}
 
 🛒 *Itens:*
 ${itemsList}
@@ -82,4 +94,5 @@ ${itemsList}
         throw error;
     }
 };
+
 
