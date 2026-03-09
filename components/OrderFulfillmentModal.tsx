@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, CheckCircle, AlertTriangle, Package, ScanLine, Loader2, Lock, Camera, MousePointerClick } from 'lucide-react';
-import { Order, InventoryProduct, OrderItem, StockMovement, ProductStatus, SaleRecord, User, PointHistory } from '../types';
+import { X, CheckCircle, AlertTriangle, Package, ScanLine, Loader2, Lock, Camera, MousePointerClick, Box } from 'lucide-react';
+import { Order, InventoryProduct, OrderItem, StockMovement, ProductStatus, SaleRecord, User, PointHistory, OrderPackage } from '../types';
 import { db, auth, firebase } from '../services/firebaseConfig';
 import BarcodeScanner from './BarcodeScanner';
 import { LOYALTY_TIERS } from '../constants';
@@ -17,6 +17,7 @@ interface ScannedItem {
     serialNumber: string;
     inventoryProductId: string; // ID do documento no Firestore (lote)
     productName: string;
+    packageId?: string; // ID do pacote, se aplicável
 }
 
 const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, inventoryProducts, onClose, onSuccess }) => {
@@ -26,26 +27,56 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
     const [error, setError] = useState<string | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [showManualSelection, setShowManualSelection] = useState<string | null>(null); // ID do item da encomenda para seleção manual
+    
+    const hasPackages = order.packages && order.packages.length > 0;
+    const [activePackageId, setActivePackageId] = useState<string | null>(hasPackages ? order.packages![0].id : null);
 
     // Normalizar itens da encomenda para facilitar o processamento
     const orderItems = useMemo(() => {
+        if (hasPackages && activePackageId) {
+            const pkg = order.packages!.find(p => p.id === activePackageId);
+            if (!pkg) return [];
+            return pkg.items.map(i => ({
+                ...i,
+                uniqueId: i.selectedVariant ? `${i.productId}-${i.selectedVariant}` : `${i.productId}`,
+                needed: i.quantity,
+                name: inventoryProducts.find(p => p.publicProductId === i.productId)?.name || `Produto ${i.productId}`
+            }));
+        }
+
         return (order.items || []).map(item => {
             if (typeof item === 'string') return null; // Ignorar legacy string items se existirem
             const i = item as OrderItem;
             return {
                 ...i,
                 uniqueId: i.selectedVariant ? `${i.productId}-${i.selectedVariant}` : `${i.productId}`,
-                needed: i.quantity
+                needed: i.quantity,
+                name: i.name
             };
-        }).filter(Boolean) as (OrderItem & { uniqueId: string, needed: number })[];
-    }, [order.items]);
+        }).filter(Boolean) as (OrderItem & { uniqueId: string, needed: number, name: string })[];
+    }, [order.items, order.packages, activePackageId, hasPackages, inventoryProducts]);
 
-    // Calcular progresso
+    // Calcular progresso global (todas as caixas ou encomenda inteira)
     const progress = useMemo(() => {
-        const totalNeeded = orderItems.reduce((acc, item) => acc + item.needed, 0);
+        let totalNeeded = 0;
+        if (hasPackages) {
+            order.packages!.forEach(pkg => {
+                pkg.items.forEach(item => totalNeeded += item.quantity);
+            });
+        } else {
+            totalNeeded = orderItems.reduce((acc, item) => acc + item.needed, 0);
+        }
         const totalScanned = scannedItems.length;
         return { totalNeeded, totalScanned, isComplete: totalNeeded === totalScanned && totalNeeded > 0 };
-    }, [orderItems, scannedItems]);
+    }, [orderItems, scannedItems, hasPackages, order.packages]);
+
+    // Calcular progresso da caixa atual
+    const currentPackageProgress = useMemo(() => {
+        if (!hasPackages || !activePackageId) return null;
+        const totalNeeded = orderItems.reduce((acc, item) => acc + item.needed, 0);
+        const totalScanned = scannedItems.filter(s => s.packageId === activePackageId).length;
+        return { totalNeeded, totalScanned, isComplete: totalNeeded === totalScanned && totalNeeded > 0 };
+    }, [orderItems, scannedItems, hasPackages, activePackageId]);
 
     const processCode = (code: string) => {
         if (!code) return;
@@ -83,7 +114,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
              return;
         }
 
-        // 4. Verificar se corresponde a algum item da encomenda que ainda precisa de unidades
+        // 4. Verificar se corresponde a algum item da encomenda que ainda precisa de unidades (no pacote atual se aplicável)
         const targetItem = orderItems.find(item => {
             const isProductMatch = item.productId === foundBatch?.publicProductId;
             
@@ -92,14 +123,17 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
             
             const isVariantMatch = orderVariant === '' || orderVariant === batchVariant;
 
-            const scannedForThisItem = scannedItems.filter(s => s.orderItemId === item.uniqueId).length;
+            const scannedForThisItem = scannedItems.filter(s => 
+                s.orderItemId === item.uniqueId && 
+                (!hasPackages || s.packageId === activePackageId)
+            ).length;
             const needsMore = scannedForThisItem < item.needed;
 
             return isProductMatch && isVariantMatch && needsMore;
         });
 
         if (!targetItem) {
-            setError(`O serial ${code} (${foundBatch.name}) não corresponde a nenhum item pendente nesta encomenda.`);
+            setError(`O serial ${code} (${foundBatch.name}) não corresponde a nenhum item pendente ${hasPackages ? 'neste volume' : 'nesta encomenda'}.`);
             return;
         }
 
@@ -108,7 +142,8 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
             orderItemId: targetItem.uniqueId,
             serialNumber: code,
             inventoryProductId: foundBatch!.id,
-            productName: foundBatch!.name
+            productName: foundBatch!.name,
+            packageId: activePackageId || undefined
         }]);
         setCurrentInput('');
         setIsScannerOpen(false);
@@ -148,7 +183,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
         return availableUnits;
     };
 
-    const [trackingNumber, setTrackingNumber] = useState('');
+    const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '');
     
     const isPickup = order.status === 'Levantamento em Loja';
 
@@ -250,7 +285,6 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                         quantitySold: update.newSold,
                         status: update.newStatus,
                         units: update.updatedUnits
-                        // REMOVIDO: salesHistory update (evita duplicação de registos de venda)
                     });
                 }
 
@@ -298,11 +332,29 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     }
                 }
 
-                // D. Atualizar Encomenda
+                // D. Atualizar Encomenda e associar seriais aos pacotes se existirem
                 const newStatus = isPickup ? 'Entregue' : 'Enviado';
                 const notes = isPickup 
                     ? `Levantado em loja. Processado por ${adminEmail} com validação de serial.`
                     : `Expedido por ${adminEmail} com validação de serial.${trackingNumber ? ` Rastreio: ${trackingNumber}` : ''}`;
+
+                let updatedPackages = currentOrder.packages;
+                if (hasPackages && updatedPackages) {
+                    updatedPackages = updatedPackages.map(pkg => {
+                        const pkgItems = pkg.items.map(item => {
+                            const uniqueId = item.selectedVariant ? `${item.productId}-${item.selectedVariant}` : `${item.productId}`;
+                            const serialsForThisItemInPkg = scannedItems
+                                .filter(s => s.packageId === pkg.id && s.orderItemId === uniqueId)
+                                .map(s => s.serialNumber);
+                            
+                            return {
+                                ...item,
+                                serialNumbers: serialsForThisItemInPkg
+                            };
+                        });
+                        return { ...pkg, items: pkgItems };
+                    });
+                }
 
                 transaction.update(orderRef, {
                     status: newStatus,
@@ -313,6 +365,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     stockDeducted: true,
                     trackingNumber: isPickup ? null : (trackingNumber || null),
                     pointsAwarded: pointsWereAwarded,
+                    packages: updatedPackages || firebase.firestore.FieldValue.delete(),
                     statusHistory: firebase.firestore.FieldValue.arrayUnion({
                         status: newStatus,
                         date: timestamp,
@@ -362,22 +415,60 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     
+                    {/* Packages Tabs */}
+                    {hasPackages && (
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {order.packages!.map((pkg, idx) => {
+                                const pkgProgress = scannedItems.filter(s => s.packageId === pkg.id).length;
+                                const pkgTotal = pkg.items.reduce((acc, item) => acc + item.quantity, 0);
+                                const isPkgComplete = pkgProgress === pkgTotal && pkgTotal > 0;
+                                
+                                return (
+                                    <button
+                                        key={pkg.id}
+                                        onClick={() => setActivePackageId(pkg.id)}
+                                        className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap flex items-center gap-2 transition-colors ${
+                                            activePackageId === pkg.id 
+                                                ? 'bg-indigo-600 text-white shadow-md' 
+                                                : isPkgComplete
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                                                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        <Box size={16} /> Volume {idx + 1}
+                                        {isPkgComplete && <CheckCircle size={14} className={activePackageId === pkg.id ? 'text-white' : 'text-green-600 dark:text-green-400'} />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     {/* Progress Bar */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800 transition-colors">
                         <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase">{isPickup ? 'Progresso da Validação' : 'Progresso da Expedição'}</span>
-                            <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">{progress.totalScanned} / {progress.totalNeeded}</span>
+                            <span className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase">
+                                {hasPackages ? `Progresso do Volume ${order.packages!.findIndex(p => p.id === activePackageId) + 1}` : (isPickup ? 'Progresso da Validação' : 'Progresso da Expedição')}
+                            </span>
+                            <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                                {hasPackages ? currentPackageProgress?.totalScanned : progress.totalScanned} / {hasPackages ? currentPackageProgress?.totalNeeded : progress.totalNeeded}
+                            </span>
                         </div>
                         <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2.5">
                             <div 
                                 className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-500" 
-                                style={{ width: `${(progress.totalScanned / progress.totalNeeded) * 100}%` }}
+                                style={{ width: `${((hasPackages ? currentPackageProgress?.totalScanned || 0 : progress.totalScanned) / (hasPackages ? currentPackageProgress?.totalNeeded || 1 : progress.totalNeeded)) * 100}%` }}
                             ></div>
                         </div>
+                        {hasPackages && (
+                            <div className="mt-2 text-xs font-medium text-blue-800 dark:text-blue-400 flex justify-between">
+                                <span>Progresso Global: {progress.totalScanned} / {progress.totalNeeded}</span>
+                                {progress.isComplete && <span className="text-green-600 dark:text-green-400 flex items-center gap-1"><CheckCircle size={12}/> Todos os volumes completos</span>}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Tracking Number Input - Only show if NOT pickup */}
-                    {!isPickup && (
+                    {/* Tracking Number Input - Only show if NOT pickup and NO packages (packages have their own tracking) */}
+                    {!isPickup && !hasPackages && (
                         <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Número de Rastreio (Opcional)</label>
                             <input 
@@ -423,9 +514,14 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
                     {/* Items List */}
                     <div className="space-y-4">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-200 text-sm uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">Itens da Encomenda</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-gray-200 text-sm uppercase tracking-wider border-b border-gray-200 dark:border-slate-700 pb-2">
+                            {hasPackages ? `Itens do Volume ${order.packages!.findIndex(p => p.id === activePackageId) + 1}` : 'Itens da Encomenda'}
+                        </h3>
                         {orderItems.map((item) => {
-                            const scannedCount = scannedItems.filter(s => s.orderItemId === item.uniqueId).length;
+                            const scannedCount = scannedItems.filter(s => 
+                                s.orderItemId === item.uniqueId && 
+                                (!hasPackages || s.packageId === activePackageId)
+                            ).length;
                             const isComplete = scannedCount >= item.needed;
                             const availableUnits = getAvailableUnitsForOrderItem(item.uniqueId);
 
@@ -477,7 +573,10 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                                     
                                     {/* Scanned Serials for this item */}
                                     <div className="mt-3 flex flex-wrap gap-2">
-                                        {scannedItems.filter(s => s.orderItemId === item.uniqueId).map((scan, idx) => (
+                                        {scannedItems.filter(s => 
+                                            s.orderItemId === item.uniqueId && 
+                                            (!hasPackages || s.packageId === activePackageId)
+                                        ).map((scan, idx) => (
                                             <span key={idx} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 text-xs font-mono px-2 py-1 rounded shadow-sm flex items-center gap-1 transition-colors">
                                                 <CheckCircle size={10} className="text-green-500" />
                                                 {scan.serialNumber}
