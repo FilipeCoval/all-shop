@@ -165,7 +165,49 @@ const OrderTracker: React.FC = () => {
                     </div>
 
                     {/* Tracking Info */}
-                    {order.trackingNumber && (
+                    {order.packages && order.packages.length > 0 ? (
+                        <div className="space-y-4 mb-8">
+                            <h3 className="font-bold text-gray-800 border-b pb-2">Volumes da Encomenda</h3>
+                            {order.packages.map((pkg, idx) => (
+                                <div key={pkg.id} className="bg-green-50 border border-green-100 rounded-xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4 w-full md:w-auto">
+                                        <div className="bg-green-100 p-3 rounded-full text-green-600 shrink-0">
+                                            <Package size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-green-900">Volume {idx + 1} de {order.packages!.length}</h3>
+                                            <p className="text-green-700 text-sm">
+                                                {pkg.items.reduce((acc, item) => acc + item.quantity, 0)} artigo(s)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    {pkg.trackingNumber ? (
+                                        <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                                            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-green-200 shadow-sm w-full md:w-auto">
+                                                <span className="font-mono font-bold text-gray-700 flex-1">{pkg.trackingNumber}</span>
+                                                <button onClick={() => copyTracking(pkg.trackingNumber!)} className="text-gray-400 hover:text-primary transition-colors relative">
+                                                    {copySuccess === pkg.trackingNumber ? <span className="text-xs text-green-600 font-bold absolute -left-12 top-0.5">Copiado!</span> : <Copy size={16} />}
+                                                </button>
+                                            </div>
+                                            <a 
+                                                href={`https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${pkg.trackingNumber}`} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow flex items-center justify-center gap-2 whitespace-nowrap"
+                                            >
+                                                Seguir Envio <ArrowRight size={16} />
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-gray-500 italic bg-white px-4 py-2 rounded-lg border border-gray-200">
+                                            A aguardar código de rastreio
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : order.trackingNumber ? (
                         <div className="bg-green-50 border border-green-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
                             <div className="flex items-center gap-4">
                                 <div className="bg-green-100 p-3 rounded-full text-green-600">
@@ -179,7 +221,7 @@ const OrderTracker: React.FC = () => {
                             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-green-200 shadow-sm w-full md:w-auto">
                                 <span className="font-mono font-bold text-gray-700 flex-1">{order.trackingNumber}</span>
                                 <button onClick={() => copyTracking(order.trackingNumber!)} className="text-gray-400 hover:text-primary transition-colors relative">
-                                    {copySuccess ? <span className="text-xs text-green-600 font-bold absolute -left-12 top-0.5">{copySuccess}</span> : <Copy size={16} />}
+                                    {copySuccess ? <span className="text-xs text-green-600 font-bold absolute -left-12 top-0.5">Copiado!</span> : <Copy size={16} />}
                                 </button>
                             </div>
                             <a 
@@ -191,7 +233,7 @@ const OrderTracker: React.FC = () => {
                                 Seguir no site CTT <ArrowRight size={16} />
                             </a>
                         </div>
-                    )}
+                    ) : null}
 
                     {/* Order Items Summary */}
                     <div>
