@@ -151,6 +151,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                         font-size: 16px;
                         line-height: 1.4;
                         margin-left: 40px; /* Indent recipient */
+                        margin-bottom: 40px; /* Espaço extra garantido antes da linha do rodapé */
                     }
                     .recipient strong {
                         font-size: 22px;
@@ -214,11 +215,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
 
                 <div class="recipient">
                     <strong>${order.shippingInfo.name}</strong>
+                    <span style="font-size: 14px; font-weight: bold; margin-bottom: 8px; display: block;">Tel: ${order.shippingInfo.phone}</span>
                     <span class="address-line">${order.shippingInfo.street}, ${order.shippingInfo.doorNumber}</span>
                     ${extraAddress}
                     <span class="zip-city">${order.shippingInfo.zip} ${order.shippingInfo.city}</span>
-                    <br>
-                    <span style="font-size: 12px;">Tel: ${order.shippingInfo.phone}</span>
                 </div>
 
                 <div class="footer">
