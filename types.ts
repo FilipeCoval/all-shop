@@ -29,6 +29,18 @@ export interface Address {
   zip: string;
 }
 
+export interface OrderPackage {
+  id: string;
+  trackingNumber?: string;
+  weight?: number;
+  items: {
+    productId: number;
+    selectedVariant?: string;
+    quantity: number;
+    serialNumbers?: string[];
+  }[];
+}
+
 export interface Order {
   id: string;
   date: string;
@@ -38,6 +50,7 @@ export interface Order {
   userId?: string | null;
   shippingInfo: UserCheckoutInfo;
   trackingNumber?: string;
+  packages?: OrderPackage[]; // NOVO: Suporte para múltiplos volumes
   pointsAwarded?: boolean;
   stockDeducted?: boolean;
   cancellationReason?: string;
@@ -170,6 +183,7 @@ export interface InventoryProduct {
   images?: string[];
   comingSoon?: boolean;
   weight?: number; // Peso em KG
+  specs?: Record<string, string | boolean>; // Especificações técnicas
 }
 
 export interface ProductUnit {
