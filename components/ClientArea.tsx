@@ -593,7 +593,41 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                 )}
 
                                 {/* Tracking Link Box (NOVO) */}
-                                {order.trackingNumber && (
+                                {order.packages && order.packages.length > 0 ? (
+                                    <div className="mt-8 space-y-4">
+                                        <h4 className="font-bold text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-slate-800 pb-2">Volumes da Encomenda</h4>
+                                        {order.packages.map((pkg, idx) => (
+                                            <div key={pkg.id} className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800"><Package size={20} /></div>
+                                                    <div>
+                                                        <p className="text-xs text-green-800 dark:text-green-300 font-bold uppercase">Volume {idx + 1} de {order.packages!.length}</p>
+                                                        {pkg.trackingNumber ? (
+                                                            <div className="font-mono text-lg font-bold text-green-900 dark:text-green-100 tracking-wider">{pkg.trackingNumber}</div>
+                                                        ) : (
+                                                            <div className="text-sm text-gray-500 dark:text-gray-400 italic mt-1">A aguardar rastreio</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {pkg.trackingNumber && (
+                                                    <div className="flex gap-2 w-full sm:w-auto">
+                                                        <button onClick={() => copyTracking(pkg.trackingNumber!)} className="bg-white dark:bg-slate-800 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 px-4 py-2 rounded-lg text-sm font-bold border border-green-200 dark:border-green-700 flex-1 sm:flex-none flex items-center justify-center gap-2">
+                                                            {copyTrackingSuccess ? 'Copiado!' : <><Copy size={16}/> Copiar</>}
+                                                        </button>
+                                                        <a 
+                                                            href={`https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${pkg.trackingNumber}`} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-1 sm:flex-none flex items-center justify-center gap-2 shadow-sm transition-colors"
+                                                        >
+                                                            Seguir Envio <ExternalLink size={16} />
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : order.trackingNumber ? (
                                     <div className="mt-8 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div className="flex items-center gap-3">
                                             <div className="bg-white dark:bg-slate-800 p-2 rounded-lg text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800"><Truck size={20} /></div>
@@ -616,7 +650,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                             </a>
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -843,4 +877,3 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 };
 
 export default ClientArea;
-
