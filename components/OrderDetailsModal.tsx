@@ -329,7 +329,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                             )}
                         </div>
                         <div className="p-3 space-y-3">
-                            {pkg.items.map((item, idx) => {
+                            {pkg.items.map((item: any, idx) => {
                                 const itemName = item.name || inventoryProducts.find(p => p.publicProductId === item.productId)?.name || `Produto ${item.productId}`;
                                 const itemVariant = item.selectedVariant ? `(${item.selectedVariant})` : '';
                                 const itemSerials = item.serialNumbers;
