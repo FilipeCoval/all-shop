@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -397,11 +398,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       // Validar tamanho (5MB)
       for (let i = 0; i < files.length; i++) {
           if (files[i].size > 5 * 1024 * 1024) {
-              alert(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
+              console.warn(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
               return;
           }
       }
 
+      setIsUploading(true);
       setUploadProgress(0);
       const newImageUrls: string[] = [];
       let completedUploads = 0;
@@ -418,7 +420,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               }, 
               (error) => {
                   console.error("Upload error:", error);
-                  alert("Erro ao carregar imagem.");
+                  setIsUploading(false);
+                  setUploadProgress(null);
               }, 
               async () => {
                   const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
@@ -426,6 +429,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   completedUploads++;
 
                   if (completedUploads === files.length) {
+                      setIsUploading(false);
                       setUploadProgress(null);
                       
                       setEditingStoreProduct(prev => {
@@ -484,8 +488,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   };
 
   const handleDeleteGalleryImage = (url: string) => {
-      if (!confirm("Tem a certeza que quer apagar esta imagem?")) return;
-      
       setEditingStoreProduct(prev => {
           if (!prev) return null;
           const newImages = (prev.images || []).filter(img => img !== url);
@@ -508,16 +510,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   const handleSaveStoreProduct = async () => {
       if (!editingStoreProduct) return;
-      // setIsLoading(true); // We don't have access to isLoading here easily, maybe create local loading state or use isUploading
-      // But we can just use alert for now.
+      setIsUploading(true);
       try {
           const cleanProduct = JSON.parse(JSON.stringify(editingStoreProduct));
           await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct);
           setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
-          alert('Produto da loja atualizado!');
+          console.log('Produto da loja atualizado!');
       } catch (error) {
           console.error("Erro ao guardar produto:", error);
-          alert('Erro ao guardar as alterações.');
+      } finally {
+          setIsUploading(false);
       }
   };
 
@@ -1480,7 +1482,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                     multiple 
                                     className="hidden" 
                                     accept="image/*"
-                                    onChange={(e) => handleStoreProductImageUpload(e.target.files, 'gallery')}
+                                    onChange={(e) => {
+                                        handleStoreProductImageUpload(e.target.files, 'gallery');
+                                        e.target.value = '';
+                                    }}
                                 />
                             </div>
                             
