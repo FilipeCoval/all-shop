@@ -45,17 +45,52 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
             }
 
             // 3. Custo dos Produtos (CPV)
-            order.items.forEach((item: any) => {
-                // Tentar encontrar o produto no inventário para saber o preço de compra
-                // Nota: Isto assume o preço de compra ATUAL. O ideal seria guardar o custo na altura da venda.
-                // Mas como SaleRecord guarda unitPrice (venda), precisamos ir ao produto pai.
-                
-                // Se o item tiver productId (public ID), procuramos no inventário
-                const product = inventoryProducts.find(p => p.publicProductId === item.productId);
-                if (product) {
-                    totalProductCost += (product.purchasePrice || 0) * (item.quantity || 1);
+            if (order.totalProductCost !== undefined) {
+                totalProductCost += order.totalProductCost;
+            } else {
+                let orderCost = 0;
+                if (order.serialNumbersUsed && order.serialNumbersUsed.length > 0) {
+                    order.serialNumbersUsed.forEach((sn: string) => {
+                        const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                        if (batch) {
+                            orderCost += (batch.purchasePrice || 0);
+                        }
+                    });
+                    const totalItems = order.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+                    if (totalItems > order.serialNumbersUsed.length) {
+                        const remainingItems = totalItems - order.serialNumbersUsed.length;
+                        const avgCost = order.items.reduce((acc: number, item: any) => {
+                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                            return acc + (p?.purchasePrice || 0);
+                        }, 0) / order.items.length;
+                        orderCost += (avgCost || 0) * remainingItems;
+                    }
+                } else {
+                    order.items.forEach((item: any) => {
+                        let itemCost = 0;
+                        if (item.serialNumbers && item.serialNumbers.length > 0) {
+                            item.serialNumbers.forEach((sn: string) => {
+                                const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                if (batch) {
+                                    itemCost += (batch.purchasePrice || 0);
+                                } else {
+                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                    itemCost += (p?.purchasePrice || 0);
+                                }
+                            });
+                            if (item.quantity > item.serialNumbers.length) {
+                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                            }
+                        } else {
+                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                            itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                        }
+                        orderCost += itemCost;
+                    });
                 }
-            });
+                totalProductCost += orderCost;
+            }
         });
 
         const totalExpenses = totalProductCost + totalShippingCost;
@@ -83,10 +118,52 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                 const monthSales = monthOrders.reduce((acc, o) => acc + o.total, 0);
                 const monthProfit = monthOrders.reduce((acc, o) => {
                     let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
-                    o.items.forEach((item: any) => {
-                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                        cost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                    });
+                    if (o.totalProductCost !== undefined) {
+                        cost += o.totalProductCost;
+                    } else {
+                        let orderCost = 0;
+                        if (o.serialNumbersUsed && o.serialNumbersUsed.length > 0) {
+                            o.serialNumbersUsed.forEach((sn: string) => {
+                                const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                if (batch) {
+                                    orderCost += (batch.purchasePrice || 0);
+                                }
+                            });
+                            const totalItems = o.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+                            if (totalItems > o.serialNumbersUsed.length) {
+                                const remainingItems = totalItems - o.serialNumbersUsed.length;
+                                const avgCost = o.items.reduce((acc: number, item: any) => {
+                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                    return acc + (p?.purchasePrice || 0);
+                                }, 0) / o.items.length;
+                                orderCost += (avgCost || 0) * remainingItems;
+                            }
+                        } else {
+                            o.items.forEach((item: any) => {
+                                let itemCost = 0;
+                                if (item.serialNumbers && item.serialNumbers.length > 0) {
+                                    item.serialNumbers.forEach((sn: string) => {
+                                        const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                        if (batch) {
+                                            itemCost += (batch.purchasePrice || 0);
+                                        } else {
+                                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                            itemCost += (p?.purchasePrice || 0);
+                                        }
+                                    });
+                                    if (item.quantity > item.serialNumbers.length) {
+                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                        itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                    }
+                                } else {
+                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                    itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                }
+                                orderCost += itemCost;
+                            });
+                        }
+                        cost += orderCost;
+                    }
                     return acc + (o.total - cost);
                 }, 0);
 
@@ -104,10 +181,52 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                 const daySales = dayOrders.reduce((acc, o) => acc + o.total, 0);
                 const dayProfit = dayOrders.reduce((acc, o) => {
                     let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
-                    o.items.forEach((item: any) => {
-                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                        cost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                    });
+                    if (o.totalProductCost !== undefined) {
+                        cost += o.totalProductCost;
+                    } else {
+                        let orderCost = 0;
+                        if (o.serialNumbersUsed && o.serialNumbersUsed.length > 0) {
+                            o.serialNumbersUsed.forEach((sn: string) => {
+                                const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                if (batch) {
+                                    orderCost += (batch.purchasePrice || 0);
+                                }
+                            });
+                            const totalItems = o.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+                            if (totalItems > o.serialNumbersUsed.length) {
+                                const remainingItems = totalItems - o.serialNumbersUsed.length;
+                                const avgCost = o.items.reduce((acc: number, item: any) => {
+                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                    return acc + (p?.purchasePrice || 0);
+                                }, 0) / o.items.length;
+                                orderCost += (avgCost || 0) * remainingItems;
+                            }
+                        } else {
+                            o.items.forEach((item: any) => {
+                                let itemCost = 0;
+                                if (item.serialNumbers && item.serialNumbers.length > 0) {
+                                    item.serialNumbers.forEach((sn: string) => {
+                                        const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                        if (batch) {
+                                            itemCost += (batch.purchasePrice || 0);
+                                        } else {
+                                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                            itemCost += (p?.purchasePrice || 0);
+                                        }
+                                    });
+                                    if (item.quantity > item.serialNumbers.length) {
+                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                        itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                    }
+                                } else {
+                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                    itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                }
+                                orderCost += itemCost;
+                            });
+                        }
+                        cost += orderCost;
+                    }
                     return acc + (o.total - cost);
                 }, 0);
 
@@ -260,10 +379,32 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                             ) : (
                                 monthlyOrders.map(order => {
                                     let prodCost = 0;
-                                    order.items.forEach((item: any) => {
-                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                        prodCost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                                    });
+                                    if (order.totalProductCost !== undefined) {
+                                        prodCost = order.totalProductCost;
+                                    } else {
+                                        order.items.forEach((item: any) => {
+                                            let itemCost = 0;
+                                            if (item.serialNumbers && item.serialNumbers.length > 0) {
+                                                item.serialNumbers.forEach((sn: string) => {
+                                                    const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                                    if (batch) {
+                                                        itemCost += (batch.purchasePrice || 0);
+                                                    } else {
+                                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                                        itemCost += (p?.purchasePrice || 0);
+                                                    }
+                                                });
+                                                if (item.quantity > item.serialNumbers.length) {
+                                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                                    itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                                }
+                                            } else {
+                                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                                itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                            }
+                                            prodCost += itemCost;
+                                        });
+                                    }
                                     const shipCost = order.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (order.storeShippingCost || 5.40);
                                     const profit = order.total - prodCost - shipCost;
 
