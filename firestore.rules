@@ -19,9 +19,17 @@ service cloud.firestore {
 
     // --- REGRAS PÚBLICAS E DE UTILIZADOR ---
 
-    // Produtos: Qualquer pessoa lê, só Admin escreve
+    // Produtos: Qualquer pessoa lê, só Admin escreve (com exceção de decrementar stock na compra)
     match /products_inventory/{docId} { allow read, write: if isAdmin(); }
-    match /products_public/{docId} { allow read: if true; allow write: if isAdmin(); }
+    match /products_public/{docId} { 
+      allow read: if true; 
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
+        request.resource.data.stock >= 0 &&
+        request.resource.data.stock < resource.data.stock
+      );
+    }
     
     // Utilizadores: O próprio pode ler/escrever o seu perfil
     match /users/{userId} {
