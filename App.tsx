@@ -577,23 +577,52 @@ const App: React.FC = () => {
           // Limpar dados para evitar erros de 'undefined' no Firebase
           const cleanOrder = JSON.parse(JSON.stringify(newOrder));
           
-          const batch = db.batch();
-          
-          // 1. Guardar a encomenda
-          const orderRef = db.collection("orders").doc(cleanOrder.id);
-          batch.set(orderRef, cleanOrder);
+          await db.runTransaction(async (transaction) => {
+              // 1. Validar e preparar decremento de stock
+              const productUpdates = [];
+              for (const item of cleanOrder.items) {
+                  // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
+                  if (typeof item !== 'object' || item === null) continue;
+                  
+                  const productRef = db.collection('products_public').doc(item.productId.toString());
+                  const productDoc = await transaction.get(productRef);
+                  
+                  if (!productDoc.exists) {
+                      throw new Error(`Produto ${item.name} não encontrado.`);
+                  }
+                  
+                  const productData = productDoc.data() as Product;
+                  if (productData.stock < item.quantity) {
+                      throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
+                  }
+                  
+                  productUpdates.push({
+                      ref: productRef,
+                      newStock: productData.stock - item.quantity
+                  });
+              }
 
-          // 2. Limpar reservas do carrinho
-          const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
-          if (!reservationQuery.empty) {
-            reservationQuery.forEach(doc => batch.delete(doc.ref));
+              // 2. Guardar a encomenda
+              const orderRef = db.collection("orders").doc(cleanOrder.id);
+              transaction.set(orderRef, cleanOrder);
+
+              // 3. Decrementar stock público imediatamente para outros utilizadores verem
+              for (const update of productUpdates) {
+                  transaction.update(update.ref, { stock: update.newStock });
+              }
+          });
+
+          // 4. Limpar reservas do carrinho (fora da transação principal para não bloquear se falhar)
+          try {
+              const reservationQuery = await db.collection('stock_reservations').where('sessionId', '==', sessionId).get();
+              if (!reservationQuery.empty) {
+                  const batch = db.batch();
+                  reservationQuery.forEach(doc => batch.delete(doc.ref));
+                  await batch.commit();
+              }
+          } catch (resErr) {
+              console.error("Erro ao limpar reservas:", resErr);
           }
-
-          // 3. Decrementar stock público imediatamente para outros utilizadores verem
-          // REMOVIDO: A atualização do stock público deve ser feita via backend ou admin para garantir segurança.
-          // O cliente não tem permissão para escrever em 'products_public'.
-          
-          await batch.commit();
 
           setOrders(prev => [newOrder, ...prev]);
           setCartItems([]);
@@ -625,9 +654,14 @@ const App: React.FC = () => {
             });
           }
           return true;
-      } catch (e) {
+      } catch (e: any) {
           console.error("Erro CRÍTICO no checkout:", e);
-          alert("Ocorreu um erro ao guardar a sua encomenda. Por favor, tente novamente ou contacte o suporte se o erro persistir.");
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          if (errorMessage.includes("stock suficiente") || errorMessage.includes("não encontrado")) {
+              alert(errorMessage);
+          } else {
+              alert("Ocorreu um erro ao guardar a sua encomenda. Por favor, tente novamente ou contacte o suporte se o erro persistir.");
+          }
           return false;
       }
   };
