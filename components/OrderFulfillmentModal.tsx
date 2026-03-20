@@ -234,6 +234,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                 // 2. Processamento e Validações em Memória
                 const updatesByBatch: Record<string, { newSold: number, newStatus: ProductStatus, updatedUnits: any[] }> = {};
                 const stockMovementItems: any[] = [];
+                let calculatedTotalProductCost = 0;
 
                 // Agrupar scans por lote para processamento
                 const scansByBatch: Record<string, string[]> = {};
@@ -246,6 +247,8 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     const batchDoc = batchDocs[batchId];
                     const batchData = batchDoc.data() as InventoryProduct;
                     
+                    calculatedTotalProductCost += (batchData.purchasePrice || 0) * serials.length;
+
                     let currentUnits = batchData.units || [];
                     
                     // Validar cada serial
@@ -365,6 +368,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     stockDeducted: true,
                     trackingNumber: isPickup ? null : (trackingNumber || null),
                     pointsAwarded: pointsWereAwarded,
+                    totalProductCost: calculatedTotalProductCost,
                     packages: updatedPackages || firebase.firestore.FieldValue.delete(),
                     statusHistory: firebase.firestore.FieldValue.arrayUnion({
                         status: newStatus,
