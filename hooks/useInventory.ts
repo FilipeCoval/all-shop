@@ -114,28 +114,39 @@ export const useInventory = (isAdmin: boolean = false) => {
   // Função auxiliar para mapear Produto de Inventário -> Produto Público (Base)
   const mapToPublicProduct = (inv: Omit<InventoryProduct, 'id'> | InventoryProduct, publicIdRaw: number | string): Product => {
     const publicId = Number(publicIdRaw);
-    const mainImage = (inv.images && inv.images.length > 0 && inv.images[0]) 
-        ? inv.images[0] 
-        : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23e2e8f0"/%3E%3C/svg%3E';
     
-    return {
+    const product: Product = {
         id: publicId,
         name: inv.name,
         category: inv.category,
         price: inv.salePrice || 0, 
         originalPrice: inv.originalPrice, // Mapeado
         promoEndsAt: inv.promoEndsAt,     // Mapeado
-        image: mainImage, 
+        image: '', 
         description: inv.description || `Produto ${inv.name}`,
         stock: 0, // Será calculado pelo refreshPublicProductStock
         features: inv.features || [],
         comingSoon: inv.comingSoon || false,
         badges: inv.badges || [],
-        images: inv.images || [],
+        images: [],
         variantLabel: 'Opção',
         weight: inv.weight || 0,
         specs: inv.specs || {}
     };
+
+    if (inv.images && inv.images.length > 0) {
+        product.images = inv.images;
+        product.image = inv.images[0];
+    } else {
+        // Se não houver imagens no lote, não definimos para não apagar as da loja
+        // Mas precisamos de uma imagem padrão se for um produto novo
+        product.image = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23e2e8f0"/%3E%3C/svg%3E';
+        // Removemos images do objeto para que o merge: true não as apague
+        delete (product as any).images;
+        delete (product as any).image;
+    }
+
+    return product;
   };
 
   const addProduct = async (product: Omit<InventoryProduct, 'id'>) => {
