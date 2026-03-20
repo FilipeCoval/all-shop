@@ -779,6 +779,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                           });
                       }
                   }
+
+                  // 3. Remover pontos se já tinham sido atribuídos
+                  if (currentOrder.pointsAwarded && currentOrder.userId) {
+                      const userRef = db.collection('users').doc(currentOrder.userId);
+                      const userDoc = await transaction.get(userRef);
+                      if (userDoc.exists) {
+                          const userData = userDoc.data() as UserType;
+                          const tier = userData.tier || 'Bronze';
+                          let multiplier = 1;
+                          if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier;
+                          if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier;
+                          const pointsToRemove = Math.floor(currentOrder.total * multiplier);
+                          
+                          if (pointsToRemove > 0) {
+                              const newHistory: PointHistory = {
+                                  id: `refund-${orderId}`,
+                                  date: new Date().toISOString(),
+                                  amount: -pointsToRemove,
+                                  reason: `Cancelamento da Compra #${orderId}`,
+                                  orderId: orderId
+                              };
+                              transaction.update(userRef, {
+                                  loyaltyPoints: Math.max(0, (userData.loyaltyPoints || 0) - pointsToRemove),
+                                  pointsHistory: [newHistory, ...(userData.pointsHistory || [])]
+                              });
+                              updates.pointsAwarded = false;
+                          }
+                      }
+                  }
               }
 
               transaction.update(orderRef, updates);
@@ -813,6 +842,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                               });
                           }
                       }
+
+                      // Remover pontos se já tinham sido atribuídos
+                      if (orderData.pointsAwarded && orderData.userId) {
+                          const userRef = db.collection('users').doc(orderData.userId);
+                          const userDoc = await transaction.get(userRef);
+                          if (userDoc.exists) {
+                              const userData = userDoc.data() as UserType;
+                              const tier = userData.tier || 'Bronze';
+                              let multiplier = 1;
+                              if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier;
+                              if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier;
+                              const pointsToRemove = Math.floor(orderData.total * multiplier);
+                              
+                              if (pointsToRemove > 0) {
+                                  const newHistory: PointHistory = {
+                                      id: `delete-${orderId}`,
+                                      date: new Date().toISOString(),
+                                      amount: -pointsToRemove,
+                                      reason: `Remoção da Compra #${orderId}`,
+                                      orderId: orderId
+                                  };
+                                  transaction.update(userRef, {
+                                      loyaltyPoints: Math.max(0, (userData.loyaltyPoints || 0) - pointsToRemove),
+                                      pointsHistory: [newHistory, ...(userData.pointsHistory || [])]
+                                  });
+                              }
+                          }
+                      }
+
                       transaction.delete(orderRef);
                   });
               } else {
