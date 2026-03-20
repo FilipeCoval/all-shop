@@ -47,6 +47,10 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           const idStr = publicId.toString();
           
+          // 0. Buscar dados atuais do produto público para preservar variantes e imagens manuais
+          const publicDoc = await db.collection('products_public').doc(idStr).get();
+          const publicData = publicDoc.exists ? publicDoc.data() as Product : null;
+
           // 1. Buscar todos os lotes deste produto
           const snapshot = await db.collection('products_inventory')
               .where('publicProductId', '==', publicId)
@@ -54,12 +58,20 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           if (snapshot.empty) {
               // Se não houver lotes, coloca stock a 0 mas não apaga o produto (para manter SEO/Histórico)
-              await db.collection('products_public').doc(idStr).set({ stock: 0, variants: [] }, { merge: true }).catch(() => {});
+              // Preservamos as variantes existentes mas com stock 0
+              await db.collection('products_public').doc(idStr).set({ stock: 0 }, { merge: true }).catch(() => {});
               return;
           }
 
           let totalStock = 0;
           const variantsMap = new Map<string, ProductVariant>();
+
+          // Inicializar o mapa com as variantes que já existem no produto público
+          if (publicData?.variants) {
+              publicData.variants.forEach(v => {
+                  variantsMap.set(v.name, { ...v });
+              });
+          }
 
           snapshot.forEach(doc => {
               const item = doc.data() as InventoryProduct;
@@ -74,8 +86,12 @@ export const useInventory = (isAdmin: boolean = false) => {
                   
                   variantsMap.set(item.variant, {
                       name: item.variant,
-                      price: item.salePrice || item.targetSalePrice || 0,
-                      image: (item.images && item.images[0]) ? item.images[0] : (existing?.image || undefined)
+                      price: item.salePrice || item.targetSalePrice || (existing?.price || 0),
+                      // Prioridade: 
+                      // 1. Imagem já definida na variante do produto público (se existir)
+                      // 2. Primeira imagem do lote de inventário
+                      // 3. Imagem que já estava no mapa nesta iteração
+                      image: (existing?.image) ? existing.image : ((item.images && item.images[0]) ? item.images[0] : undefined)
                   });
               }
           });
@@ -117,7 +133,8 @@ export const useInventory = (isAdmin: boolean = false) => {
         badges: inv.badges || [],
         images: inv.images || [],
         variantLabel: 'Opção',
-        weight: inv.weight || 0
+        weight: inv.weight || 0,
+        specs: inv.specs || {}
     };
   };
 
@@ -224,3 +241,4 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
+
