@@ -10,15 +10,28 @@ export const useStock = (isAdmin: boolean) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
+
+    // 1. Escutar Reservas Temporárias em Carrinhos (Todos os utilizadores)
+    const unsubRes = db.collection('stock_reservations')
+      .where('expiresAt', '>', Date.now())
+      .onSnapshot((snapshot) => {
+        const resList: StockReservation[] = [];
+        snapshot.forEach(doc => {
+            resList.push({ id: doc.id, ...doc.data() } as StockReservation);
+        });
+        setReservations(resList);
+      });
+
     // Se o utilizador não for admin, não tenta aceder a dados privados.
     if (!isAdmin) {
       setLoading(false);
-      return () => {}; // Retorna uma função de limpeza vazia
+      return () => {
+          unsubRes();
+      };
     }
 
-    setLoading(true);
-
-    // 1. Escutar Inventário Físico (Apenas Admin)
+    // 2. Escutar Inventário Físico (Apenas Admin)
     const unsubInv = db.collection('products_inventory').onSnapshot(
       (snapshot) => {
         const items: InventoryProduct[] = [];
@@ -32,24 +45,29 @@ export const useStock = (isAdmin: boolean) => {
       }
     );
 
-    // 2. Escutar Reservas Temporárias em Carrinhos (Apenas Admin)
-    const unsubRes = db.collection('stock_reservations')
-      .where('expiresAt', '>', Date.now())
-      .onSnapshot((snapshot) => {
-        const resList: StockReservation[] = [];
-        snapshot.forEach(doc => {
-            resList.push({ id: doc.id, ...doc.data() } as StockReservation);
-        });
-        setReservations(resList);
-      });
-
     // 3. Escutar Encomendas Pendentes (Apenas Admin)
     const unsubOrders = db.collection('orders')
-      .where('status', 'in', ['Processamento', 'Pago'])
+      .where('status', 'in', ['Processamento', 'Pago', 'Enviado', 'Entregue'])
       .onSnapshot((snapshot) => {
           const ordersList: Order[] = [];
+          const now = new Date();
+          const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+
           snapshot.forEach(doc => {
-              ordersList.push({ id: doc.id, ...doc.data() } as Order);
+              const data = doc.data() as Order;
+              const orderDate = new Date(data.date);
+              
+              // Lógica de Reserva Estrita:
+              // 1. Encomendas com stockDeducted: false (Novas encomendas)
+              // 2. Encomendas sem o campo (antigas) mas que ainda estão em estados iniciais e são recentes (< 30 dias)
+              const isExplicitlyPending = data.stockDeducted === false;
+              const isOldButStuck = data.stockDeducted === undefined && 
+                                   ['Processamento', 'Pago'].includes(data.status) && 
+                                   orderDate > thirtyDaysAgo;
+              
+              if (isExplicitlyPending || isOldButStuck) {
+                  ordersList.push({ ...data, id: doc.id } as Order);
+              }
           });
           setPendingOrders(ordersList);
           setLoading(false);
