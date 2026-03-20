@@ -192,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
 
   const [editingStoreProduct, setEditingStoreProduct] = useState<Product | null>(null);
-  const [activeStoreVariantIndex, setActiveStoreVariantIndex] = useState<number | null>(null);
+  const activeStoreVariantIndexRef = useRef<number | null>(null);
 
 
 
@@ -511,7 +511,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       // setIsLoading(true); // We don't have access to isLoading here easily, maybe create local loading state or use isUploading
       // But we can just use alert for now.
       try {
-          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(editingStoreProduct);
+          const cleanProduct = JSON.parse(JSON.stringify(editingStoreProduct));
+          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct);
           setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
           alert('Produto da loja atualizado!');
       } catch (error) {
@@ -604,7 +605,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     } 
                     return item; 
                 }); 
-                await orderRef.update({ items: updatedItems, stockDeducted: true }); 
+                const additionalCost = qty * (selectedProductForSale.purchasePrice || 0);
+                const newTotalCost = (orderData.totalProductCost || 0) + additionalCost;
+                await orderRef.update({ items: updatedItems, stockDeducted: true, totalProductCost: newTotalCost }); 
             } 
         } 
         setIsSaleModalOpen(false); 
@@ -1562,7 +1565,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                         <button 
                                             type="button"
-                                            onClick={() => { setActiveStoreVariantIndex(null); document.getElementById('store-product-file-input')?.click(); }}
+                                            onClick={() => { activeStoreVariantIndexRef.current = null; document.getElementById('store-product-file-input')?.click(); }}
                                             className="text-white p-3 hover:scale-110 transition-transform bg-black/50 rounded-full"
                                             title="Alterar Imagem Principal"
                                         >
@@ -1619,7 +1622,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                             )}
                                             <button 
                                                 type="button"
-                                                onClick={() => { setActiveStoreVariantIndex(idx); document.getElementById('store-product-file-input')?.click(); }}
+                                                onClick={() => { activeStoreVariantIndexRef.current = idx; document.getElementById('store-product-file-input')?.click(); }}
                                                 className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
                                             >
                                                 <Upload size={12} />
@@ -1664,7 +1667,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                             accept="image/*" 
                             onChange={(e) => {
                                 if (e.target.files && e.target.files.length > 0) {
-                                    const target = activeStoreVariantIndex === null ? 'main' : activeStoreVariantIndex;
+                                    const target = activeStoreVariantIndexRef.current === null ? 'main' : activeStoreVariantIndexRef.current;
                                     handleStoreProductImageUpload(e.target.files, target);
                                 }
                                 e.target.value = '';
