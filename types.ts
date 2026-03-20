@@ -68,6 +68,7 @@ export interface Order {
   storeShippingCost?: number; // Custo real de envio para a loja (para cálculo de lucro)
   discountValue?: number; // Valor total do desconto aplicado
   couponCode?: string; // Código do cupão utilizado
+  totalProductCost?: number; // Custo exato dos produtos (baseado nos lotes/seriais usados)
 }
 
 export interface StockMovement {
