@@ -722,8 +722,108 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setIsSyncingStock(false);
     }
   };
-  const handleOrderStatusChange = async (orderId: string, newStatus: string) => { try { const orderRef = db.collection('orders').doc(orderId); const orderDoc = await orderRef.get(); if(!orderDoc.exists) return; const currentOrder = orderDoc.data() as Order; const updates: any = { status: newStatus, statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: newStatus, date: new Date().toISOString(), notes: 'Estado alterado via Backoffice' }) }; if (newStatus === 'Entregue' && !currentOrder.pointsAwarded && currentOrder.userId) { const userRef = db.collection('users').doc(currentOrder.userId); await db.runTransaction(async (transaction) => { const userDoc = await transaction.get(userRef); if (!userDoc.exists) return; const userData = userDoc.data() as UserType; const tier = userData.tier || 'Bronze'; let multiplier = 1; if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier; if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier; const pointsToAward = Math.floor(currentOrder.total * multiplier); if (pointsToAward > 0) { const newHistory: PointHistory = { id: `earn-${orderId}`, date: new Date().toISOString(), amount: pointsToAward, reason: `Compra #${orderId} (Nível ${tier})`, orderId: orderId }; transaction.update(userRef, { loyaltyPoints: (userData.loyaltyPoints || 0) + pointsToAward, pointsHistory: [newHistory, ...(userData.pointsHistory || [])] }); updates.pointsAwarded = true; } }); } await orderRef.update(updates); setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o)); if (selectedOrderDetails?.id === orderId) { setSelectedOrderDetails(prev => prev ? { ...prev, ...updates } : null); } } catch (error) { console.error("Erro ao mudar estado:", error); alert("Erro ao atualizar estado da encomenda."); } };
-  const handleDeleteOrder = async (orderId: string) => { if(!window.confirm("ATENÇÃO: Apagar a encomenda é irreversível. Deseja continuar?")) return; try { await db.collection('orders').doc(orderId).delete(); setAllOrders(prev => prev.filter(o => o.id !== orderId)); } catch(e) { alert("Erro ao apagar encomenda."); } };
+  const handleOrderStatusChange = async (orderId: string, newStatus: string) => { 
+      try { 
+          const orderRef = db.collection('orders').doc(orderId); 
+          const orderDoc = await orderRef.get(); 
+          if(!orderDoc.exists) return; 
+          const currentOrder = orderDoc.data() as Order; 
+          const updates: any = { 
+              status: newStatus, 
+              statusHistory: firebase.firestore.FieldValue.arrayUnion({ 
+                  status: newStatus, 
+                  date: new Date().toISOString(), 
+                  notes: 'Estado alterado via Backoffice' 
+              }) 
+          }; 
+
+          await db.runTransaction(async (transaction) => {
+              // 1. Atribuir pontos se for entregue
+              if (newStatus === 'Entregue' && !currentOrder.pointsAwarded && currentOrder.userId) { 
+                  const userRef = db.collection('users').doc(currentOrder.userId); 
+                  const userDoc = await transaction.get(userRef); 
+                  if (userDoc.exists) { 
+                      const userData = userDoc.data() as UserType; 
+                      const tier = userData.tier || 'Bronze'; 
+                      let multiplier = 1; 
+                      if (tier === 'Prata') multiplier = LOYALTY_TIERS.SILVER.multiplier; 
+                      if (tier === 'Ouro') multiplier = LOYALTY_TIERS.GOLD.multiplier; 
+                      const pointsToAward = Math.floor(currentOrder.total * multiplier); 
+                      if (pointsToAward > 0) { 
+                          const newHistory: PointHistory = { 
+                              id: `earn-${orderId}`, 
+                              date: new Date().toISOString(), 
+                              amount: pointsToAward, 
+                              reason: `Compra #${orderId} (Nível ${tier})`, 
+                              orderId: orderId 
+                          }; 
+                          transaction.update(userRef, { 
+                              loyaltyPoints: (userData.loyaltyPoints || 0) + pointsToAward, 
+                              pointsHistory: [newHistory, ...(userData.pointsHistory || [])] 
+                          }); 
+                          updates.pointsAwarded = true; 
+                      } 
+                  } 
+              }
+
+              // 2. Repor stock se for cancelada
+              if (newStatus === 'Cancelado' && currentOrder.status !== 'Cancelado') {
+                  for (const item of currentOrder.items) {
+                      if (typeof item !== 'object' || item === null) continue;
+                      const productRef = db.collection('products_public').doc(item.productId.toString());
+                      const productDoc = await transaction.get(productRef);
+                      if (productDoc.exists) {
+                          const productData = productDoc.data() as Product;
+                          transaction.update(productRef, {
+                              stock: (productData.stock || 0) + item.quantity
+                          });
+                      }
+                  }
+              }
+
+              transaction.update(orderRef, updates);
+          });
+
+          setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o)); 
+          if (selectedOrderDetails?.id === orderId) { 
+              setSelectedOrderDetails(prev => prev ? { ...prev, ...updates } : null); 
+          } 
+      } catch (error) { 
+          console.error("Erro ao mudar estado:", error); 
+          alert("Erro ao atualizar estado da encomenda."); 
+      } 
+  };
+  const handleDeleteOrder = async (orderId: string) => { 
+      if(!window.confirm("ATENÇÃO: Apagar a encomenda é irreversível. Deseja continuar?")) return; 
+      try { 
+          const orderRef = db.collection('orders').doc(orderId);
+          const orderDoc = await orderRef.get();
+          if (orderDoc.exists) {
+              const orderData = orderDoc.data() as Order;
+              if (orderData.status !== 'Cancelado' && orderData.fulfillmentStatus !== 'COMPLETED') {
+                  await db.runTransaction(async (transaction) => {
+                      for (const item of orderData.items) {
+                          if (typeof item !== 'object' || item === null) continue;
+                          const productRef = db.collection('products_public').doc(item.productId.toString());
+                          const productDoc = await transaction.get(productRef);
+                          if (productDoc.exists) {
+                              const productData = productDoc.data() as Product;
+                              transaction.update(productRef, {
+                                  stock: (productData.stock || 0) + item.quantity
+                              });
+                          }
+                      }
+                      transaction.delete(orderRef);
+                  });
+              } else {
+                  await orderRef.delete();
+              }
+          }
+          setAllOrders(prev => prev.filter(o => o.id !== orderId)); 
+      } catch(e) { 
+          alert("Erro ao apagar encomenda."); 
+      } 
+  };
   const handleUpdateTracking = async (orderId: string, tracking: string) => { try { await db.collection('orders').doc(orderId).update({ trackingNumber: tracking }); if (selectedOrderDetails) setSelectedOrderDetails({...selectedOrderDetails, trackingNumber: tracking}); } catch (e) { alert("Erro ao gravar rastreio"); } };
   const handleAddUnit = (code: string) => { if (modalUnits.some(u => u.id === code)) return alert("Este código já foi adicionado."); setModalUnits(prev => [...prev, { id: code, status: 'AVAILABLE', addedAt: new Date().toISOString() }]); };
   const handleRemoveUnit = (id: string) => setModalUnits(prev => prev.filter(u => u.id !== id));
