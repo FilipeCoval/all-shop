@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, TrendingUp, DollarSign, Package, AlertCircle, 
@@ -395,10 +394,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleStoreProductImageUpload = async (files: FileList | null, target: 'main' | 'gallery' | number) => {
       if (!files || files.length === 0) return;
       
+      console.log(`Iniciando upload para target: ${target}, total de ficheiros: ${files.length}`);
+
       // Validar tamanho (5MB)
       for (let i = 0; i < files.length; i++) {
           if (files[i].size > 5 * 1024 * 1024) {
               console.warn(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
+              alert(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
               return;
           }
       }
@@ -408,61 +410,83 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       const newImageUrls: string[] = [];
       let completedUploads = 0;
 
-      Array.from(files).forEach(file => {
-          const storageRef = storage.ref();
-          const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
-          const uploadTask = fileRef.put(file);
+      const uploadPromises = Array.from(files).map(file => {
+          return new Promise<string>((resolve, reject) => {
+              const storageRef = storage.ref();
+              const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
+              let uploadTask: firebase.storage.UploadTask;
+              try {
+                uploadTask = fileRef.put(file);
+              } catch (putError) {
+                console.error(`Erro ao iniciar put para ${file.name}:`, putError);
+                reject(putError);
+                return;
+              }
 
-          uploadTask.on('state_changed', 
-              (snapshot) => {
-                  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                  setUploadProgress(progress);
-              }, 
-              (error) => {
-                  console.error("Upload error:", error);
-                  setIsUploading(false);
-                  setUploadProgress(null);
-              }, 
-              async () => {
-                  const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                  newImageUrls.push(downloadURL);
-                  completedUploads++;
+              uploadTask.on('state_changed', 
+                  (snapshot) => {
+                      const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                      setUploadProgress(progress);
+                      console.log(`Upload progress (${file.name}): ${Math.round(progress)}%`);
+                  }, 
+                  (error) => {
+                      console.error(`Erro no upload de ${file.name}:`, error);
+                      reject(error);
+                  }, 
+                  async () => {
+                      try {
+                          const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                          console.log(`Upload concluído (${file.name}): ${downloadURL}`);
+                          resolve(downloadURL);
+                      } catch (err) {
+                          reject(err);
+                      }
+                  }
+              );
+          });
+      });
 
-                  if (completedUploads === files.length) {
-                      setIsUploading(false);
-                      setUploadProgress(null);
-                      
-                      setEditingStoreProduct(prev => {
-                          if (!prev) return null;
-                          
-                          const currentImages = prev.images || [];
-                          const uniqueNewImages = newImageUrls.filter(url => !currentImages.includes(url));
-                          const updatedImages = [...currentImages, ...uniqueNewImages];
-                          
-                          let updates: any = { images: updatedImages };
+      try {
+          const urls = await Promise.all(uploadPromises);
+          newImageUrls.push(...urls);
+          
+          setIsUploading(false);
+          setUploadProgress(null);
+          
+          setEditingStoreProduct(prev => {
+              if (!prev) return null;
+              
+              const currentImages = prev.images || [];
+              const uniqueNewImages = newImageUrls.filter(url => !currentImages.includes(url));
+              const updatedImages = [...currentImages, ...uniqueNewImages];
+              
+              let updates: any = { images: updatedImages };
 
-                          if (target === 'main') {
-                              updates.image = newImageUrls[0];
-                          } else if (typeof target === 'number') {
-                              const newVariants = [...(prev.variants || [])];
-                              if (newVariants[target]) {
-                                  newVariants[target] = { ...newVariants[target], image: newImageUrls[0] };
-                                  updates.variants = newVariants;
-                              }
-                          } else if (target === 'gallery') {
-                              if (!prev.image && newImageUrls.length > 0) {
-                                  updates.image = newImageUrls[0];
-                              }
-                          }
-
-                          const updatedProduct = { ...prev, ...updates };
-                          saveStoreProductToDb(updatedProduct); // Auto-save
-                          return updatedProduct;
-                      });
+              if (target === 'main') {
+                  updates.image = newImageUrls[0];
+              } else if (typeof target === 'number') {
+                  const newVariants = [...(prev.variants || [])];
+                  if (newVariants[target]) {
+                      newVariants[target] = { ...newVariants[target], image: newImageUrls[0] };
+                      updates.variants = newVariants;
+                  }
+              } else if (target === 'gallery') {
+                  if (!prev.image && newImageUrls.length > 0) {
+                      updates.image = newImageUrls[0];
                   }
               }
-          );
-      });
+
+              const updatedProduct = { ...prev, ...updates };
+              // Agendar o save para fora do render cycle
+              setTimeout(() => saveStoreProductToDb(updatedProduct), 0);
+              return updatedProduct;
+          });
+      } catch (error) {
+          console.error("Erro geral no upload de imagens da loja:", error);
+          setIsUploading(false);
+          setUploadProgress(null);
+          alert("Erro ao carregar uma ou mais imagens. Tente novamente.");
+      }
   };
 
   const handleSetMainImage = (url: string) => {
@@ -638,7 +662,54 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     }
   };
   const handleAddImage = () => { if (formData.newImageUrl && formData.newImageUrl.trim()) { setFormData(prev => ({ ...prev, images: [...prev.images, prev.newImageUrl.trim()], newImageUrl: '' })); } };
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setIsUploading(true); setUploadProgress(0); const storageRef = storage.ref(`products/${Date.now()}_${file.name}`); const uploadTask = storageRef.put(file); uploadTask.on('state_changed', (snapshot) => { const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; setUploadProgress(progress); }, (error) => { console.error("Upload error:", error); alert("Erro ao fazer upload da imagem."); setIsUploading(false); setUploadProgress(null); }, async () => { const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); setIsUploading(false); setUploadProgress(null); if (fileInputRef.current) fileInputRef.current.value = ''; }); };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { 
+    const file = e.target.files?.[0]; 
+    if (!file) return; 
+
+    console.log("Iniciando upload de imagem de inventário:", file.name);
+    setIsUploading(true); 
+    setUploadProgress(0); 
+
+    const storageRef = storage.ref(`products/${Date.now()}_${file.name}`); 
+    let uploadTask: firebase.storage.UploadTask;
+    try {
+      uploadTask = storageRef.put(file); 
+    } catch (putError) {
+      console.error("Erro ao iniciar put no storage:", putError);
+      setIsUploading(false);
+      setUploadProgress(null);
+      alert("Erro ao iniciar o carregamento. Verifique as permissões.");
+      return;
+    }
+
+    uploadTask.on('state_changed', 
+      (snapshot) => { 
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100; 
+        setUploadProgress(progress); 
+        console.log(`Upload progress (inventário): ${Math.round(progress)}%`);
+      }, 
+      (error) => { 
+        console.error("Erro no upload de inventário:", error); 
+        setIsUploading(false); 
+        setUploadProgress(null); 
+        alert("Erro ao carregar imagem. Tente novamente."); 
+      }, 
+      async () => { 
+        try {
+          const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); 
+          console.log("Upload de inventário concluído:", downloadURL);
+          setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); 
+          setIsUploading(false); 
+          setUploadProgress(null); 
+          if (fileInputRef.current) fileInputRef.current.value = ''; 
+        } catch (err) {
+          console.error("Erro ao obter URL de download (inventário):", err);
+          setIsUploading(false);
+          setUploadProgress(null);
+        }
+      } 
+    ); 
+  };
   const handleRemoveImage = (indexToRemove: number) => { setFormData(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== indexToRemove) })); };
   const handleMoveImage = (index: number, direction: 'left' | 'right') => { if ((direction === 'left' && index === 0) || (direction === 'right' && index === formData.images.length - 1)) return; const newImages = [...formData.images]; const targetIndex = direction === 'left' ? index - 1 : index + 1; [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setFormData(prev => ({ ...prev, images: newImages })); };
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
@@ -1472,10 +1543,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                 <button 
                                     type="button"
                                     onClick={() => document.getElementById('gallery-upload')?.click()}
-                                    className="text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
+                                    disabled={isUploading}
+                                    className="text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
                                 >
-                                    <Upload size={14}/> Adicionar Fotos
+                                    {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14}/>} Adicionar Fotos
                                 </button>
+
                                 <input 
                                     type="file" 
                                     id="gallery-upload" 
@@ -1719,7 +1792,38 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           </button>
       </div>
       
-      <textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}<div className="flex gap-2"><div className="relative flex-1"><input type="url" placeholder="Cole o link da imagem (ex: imgur.com/...)" className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" value={formData.newImageUrl} onChange={e => setFormData({...formData, newImageUrl: e.target.value})} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" title="Upload do PC">{isUploading && uploadProgress === null ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}</button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/></div><button type="button" onClick={handleAddImage} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 rounded-lg font-bold transition-colors">Adicionar</button></div>{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div>
+      <textarea rows={4} className="w-full p-3 border border-gray-300 rounded-lg text-sm" placeholder="Descreva o produto com detalhes..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}/></div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><ImageIcon size={16} /> Galeria de Imagens</h4>{formData.images.length > 0 && (<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">{formData.images.map((img, idx) => (<div key={idx} className="relative group bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col"><div className="aspect-square relative"><img src={img} alt={`Img ${idx}`} className="w-full h-full object-contain p-1" /><div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded">{idx + 1}</div></div><div className="flex border-t border-gray-100 divide-x divide-gray-100"><button type="button" disabled={idx === 0} onClick={() => handleMoveImage(idx, 'left')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowLeft size={14} /></button><button type="button" onClick={() => handleRemoveImage(idx)} className="flex-1 p-1.5 hover:bg-red-50 text-red-500 flex justify-center"><Trash2 size={14} /></button><button type="button" disabled={idx === formData.images.length - 1} onClick={() => handleMoveImage(idx, 'right')} className="flex-1 p-1.5 hover:bg-gray-100 disabled:opacity-30 flex justify-center"><ArrowRightIcon size={14} /></button></div></div>))}</div>)}    <div className="flex gap-2">
+      <div className="relative flex-1">
+        <input 
+          type="url" 
+          placeholder="Cole o link da imagem (ex: imgur.com/...)" 
+          className="w-full p-3 border border-gray-300 rounded-lg text-sm pr-20" 
+          value={formData.newImageUrl} 
+          onChange={e => setFormData({...formData, newImageUrl: e.target.value})} 
+        />
+        <button 
+          type="button" 
+          onClick={() => fileInputRef.current?.click()} 
+          disabled={isUploading} 
+          className="absolute right-1 top-1 bottom-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors" 
+          title="Upload do PC"
+        >
+          {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          <span>Upload</span>
+        </button>
+        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange}/>
+      </div>
+      <button 
+        type="button" 
+        onClick={handleAddImage} 
+        disabled={isUploading || !formData.newImageUrl?.trim()}
+        className={`px-4 rounded-lg font-bold transition-colors ${isUploading || !formData.newImageUrl?.trim() ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+      >
+        Adicionar Link
+      </button>
+    </div>
+    <p className="text-[10px] text-gray-400 mt-1 italic">* O upload de ficheiros é automático após a seleção.</p>
+{isUploading && uploadProgress !== null && (<div className="mt-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div><p className="text-xs text-center text-gray-500 mt-1">A carregar... {Math.round(uploadProgress)}%</p></div>)}</div><div><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2"><ListPlus size={16} /> Destaques / Características Principais</h4>{formData.features.length > 0 && (<div className="space-y-2 mb-3">{formData.features.map((feat, idx) => (<div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-sm"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div><span className="flex-1 text-gray-700">{feat}</span><button type="button" onClick={() => handleRemoveFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button></div>))}</div>)}<div className="flex gap-2"><input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 rounded-lg text-sm" value={formData.newFeature} onChange={e => setFormData({...formData, newFeature: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}/><button type="button" onClick={handleAddFeature} className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 rounded-lg font-bold transition-colors">+ Item</button></div></div>
 <div className="mt-4">
     <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-2"><Settings size={16} /> Especificações Técnicas (Comparador)</h4>
     {formData.specs && Object.keys(formData.specs).length > 0 && (
@@ -1919,3 +2023,4 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
+
