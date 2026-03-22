@@ -383,11 +383,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       try {
           // Remover campos undefined para evitar erro no Firestore
           const cleanProduct = JSON.parse(JSON.stringify(product));
-          await db.collection('products_public').doc(product.id.toString()).set(cleanProduct);
+          delete cleanProduct.id;
+          
+          await db.collection('products_public').doc(product.id.toString()).set(cleanProduct, { merge: true });
           setPublicProductsList(prev => prev.map(p => p.id === product.id ? product : p));
-      } catch (error) {
+      } catch (error: any) {
           console.error("Erro ao gravar automaticamente:", error);
-          alert("Erro ao gravar alterações. Verifique a sua ligação.");
+          if (error.message && error.message.includes('permission')) {
+              alert("Erro de permissão ao gravar na loja. Verifique se as regras do Firebase foram publicadas.");
+          } else {
+              alert("Erro ao gravar alterações. Verifique a sua ligação.");
+          }
       }
   };
 
@@ -477,6 +483,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               }
 
               const updatedProduct = { ...prev, ...updates };
+              // Sincronizar com formData se estiverem ligados
+              if (formData.publicProductId === updatedProduct.id) {
+                  setFormData(f => ({ ...f, images: updatedProduct.images, image: updatedProduct.image }));
+              }
               // Agendar o save para fora do render cycle
               setTimeout(() => saveStoreProductToDb(updatedProduct), 0);
               return updatedProduct;
@@ -493,6 +503,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setEditingStoreProduct(prev => {
           if (!prev) return null;
           const updated = { ...prev, image: url };
+          // Sincronizar com formData se estiverem ligados
+          if (formData.publicProductId === updated.id) {
+              setFormData(f => ({ ...f, image: url }));
+          }
           saveStoreProductToDb(updated); // Auto-save
           return updated;
       });
@@ -527,6 +541,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           }));
           
           const updated = { ...prev, images: newImages, image: newMainImage, variants: newVariants };
+          // Sincronizar com formData se estiverem ligados
+          if (formData.publicProductId === updated.id) {
+              setFormData(f => ({ ...f, images: newImages, image: newMainImage }));
+          }
           saveStoreProductToDb(updated); // Auto-save
           return updated;
       });
@@ -537,11 +555,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       setIsUploading(true);
       try {
           const cleanProduct = JSON.parse(JSON.stringify(editingStoreProduct));
-          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct);
+          delete cleanProduct.id;
+          
+          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct, { merge: true });
           setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
           console.log('Produto da loja atualizado!');
-      } catch (error) {
+          alert("Alterações na loja guardadas com sucesso!");
+      } catch (error: any) {
           console.error("Erro ao guardar produto:", error);
+          alert(`Erro ao guardar alterações na loja online: ${error.message}. Verifique as suas permissões e se as regras do Firebase foram publicadas.`);
       } finally {
           setIsUploading(false);
       }
@@ -698,7 +720,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         try {
           const downloadURL = await uploadTask.snapshot.ref.getDownloadURL(); 
           console.log("Upload de inventário concluído:", downloadURL);
-          setFormData(prev => ({ ...prev, images: [...prev.images, downloadURL] })); 
+          setFormData(prev => {
+              const updated = { ...prev, images: [...prev.images, downloadURL] };
+              // Sincronizar com editingStoreProduct se estiverem ligados
+              if (editingStoreProduct && editingStoreProduct.id === updated.publicProductId) {
+                  setEditingStoreProduct(s => s ? { ...s, images: updated.images, image: s.image || downloadURL } : null);
+              }
+              return updated;
+          }); 
           setIsUploading(false); 
           setUploadProgress(null); 
           if (fileInputRef.current) fileInputRef.current.value = ''; 
