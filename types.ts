@@ -16,6 +16,7 @@ export interface User {
   wishlist?: number[];
   fcmToken?: string; // Mantido para retrocompatibilidade
   deviceTokens?: string[]; // NOVO: Lista de dispositivos ativos
+  notificationsEnabled?: boolean; // NOVO: Preferência de notificações
   lastShareDate?: string; // Data da última partilha premiada (ISO Date string)
   birthday?: string; // Data de nascimento (ISO Date string ou YYYY-MM-DD)
   isGuest?: boolean; // NOVO: Flag para identificar clientes convidados (sem conta)
