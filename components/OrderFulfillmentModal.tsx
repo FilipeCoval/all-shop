@@ -109,7 +109,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
         }
 
         // 3. Validar estado da unidade
-        if (foundUnit.status !== 'AVAILABLE') {
+        if (foundUnit.status !== 'AVAILABLE' && !(foundUnit.status === 'SOLD' && foundUnit.soldToOrder === order.id)) {
              setError(`A unidade ${code} não está disponível (Status: ${foundUnit.status}).`);
              return;
         }
@@ -173,7 +173,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 
             if (isProductMatch && isVariantMatch && batch.units) {
                 batch.units.forEach(unit => {
-                    if (unit.status === 'AVAILABLE' && !scannedItems.some(s => s.serialNumber === unit.id)) {
+                    if ((unit.status === 'AVAILABLE' || (unit.status === 'SOLD' && unit.soldToOrder === order.id)) && !scannedItems.some(s => s.serialNumber === unit.id)) {
                         availableUnits.push({ serial: unit.id, batchName: batch.name });
                     }
                 });
