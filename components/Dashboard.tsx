@@ -82,7 +82,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   
   // Sound State
-  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(user?.notificationsEnabled || false);
+
+  useEffect(() => {
+      if (user && user.notificationsEnabled !== undefined) {
+          setIsSoundEnabled(user.notificationsEnabled);
+      }
+  }, [user?.notificationsEnabled]);
+
+  const toggleSound = async () => {
+      const newValue = !isSoundEnabled;
+      setIsSoundEnabled(newValue);
+      if (user) {
+          try {
+              await db.collection('users').doc(user.uid).update({
+                  notificationsEnabled: newValue
+              });
+          } catch (e) {
+              console.error("Erro ao guardar preferência de som:", e);
+          }
+      }
+  };
   
   // Notification Modal Data Updated Type
   const [notificationModalData, setNotificationModalData] = useState<{
@@ -653,7 +673,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     } 
                     return item; 
                 }); 
-                const additionalCost = qty * (selectedProductForSale.purchasePrice || 0);
+                const additionalCost = qty * ((selectedProductForSale.purchasePrice || 0) / (selectedProductForSale.quantityBought || 1));
                 const newTotalCost = (orderData.totalProductCost || 0) + additionalCost;
                 await orderRef.update({ items: updatedItems, stockDeducted: true, totalProductCost: newTotalCost }); 
             } 
@@ -1008,9 +1028,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   
   const handleToggleCoupon = async (coupon: Coupon) => { if(!coupon.id) return; try { await db.collection('coupons').doc(coupon.id).update({ isActive: !coupon.isActive }); } catch(e) { alert("Erro ao atualizar cupão."); } };
   const handleDeleteCoupon = async (id?: string) => { if (!id || !window.confirm("Apagar cupão permanentemente?")) return; try { await db.collection('coupons').doc(id).delete(); setCoupons(prevCoupons => prevCoupons.filter(coupon => coupon.id !== id)); } catch (e) { alert("Erro ao apagar o cupão."); console.error("Delete coupon error:", e); } };
-  const handleOpenInvestedModal = () => { setDetailsModalData({ title: "Detalhe do Investimento", data: products.map(p => ({ id: p.id, name: p.name, qty: p.quantityBought, cost: p.purchasePrice, total: p.quantityBought * p.purchasePrice })).filter(i => i.total > 0).sort((a,b) => b.total - a.total), total: stats.totalInvested, columns: [{ header: "Produto", accessor: "name" }, { header: "Qtd. Comprada", accessor: "qty" }, { header: "Custo Unit.", accessor: (i) => formatCurrency(i.cost) }, { header: "Total", accessor: (i) => formatCurrency(i.total) }] }); };
-  const handleOpenRevenueModal = () => { setDetailsModalData({ title: "Receita Realizada", data: products.flatMap(p => (p.salesHistory || []).map(s => ({ id: s.id, name: p.name, date: s.date, qty: s.quantity, val: s.quantity * s.unitPrice }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), total: stats.realizedRevenue, columns: [{ header: "Data", accessor: (i) => new Date(i.date).toLocaleDateString() }, { header: "Produto", accessor: "name" }, { header: "Qtd", accessor: "qty" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
-  const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const revenue = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity * s.unitPrice), 0); const cogs = p.quantitySold * p.purchasePrice; const cashback = p.cashbackStatus === 'RECEIVED' ? p.cashbackValue : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
+  const handleOpenInvestedModal = () => { setDetailsModalData({ title: "Detalhe do Investimento", data: products.map(p => ({ id: p.id, name: p.name, qty: p.quantityBought, cost: (p.purchasePrice || 0) / (p.quantityBought || 1), total: p.purchasePrice || 0 })).filter(i => i.total > 0).sort((a,b) => b.total - a.total), total: stats.totalInvested, columns: [{ header: "Produto", accessor: "name" }, { header: "Qtd. Comprada", accessor: "qty" }, { header: "Custo Unit.", accessor: (i) => formatCurrency(i.cost) }, { header: "Total", accessor: (i) => formatCurrency(i.total) }] }); };
+  const handleOpenRevenueModal = () => { setDetailsModalData({ title: "Receita Realizada", data: products.flatMap(p => { const manualSales = (p.salesHistory || []).map(s => ({ id: s.id, name: p.name, date: s.date, qty: s.quantity, val: s.quantity * s.unitPrice })); const manualQty = manualSales.reduce((acc, s) => acc + s.qty, 0); const onlineQty = Math.max(0, (p.quantitySold || 0) - manualQty); const onlineSales = onlineQty > 0 ? [{ id: `online-${p.id}`, name: `${p.name} (Online)`, date: new Date().toISOString().split('T')[0], qty: onlineQty, val: onlineQty * (p.salePrice || 0) }] : []; return [...manualSales, ...onlineSales]; }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), total: stats.realizedRevenue, columns: [{ header: "Data", accessor: (i) => new Date(i.date).toLocaleDateString() }, { header: "Produto", accessor: "name" }, { header: "Qtd", accessor: "qty" }, { header: "Valor", accessor: (i) => formatCurrency(i.val) }] }); };
+  const handleOpenProfitModal = () => { setDetailsModalData({ title: "Lucro Líquido por Produto", data: products.map(p => { const manualQty = (p.salesHistory || []).reduce((acc, s) => acc + (s.quantity || 0), 0); const onlineQty = Math.max(0, (p.quantitySold || 0) - manualQty); const revenue = (p.salesHistory || []).reduce((acc, s) => acc + ((s.quantity || 0) * (s.unitPrice || 0)), 0) + (onlineQty * (p.salePrice || 0)); const cogs = (p.quantitySold || 0) * ((p.purchasePrice || 0) / (p.quantityBought || 1)); const cashback = p.cashbackStatus === 'RECEIVED' ? ((p.cashbackValue || 0) / (p.quantityBought || 1)) * (p.quantitySold || 0) : 0; return { id: p.id, name: p.name, profit: revenue - cogs + cashback }; }).filter(p => p.profit !== 0).sort((a,b) => b.profit - a.profit), total: stats.realizedProfit, columns: [{ header: "Produto", accessor: "name" }, { header: "Lucro", accessor: (i) => <span className={i.profit >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(i.profit)}</span> }] }); };
   const handleOpenCashbackManager = () => { setIsCashbackManagerOpen(true); };
   
   // --- HANDLE PRINT LABELS COM BARCODE REAL ---
@@ -1103,7 +1123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           (u.email && u.email.toLowerCase().includes(lowerTerm))
       ); 
   }, [allUsers, allOrders, clientsSearchTerm]);
-  const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0) * (p.quantityBought || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; if (p.salesHistory && p.salesHistory.length > 0) { revenue = p.salesHistory.reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0); totalShippingPaid = p.salesHistory.reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); } else { revenue = (p.quantitySold || 0) * (p.salePrice || 0); } realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * (p.purchasePrice || 0); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? (p.cashbackValue || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - (p.purchasePrice || 0)) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
+  const stats = useMemo(() => { let totalInvested = 0, realizedRevenue = 0, realizedProfit = 0, pendingCashback = 0, potentialProfit = 0; products.forEach(p => { const invested = (p.purchasePrice || 0); totalInvested += invested; let revenue = 0, totalShippingPaid = 0; const manualQtySold = (p.salesHistory || []).reduce((acc, sale) => acc + (sale.quantity || 0), 0); const onlineQtySold = Math.max(0, (p.quantitySold || 0) - manualQtySold); revenue = (p.salesHistory || []).reduce((acc, sale) => acc + ((sale.quantity || 0) * (sale.unitPrice || 0)), 0) + (onlineQtySold * (p.salePrice || 0)); totalShippingPaid = (p.salesHistory || []).reduce((acc, sale) => acc + (sale.shippingCost || 0), 0); realizedRevenue += revenue; const cogs = (p.quantitySold || 0) * ((p.purchasePrice || 0) / (p.quantityBought || 1)); const profitFromSales = revenue - cogs - totalShippingPaid; const cashback = p.cashbackStatus === 'RECEIVED' ? ((p.cashbackValue || 0) / (p.quantityBought || 1)) * (p.quantitySold || 0) : 0; realizedProfit += profitFromSales + cashback; if (p.cashbackStatus === 'PENDING') { pendingCashback += (p.cashbackValue || 0); } const remainingStock = (p.quantityBought || 0) - (p.quantitySold || 0); if (remainingStock > 0 && p.targetSalePrice) { potentialProfit += ((p.targetSalePrice || 0) - ((p.purchasePrice || 0) / (p.quantityBought || 1))) * remainingStock; } }); return { totalInvested, realizedRevenue, realizedProfit, pendingCashback, potentialProfit }; }, [products]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-gray-100 pb-20 animate-fade-in relative">
@@ -1132,7 +1152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               {/* TOGGLE SOUND & MOBILE MENU */}
               <div className="flex items-center gap-2">
                 <button 
-                    onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
+                    onClick={toggleSound} 
                     className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'}`}
                     title={isSoundEnabled ? "Silenciar notificações" : "Ativar som de encomendas"}
                 >
@@ -1161,7 +1181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
             {/* DESKTOP SOUND TOGGLE (Visible on Desktop) */}
             <div className="hidden md:flex items-center gap-2">
                 <button 
-                    onClick={() => setIsSoundEnabled(!isSoundEnabled)} 
+                    onClick={toggleSound} 
                     className={`p-2 rounded-full transition-colors relative ${isSoundEnabled ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'}`}
                     title={isSoundEnabled ? "Silenciar Campainha" : "Ativar Campainha de Encomendas"}
                 >
