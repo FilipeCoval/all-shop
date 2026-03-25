@@ -31,6 +31,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
         let totalSales = 0;
         let totalProductCost = 0;
         let totalShippingCost = 0;
+        let totalCashback = 0;
 
         monthlyOrders.forEach(order => {
             // 1. Total Vendas (O que o cliente pagou)
@@ -53,7 +54,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                     order.serialNumbersUsed.forEach((sn: string) => {
                         const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                         if (batch) {
-                            orderCost += (batch.purchasePrice || 0);
+                            orderCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
                         }
                     });
                     const totalItems = order.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
@@ -61,7 +62,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         const remainingItems = totalItems - order.serialNumbersUsed.length;
                         const avgCost = order.items.reduce((acc: number, item: any) => {
                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                            return acc + (p?.purchasePrice || 0);
+                            return acc + ((p?.purchasePrice || 0) / (p?.quantityBought || 1));
                         }, 0) / order.items.length;
                         orderCost += (avgCost || 0) * remainingItems;
                     }
@@ -72,35 +73,55 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                             item.serialNumbers.forEach((sn: string) => {
                                 const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                 if (batch) {
-                                    itemCost += (batch.purchasePrice || 0);
+                                    itemCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
                                 } else {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += (p?.purchasePrice || 0);
+                                    itemCost += (p?.purchasePrice || 0) / (p?.quantityBought || 1);
                                 }
                             });
                             if (item.quantity > item.serialNumbers.length) {
                                 const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity - item.serialNumbers.length);
                             }
                         } else {
                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                            itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                            itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity || 1);
                         }
                         orderCost += itemCost;
                     });
                 }
                 totalProductCost += orderCost;
             }
+
+            // 4. Cashback (Receita Extra)
+            let orderCashback = 0;
+            if (order.serialNumbersUsed && order.serialNumbersUsed.length > 0) {
+                order.serialNumbersUsed.forEach((sn: string) => {
+                    const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                    if (batch && batch.cashbackStatus === 'RECEIVED') {
+                        orderCashback += (batch.cashbackValue || 0) / (batch.quantityBought || 1);
+                    }
+                });
+            } else {
+                order.items.forEach((item: any) => {
+                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                    if (p && p.cashbackStatus === 'RECEIVED') {
+                        orderCashback += ((p.cashbackValue || 0) / (p.quantityBought || 1)) * (item.quantity || 1);
+                    }
+                });
+            }
+            totalCashback += orderCashback;
         });
 
         const totalExpenses = totalProductCost + totalShippingCost;
-        const netProfit = totalSales - totalExpenses;
+        const netProfit = totalSales - totalExpenses + totalCashback;
         const margin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
 
         return {
             totalSales,
             totalProductCost,
             totalShippingCost,
+            totalCashback,
             totalExpenses,
             netProfit,
             margin
@@ -118,15 +139,16 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                 const monthSales = monthOrders.reduce((acc, o) => acc + o.total, 0);
                 const monthProfit = monthOrders.reduce((acc, o) => {
                     let cost = (o.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (o.storeShippingCost || 5.40));
+                    let prodCost = 0;
                     if (o.totalProductCost !== undefined) {
-                        cost += o.totalProductCost;
+                        prodCost = o.totalProductCost;
                     } else {
                         let orderCost = 0;
                         if (o.serialNumbersUsed && o.serialNumbersUsed.length > 0) {
                             o.serialNumbersUsed.forEach((sn: string) => {
                                 const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                 if (batch) {
-                                    orderCost += (batch.purchasePrice || 0);
+                                    orderCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
                                 }
                             });
                             const totalItems = o.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
@@ -134,7 +156,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                 const remainingItems = totalItems - o.serialNumbersUsed.length;
                                 const avgCost = o.items.reduce((acc: number, item: any) => {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    return acc + (p?.purchasePrice || 0);
+                                    return acc + ((p?.purchasePrice || 0) / (p?.quantityBought || 1));
                                 }, 0) / o.items.length;
                                 orderCost += (avgCost || 0) * remainingItems;
                             }
@@ -145,26 +167,45 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                     item.serialNumbers.forEach((sn: string) => {
                                         const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                         if (batch) {
-                                            itemCost += (batch.purchasePrice || 0);
+                                            itemCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
                                         } else {
                                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                            itemCost += (p?.purchasePrice || 0);
+                                            itemCost += (p?.purchasePrice || 0) / (p?.quantityBought || 1);
                                         }
                                     });
                                     if (item.quantity > item.serialNumbers.length) {
                                         const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                        itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                        itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity - item.serialNumbers.length);
                                     }
                                 } else {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                    itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity || 1);
                                 }
                                 orderCost += itemCost;
                             });
                         }
-                        cost += orderCost;
+                        prodCost = orderCost;
                     }
-                    return acc + (o.total - cost);
+                    cost += prodCost;
+
+                    let orderCashback = 0;
+                    if (o.serialNumbersUsed && o.serialNumbersUsed.length > 0) {
+                        o.serialNumbersUsed.forEach((sn: string) => {
+                            const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                            if (batch && batch.cashbackStatus === 'RECEIVED') {
+                                orderCashback += (batch.cashbackValue || 0) / (batch.quantityBought || 1);
+                            }
+                        });
+                    } else {
+                        o.items.forEach((item: any) => {
+                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                            if (p && p.cashbackStatus === 'RECEIVED') {
+                                orderCashback += ((p.cashbackValue || 0) / (p.quantityBought || 1)) * (item.quantity || 1);
+                            }
+                        });
+                    }
+
+                    return acc + (o.total - cost + orderCashback);
                 }, 0);
 
                 data.push({
@@ -406,7 +447,25 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                         });
                                     }
                                     const shipCost = order.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (order.storeShippingCost || 5.40);
-                                    const profit = order.total - prodCost - shipCost;
+                                    
+                                    let orderCashback = 0;
+                                    if (order.serialNumbersUsed && order.serialNumbersUsed.length > 0) {
+                                        order.serialNumbersUsed.forEach((sn: string) => {
+                                            const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                            if (batch && batch.cashbackStatus === 'RECEIVED') {
+                                                orderCashback += (batch.cashbackValue || 0) / (batch.quantityBought || 1);
+                                            }
+                                        });
+                                    } else {
+                                        order.items.forEach((item: any) => {
+                                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                            if (p && p.cashbackStatus === 'RECEIVED') {
+                                                orderCashback += ((p.cashbackValue || 0) / (p.quantityBought || 1)) * (item.quantity || 1);
+                                            }
+                                        });
+                                    }
+
+                                    const profit = order.total - prodCost - shipCost + orderCashback;
 
                                     return (
                                         <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
