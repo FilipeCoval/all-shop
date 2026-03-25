@@ -93,7 +93,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   // Notifications State
   const [notifLoading, setNotifLoading] = useState(false);
-  const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [isPushEnabled, setIsPushEnabled] = useState(user.notificationsEnabled || false);
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -123,17 +123,25 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
               try {
                   const token = await requestPushPermission();
                   setCurrentToken(token);
-                  // Verifica se este token está na lista de tokens do utilizador
-                  if (token && user.deviceTokens && user.deviceTokens.includes(token)) {
-                      setIsPushEnabled(true);
-                  } else {
-                      setIsPushEnabled(false);
+                  // Se a conta tem notificações ativas, mas este dispositivo ainda não tem o token guardado, guarda silenciosamente
+                  if (user.notificationsEnabled && token && (!user.deviceTokens || !user.deviceTokens.includes(token))) {
+                      await db.collection('users').doc(user.uid).update({
+                          deviceTokens: firebase.firestore.FieldValue.arrayUnion(token),
+                          fcmToken: token
+                      });
                   }
               } catch (e) { console.error("Error fetching token status", e); }
           }
       };
       checkStatus();
-  }, [user.deviceTokens]); // Re-run if user data refreshes from Firebase
+  }, [user.notificationsEnabled, user.deviceTokens]); // Re-run se a preferência mudar
+
+  // Sincroniza o estado local com a base de dados
+  useEffect(() => {
+      if (user.notificationsEnabled !== undefined) {
+          setIsPushEnabled(user.notificationsEnabled);
+      }
+  }, [user.notificationsEnabled]);
 
   useEffect(() => {
       if (activeTab === 'support' && user.email) {
@@ -173,40 +181,40 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
   const handleToggleNotifications = async () => {
       setNotifLoading(true);
       try {
-          if (isPushEnabled) {
-              // --- DESATIVAR (Remover Token deste dispositivo) ---
+          const newValue = !isPushEnabled;
+          
+          if (!newValue) {
+              // --- DESATIVAR ---
+              const updates: any = { notificationsEnabled: false };
               if (currentToken) {
-                  // Remover da base de dados usando arrayRemove (atómico)
-                  await db.collection('users').doc(user.uid).update({
-                      deviceTokens: firebase.firestore.FieldValue.arrayRemove(currentToken)
-                  });
-                  
-                  // Remover também do campo legacy 'fcmToken' se for igual
+                  updates.deviceTokens = firebase.firestore.FieldValue.arrayRemove(currentToken);
                   if (user.fcmToken === currentToken) {
-                      await db.collection('users').doc(user.uid).update({ fcmToken: firebase.firestore.FieldValue.delete() });
+                      updates.fcmToken = firebase.firestore.FieldValue.delete();
                   }
-
-                  setIsPushEnabled(false);
-                  alert("Notificações desativadas neste dispositivo.");
               }
+              await db.collection('users').doc(user.uid).update(updates);
+              setIsPushEnabled(false);
+              alert("Notificações desativadas na sua conta.");
           } else {
-              // --- ATIVAR (Adicionar Token deste dispositivo) ---
+              // --- ATIVAR ---
               const token = await requestPushPermission();
+              const updates: any = { notificationsEnabled: true };
+              
               if (token) {
                   setCurrentToken(token);
-                  // Adicionar à lista de tokens usando arrayUnion (atómico)
-                  // Isto garante que NÃO apaga os tokens de outros dispositivos (iPhone/PC)
-                  await db.collection('users').doc(user.uid).update({
-                      deviceTokens: firebase.firestore.FieldValue.arrayUnion(token),
-                      fcmToken: token // Atualiza legacy para o mais recente (opcional)
-                  });
-                  
-                  setIsPushEnabled(true);
+                  updates.deviceTokens = firebase.firestore.FieldValue.arrayUnion(token);
+                  updates.fcmToken = token;
+              }
+              
+              await db.collection('users').doc(user.uid).update(updates);
+              setIsPushEnabled(true);
+              
+              if (token) {
                   alert("Notificações ativadas com sucesso!");
+              } else if (Notification.permission === 'denied') {
+                  alert("Preferência guardada, mas as notificações estão bloqueadas pelo navegador neste dispositivo. Clique no cadeado na barra de endereço para permitir.");
               } else {
-                  if (Notification.permission === 'denied') {
-                      alert("Bloqueado pelo navegador. Clique no cadeado na barra de endereço para permitir.");
-                  }
+                  alert("Preferência guardada na sua conta.");
               }
           }
       } catch (e) {
@@ -777,7 +785,7 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                               <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">Receba avisos quando os seus produtos favoritos voltarem ao stock.</p>
                               {isPushEnabled && (
                                   <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs px-2 py-1 rounded font-bold">
-                                      <CheckCircle size={12}/> Ativo neste dispositivo
+                                      <CheckCircle size={12}/> Ativo na sua conta
                                   </span>
                               )}
                           </div>
