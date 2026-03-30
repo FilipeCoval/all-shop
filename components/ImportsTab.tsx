@@ -245,7 +245,7 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
         return { totalItems, totalBaseValueUSD, totalBaseValueEUR, totalLocalShippingUSD, totalLocalShippingEUR, globalExtraCostsEUR };
     }, [shipment]);
 
-    const calculateFinalCost = (order: ImportOrder, item: ImportItem) => {
+    const calculateFinalCost = (order: ImportOrder, item: ImportItem, includeGlobalCosts: boolean = true) => {
         const rate = shipment.exchangeRate || 1;
         const itemUnitPriceEUR = item.unitPrice * rate;
 
@@ -260,14 +260,18 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
         if (shipment.distributionMethod === 'QUANTITY') {
             const localShippingEUR = order.localShippingCost * rate;
             localShippingShareEUR = orderTotalItems > 0 ? (localShippingEUR / orderTotalItems) : 0;
-            globalShippingShareEUR = totals.totalItems > 0 ? (totals.globalExtraCostsEUR / totals.totalItems) : 0;
+            if (includeGlobalCosts) {
+                globalShippingShareEUR = totals.totalItems > 0 ? (totals.globalExtraCostsEUR / totals.totalItems) : 0;
+            }
         } else {
             // VALUE
             const itemTotalValueUSD = item.quantity * item.unitPrice;
             const localShippingEUR = order.localShippingCost * rate;
             
             localShippingShareEUR = orderTotalValueUSD > 0 ? (localShippingEUR * (itemTotalValueUSD / orderTotalValueUSD)) / item.quantity : 0;
-            globalShippingShareEUR = totals.totalBaseValueUSD > 0 ? (totals.globalExtraCostsEUR * (itemTotalValueUSD / totals.totalBaseValueUSD)) / item.quantity : 0;
+            if (includeGlobalCosts) {
+                globalShippingShareEUR = totals.totalBaseValueUSD > 0 ? (totals.globalExtraCostsEUR * (itemTotalValueUSD / totals.totalBaseValueUSD)) / item.quantity : 0;
+            }
         }
 
         return itemUnitPriceEUR + localShippingShareEUR + globalShippingShareEUR;
@@ -459,7 +463,7 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                                         <div className="text-right">
                                             <span className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Custo Total da Encomenda</span>
                                             <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                                {formatCurrency(order.items.reduce((sum, item) => sum + (calculateFinalCost(order, item) * item.quantity), 0))}
+                                                {formatCurrency(order.items.reduce((sum, item) => sum + (calculateFinalCost(order, item, false) * item.quantity), 0))}
                                             </span>
                                         </div>
                                         <button 
