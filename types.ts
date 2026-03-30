@@ -307,6 +307,7 @@ export interface ImportShipment {
   agentShippingCost: number;
   customsCost: number;
   distributionMethod: 'QUANTITY' | 'VALUE';
+  exchangeRate?: number; // USD to EUR exchange rate
   orders: ImportOrder[];
   createdAt: string;
 }
