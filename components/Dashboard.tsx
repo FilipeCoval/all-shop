@@ -22,6 +22,7 @@ import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
 import OrderFulfillmentModal from './OrderFulfillmentModal';
 import ReportsTab from './ReportsTab';
+import { ImportsTab } from './ImportsTab';
 
 import SupportTicketModal from './SupportTicketModal';
 import AnalyticsModal from './AnalyticsModal';
@@ -46,7 +47,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products' | 'imports'>('inventory');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1176,6 +1177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 <button onClick={() => setActiveTab('coupons')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'coupons' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><TicketPercent size={16} /> Cupões</button>
                 <button onClick={() => setActiveTab('marketing')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'marketing' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Megaphone size={16} /> Marketing</button>
                 <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><BarChart2 size={16} /> Relatórios</button>
+                <button onClick={() => setActiveTab('imports')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'imports' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Truck size={16} /> Importações</button>
             </div>
             
             {/* DESKTOP SOUND TOGGLE (Visible on Desktop) */}
@@ -1457,6 +1459,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
         {activeTab === 'reports' && (
             <ReportsTab orders={allOrders} inventoryProducts={products} />
+        )}
+
+        {activeTab === 'imports' && (
+            <ImportsTab />
         )}
 
         {/* ... (Support Tab) ... */}
