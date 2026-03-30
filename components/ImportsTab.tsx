@@ -7,6 +7,10 @@ const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 };
 
+const formatUSD = (value: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+};
+
 export const ImportsTab: React.FC = () => {
     const [shipments, setShipments] = useState<ImportShipment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -33,6 +37,7 @@ export const ImportsTab: React.FC = () => {
             agentShippingCost: 0,
             customsCost: 0,
             distributionMethod: 'QUANTITY',
+            exchangeRate: 0.92,
             orders: [],
             createdAt: new Date().toISOString()
         };
@@ -95,8 +100,10 @@ export const ImportsTab: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {shipments.map(shipment => {
                         const totalItems = shipment.orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
-                        const totalBaseValue = shipment.orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.quantity * i.unitPrice), 0), 0);
-                        const totalExtraCosts = shipment.agentShippingCost + shipment.customsCost + shipment.orders.reduce((acc, o) => acc + o.localShippingCost, 0);
+                        const totalBaseValueUSD = shipment.orders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.quantity * i.unitPrice), 0), 0);
+                        const rate = shipment.exchangeRate || 1;
+                        const totalBaseValueEUR = totalBaseValueUSD * rate;
+                        const totalExtraCostsEUR = shipment.agentShippingCost + shipment.customsCost + shipment.orders.reduce((acc, o) => acc + (o.localShippingCost * rate), 0);
 
                         return (
                             <div key={shipment.id} className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow relative group">
@@ -122,11 +129,11 @@ export const ImportsTab: React.FC = () => {
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500 dark:text-slate-400">Valor Base:</span>
-                                        <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totalBaseValue)}</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">{formatUSD(totalBaseValueUSD)} <span className="text-xs font-normal opacity-70">({formatCurrency(totalBaseValueEUR)})</span></span>
                                     </div>
                                     <div className="flex justify-between text-sm pt-2 border-t border-gray-100 dark:border-slate-800">
                                         <span className="text-gray-500 dark:text-slate-400">Custos Extra:</span>
-                                        <span className="font-bold text-red-600 dark:text-red-400">+{formatCurrency(totalExtraCosts)}</span>
+                                        <span className="font-bold text-red-600 dark:text-red-400">+{formatCurrency(totalExtraCostsEUR)}</span>
                                     </div>
                                 </div>
 
@@ -218,42 +225,52 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
     // Cálculos
     const totals = useMemo(() => {
         let totalItems = 0;
-        let totalBaseValue = 0;
-        let totalLocalShipping = 0;
+        let totalBaseValueUSD = 0;
+        let totalLocalShippingUSD = 0;
 
         shipment.orders.forEach(o => {
-            totalLocalShipping += o.localShippingCost;
+            totalLocalShippingUSD += o.localShippingCost;
             o.items.forEach(i => {
                 totalItems += i.quantity;
-                totalBaseValue += (i.quantity * i.unitPrice);
+                totalBaseValueUSD += (i.quantity * i.unitPrice);
             });
         });
 
-        const globalExtraCosts = shipment.agentShippingCost + shipment.customsCost;
+        const rate = shipment.exchangeRate || 1;
+        const totalBaseValueEUR = totalBaseValueUSD * rate;
+        const totalLocalShippingEUR = totalLocalShippingUSD * rate;
 
-        return { totalItems, totalBaseValue, totalLocalShipping, globalExtraCosts };
+        const globalExtraCostsEUR = shipment.agentShippingCost + shipment.customsCost;
+
+        return { totalItems, totalBaseValueUSD, totalBaseValueEUR, totalLocalShippingUSD, totalLocalShippingEUR, globalExtraCostsEUR };
     }, [shipment]);
 
     const calculateFinalCost = (order: ImportOrder, item: ImportItem) => {
-        if (totals.totalItems === 0 || totals.totalBaseValue === 0) return item.unitPrice;
+        const rate = shipment.exchangeRate || 1;
+        const itemUnitPriceEUR = item.unitPrice * rate;
+
+        if (totals.totalItems === 0 || totals.totalBaseValueUSD === 0) return itemUnitPriceEUR;
 
         const orderTotalItems = order.items.reduce((acc, i) => acc + i.quantity, 0);
-        const orderTotalValue = order.items.reduce((acc, i) => acc + (i.quantity * i.unitPrice), 0);
+        const orderTotalValueUSD = order.items.reduce((acc, i) => acc + (i.quantity * i.unitPrice), 0);
 
-        let localShippingShare = 0;
-        let globalShippingShare = 0;
+        let localShippingShareEUR = 0;
+        let globalShippingShareEUR = 0;
 
         if (shipment.distributionMethod === 'QUANTITY') {
-            localShippingShare = orderTotalItems > 0 ? (order.localShippingCost / orderTotalItems) : 0;
-            globalShippingShare = totals.totalItems > 0 ? (totals.globalExtraCosts / totals.totalItems) : 0;
+            const localShippingEUR = order.localShippingCost * rate;
+            localShippingShareEUR = orderTotalItems > 0 ? (localShippingEUR / orderTotalItems) : 0;
+            globalShippingShareEUR = totals.totalItems > 0 ? (totals.globalExtraCostsEUR / totals.totalItems) : 0;
         } else {
             // VALUE
-            const itemTotalValue = item.quantity * item.unitPrice;
-            localShippingShare = orderTotalValue > 0 ? (order.localShippingCost * (itemTotalValue / orderTotalValue)) / item.quantity : 0;
-            globalShippingShare = totals.totalBaseValue > 0 ? (totals.globalExtraCosts * (itemTotalValue / totals.totalBaseValue)) / item.quantity : 0;
+            const itemTotalValueUSD = item.quantity * item.unitPrice;
+            const localShippingEUR = order.localShippingCost * rate;
+            
+            localShippingShareEUR = orderTotalValueUSD > 0 ? (localShippingEUR * (itemTotalValueUSD / orderTotalValueUSD)) / item.quantity : 0;
+            globalShippingShareEUR = totals.totalBaseValueUSD > 0 ? (totals.globalExtraCostsEUR * (itemTotalValueUSD / totals.totalBaseValueUSD)) / item.quantity : 0;
         }
 
-        return item.unitPrice + localShippingShare + globalShippingShare;
+        return itemUnitPriceEUR + localShippingShareEUR + globalShippingShareEUR;
     };
 
     return (
@@ -324,6 +341,16 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                                 />
                             </div>
                             <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Taxa de Câmbio (1 USD = X EUR)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.0001"
+                                    value={shipment.exchangeRate || ''} 
+                                    onChange={e => setShipment({...shipment, exchangeRate: parseFloat(e.target.value) || 0})}
+                                    className="w-full p-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
+                                />
+                            </div>
+                            <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Método de Distribuição de Custos</label>
                                 <select 
                                     value={shipment.distributionMethod} 
@@ -354,20 +381,20 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-indigo-700/70 dark:text-indigo-400/70">Valor Base (Produtos):</span>
-                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatCurrency(totals.totalBaseValue)}</span>
+                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatUSD(totals.totalBaseValueUSD)} <span className="text-xs font-normal opacity-70">({formatCurrency(totals.totalBaseValueEUR)})</span></span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-indigo-700/70 dark:text-indigo-400/70">Envios Locais (China):</span>
-                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatCurrency(totals.totalLocalShipping)}</span>
+                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatUSD(totals.totalLocalShippingUSD)} <span className="text-xs font-normal opacity-70">({formatCurrency(totals.totalLocalShippingEUR)})</span></span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-indigo-700/70 dark:text-indigo-400/70">Envio Global + Alfândega:</span>
-                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatCurrency(totals.globalExtraCosts)}</span>
+                                <span className="font-bold text-indigo-900 dark:text-indigo-300">{formatCurrency(totals.globalExtraCostsEUR)}</span>
                             </div>
                             <div className="pt-3 border-t border-indigo-200 dark:border-indigo-800/50 flex justify-between">
                                 <span className="font-bold text-indigo-900 dark:text-indigo-300">Custo Total Final:</span>
                                 <span className="font-black text-lg text-indigo-600 dark:text-indigo-400">
-                                    {formatCurrency(totals.totalBaseValue + totals.totalLocalShipping + totals.globalExtraCosts)}
+                                    {formatCurrency(totals.totalBaseValueEUR + totals.totalLocalShippingEUR + totals.globalExtraCostsEUR)}
                                 </span>
                             </div>
                         </div>
@@ -418,7 +445,7 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Envio Local (China) €</label>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Envio Local (China) $</label>
                                             <input 
                                                 type="number" 
                                                 step="0.01"
@@ -485,7 +512,7 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                                                             </td>
                                                             <td className="py-2 pr-2">
                                                                 <div className="relative">
-                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">€</span>
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">$</span>
                                                                     <input 
                                                                         type="number" 
                                                                         step="0.01"
