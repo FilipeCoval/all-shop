@@ -455,13 +455,21 @@ const ShipmentEditor: React.FC<{ shipment: ImportShipment, onSave: (s: ImportShi
                                             />
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={() => handleDeleteOrder(order.id)}
-                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors self-end sm:self-center"
-                                        title="Apagar Encomenda"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    <div className="flex items-center gap-4 self-end sm:self-center">
+                                        <div className="text-right">
+                                            <span className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Custo Total da Encomenda</span>
+                                            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                                {formatCurrency(order.items.reduce((sum, item) => sum + (calculateFinalCost(order, item) * item.quantity), 0))}
+                                            </span>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleDeleteOrder(order.id)}
+                                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                            title="Apagar Encomenda"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Itens da Encomenda */}
