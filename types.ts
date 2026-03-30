@@ -284,6 +284,33 @@ export interface SupportTicket {
     unreadAdmin: boolean; // Se tem mensagens novas para o admin
 }
 
+export interface ImportItem {
+  id: string;
+  name: string;
+  variant?: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface ImportOrder {
+  id: string;
+  supplierName: string;
+  orderNumber?: string;
+  localShippingCost: number;
+  items: ImportItem[];
+}
+
+export interface ImportShipment {
+  id: string;
+  name: string;
+  status: 'GATHERING' | 'SHIPPED' | 'RECEIVED';
+  agentShippingCost: number;
+  customsCost: number;
+  distributionMethod: 'QUANTITY' | 'VALUE';
+  orders: ImportOrder[];
+  createdAt: string;
+}
+
 export interface TicketMessage {
     id: string;
     senderId: string;
