@@ -54,7 +54,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                     order.serialNumbersUsed.forEach((sn: string) => {
                         const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                         if (batch) {
-                            orderCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
+                            orderCost += (batch.purchasePrice || 0);
                         }
                     });
                     const totalItems = order.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
@@ -62,7 +62,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         const remainingItems = totalItems - order.serialNumbersUsed.length;
                         const avgCost = order.items.reduce((acc: number, item: any) => {
                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                            return acc + ((p?.purchasePrice || 0) / (p?.quantityBought || 1));
+                            return acc + (p?.purchasePrice || 0);
                         }, 0) / order.items.length;
                         orderCost += (avgCost || 0) * remainingItems;
                     }
@@ -73,19 +73,19 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                             item.serialNumbers.forEach((sn: string) => {
                                 const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                 if (batch) {
-                                    itemCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
+                                    itemCost += (batch.purchasePrice || 0);
                                 } else {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += (p?.purchasePrice || 0) / (p?.quantityBought || 1);
+                                    itemCost += (p?.purchasePrice || 0);
                                 }
                             });
                             if (item.quantity > item.serialNumbers.length) {
                                 const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity - item.serialNumbers.length);
+                                itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
                             }
                         } else {
                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                            itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity || 1);
+                            itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
                         }
                         orderCost += itemCost;
                     });
@@ -148,7 +148,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                             o.serialNumbersUsed.forEach((sn: string) => {
                                 const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                 if (batch) {
-                                    orderCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
+                                    orderCost += (batch.purchasePrice || 0);
                                 }
                             });
                             const totalItems = o.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
@@ -156,7 +156,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                 const remainingItems = totalItems - o.serialNumbersUsed.length;
                                 const avgCost = o.items.reduce((acc: number, item: any) => {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    return acc + ((p?.purchasePrice || 0) / (p?.quantityBought || 1));
+                                    return acc + (p?.purchasePrice || 0);
                                 }, 0) / o.items.length;
                                 orderCost += (avgCost || 0) * remainingItems;
                             }
@@ -167,19 +167,19 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                                     item.serialNumbers.forEach((sn: string) => {
                                         const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
                                         if (batch) {
-                                            itemCost += (batch.purchasePrice || 0) / (batch.quantityBought || 1);
+                                            itemCost += (batch.purchasePrice || 0);
                                         } else {
                                             const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                            itemCost += (p?.purchasePrice || 0) / (p?.quantityBought || 1);
+                                            itemCost += (p?.purchasePrice || 0);
                                         }
                                     });
                                     if (item.quantity > item.serialNumbers.length) {
                                         const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                        itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity - item.serialNumbers.length);
+                                        itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
                                     }
                                 } else {
                                     const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += ((p?.purchasePrice || 0) / (p?.quantityBought || 1)) * (item.quantity || 1);
+                                    itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
                                 }
                                 orderCost += itemCost;
                             });
