@@ -65,26 +65,8 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                 }
             } else {
                 order.items.forEach((item: any) => {
-                    let itemCost = 0;
-                    if (item.serialNumbers && item.serialNumbers.length > 0) {
-                        item.serialNumbers.forEach((sn: string) => {
-                            const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
-                            if (batch) {
-                                itemCost += (batch.purchasePrice || 0);
-                            } else {
-                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                itemCost += (p?.purchasePrice || 0);
-                            }
-                        });
-                        if (item.quantity > item.serialNumbers.length) {
-                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                            itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
-                        }
-                    } else {
-                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                        itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                    }
-                    orderCost += itemCost;
+                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId && prod.status !== 'SOLD') || inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                    orderCost += (p?.purchasePrice || 0) * (item.quantity || 1);
                 });
             }
             totalProductCost += orderCost;
@@ -155,26 +137,8 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         }
                     } else {
                         o.items.forEach((item: any) => {
-                            let itemCost = 0;
-                            if (item.serialNumbers && item.serialNumbers.length > 0) {
-                                item.serialNumbers.forEach((sn: string) => {
-                                    const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
-                                    if (batch) {
-                                        itemCost += (batch.purchasePrice || 0);
-                                    } else {
-                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                        itemCost += (p?.purchasePrice || 0);
-                                    }
-                                });
-                                if (item.quantity > item.serialNumbers.length) {
-                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
-                                }
-                            } else {
-                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                            }
-                            orderCost += itemCost;
+                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId && prod.status !== 'SOLD') || inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                            orderCost += (p?.purchasePrice || 0) * (item.quantity || 1);
                         });
                     }
                     prodCost = orderCost;
@@ -233,26 +197,8 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                         }
                     } else {
                         o.items.forEach((item: any) => {
-                            let itemCost = 0;
-                            if (item.serialNumbers && item.serialNumbers.length > 0) {
-                                item.serialNumbers.forEach((sn: string) => {
-                                    const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
-                                    if (batch) {
-                                        itemCost += (batch.purchasePrice || 0);
-                                    } else {
-                                        const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                        itemCost += (p?.purchasePrice || 0);
-                                    }
-                                });
-                                if (item.quantity > item.serialNumbers.length) {
-                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                    itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
-                                }
-                            } else {
-                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
-                            }
-                            orderCost += itemCost;
+                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId && prod.status !== 'SOLD') || inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                            orderCost += (p?.purchasePrice || 0) * (item.quantity || 1);
                         });
                     }
                     cost += orderCost;
@@ -408,28 +354,28 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ orders, inventoryProducts }) =>
                             ) : (
                                 monthlyOrders.map(order => {
                                     let prodCost = 0;
-                                    order.items.forEach((item: any) => {
-                                        let itemCost = 0;
-                                        if (item.serialNumbers && item.serialNumbers.length > 0) {
-                                            item.serialNumbers.forEach((sn: string) => {
-                                                const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
-                                                if (batch) {
-                                                    itemCost += (batch.purchasePrice || 0);
-                                                } else {
-                                                    const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                                    itemCost += (p?.purchasePrice || 0);
-                                                }
-                                            });
-                                            if (item.quantity > item.serialNumbers.length) {
-                                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                                itemCost += (p?.purchasePrice || 0) * (item.quantity - item.serialNumbers.length);
+                                    if (order.serialNumbersUsed && order.serialNumbersUsed.length > 0) {
+                                        order.serialNumbersUsed.forEach((sn: string) => {
+                                            const batch = inventoryProducts.find(p => p.units?.some(u => u.id === sn));
+                                            if (batch) {
+                                                prodCost += (batch.purchasePrice || 0);
                                             }
-                                        } else {
-                                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
-                                            itemCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                        });
+                                        const totalItems = order.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+                                        if (totalItems > order.serialNumbersUsed.length) {
+                                            const remainingItems = totalItems - order.serialNumbersUsed.length;
+                                            const avgCost = order.items.reduce((acc: number, item: any) => {
+                                                const p = inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                                return acc + (p?.purchasePrice || 0);
+                                            }, 0) / order.items.length;
+                                            prodCost += (avgCost || 0) * remainingItems;
                                         }
-                                        prodCost += itemCost;
-                                    });
+                                    } else {
+                                        order.items.forEach((item: any) => {
+                                            const p = inventoryProducts.find(prod => prod.publicProductId === item.productId && prod.status !== 'SOLD') || inventoryProducts.find(prod => prod.publicProductId === item.productId);
+                                            prodCost += (p?.purchasePrice || 0) * (item.quantity || 1);
+                                        });
+                                    }
                                     const shipCost = order.shippingInfo.deliveryMethod === 'Pickup' ? 0 : (order.storeShippingCost || 5.40);
                                     
                                     let orderCashback = 0;
