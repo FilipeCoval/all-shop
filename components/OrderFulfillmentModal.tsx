@@ -247,7 +247,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     const batchDoc = batchDocs[batchId];
                     const batchData = batchDoc.data() as InventoryProduct;
                     
-                    calculatedTotalProductCost += ((batchData.purchasePrice || 0) / (batchData.quantityBought || 1)) * serials.length;
+                    calculatedTotalProductCost += (batchData.purchasePrice || 0) * serials.length;
 
                     let currentUnits = batchData.units || [];
                     
@@ -621,4 +621,3 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 };
 
 export default OrderFulfillmentModal;
-
