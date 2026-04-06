@@ -65,7 +65,7 @@ interface CartDrawerProps {
   onRemoveItem: (id: string) => void;
   onUpdateQuantity: (id: string, delta: number) => void;
   total: number;
-  onCheckout: (order: Order) => Promise<boolean>;
+  onCheckout: (order: Order, isAutoSave?: boolean) => Promise<boolean>;
   user: User | null;
   onOpenLogin: () => void;
 }
@@ -325,12 +325,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     setIsFinalizing(false);
   };
 
-  const handleConfirmSent = async () => {
+  const handleConfirmSent = async (isAutoSave: boolean = false) => {
       if (!pendingOrder) return;
       setIsFinalizing(true);
-      const success = await onCheckout(pendingOrder);
+      const success = await onCheckout(pendingOrder, isAutoSave);
       if (success) {
-          setCheckoutStep('success');
+          if (!isAutoSave) {
+              setCheckoutStep('success');
+          } else {
+              setPendingOrder(null); // Prevent saving again if they click another button
+          }
       }
       setIsFinalizing(false);
   };
