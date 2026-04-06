@@ -5,7 +5,7 @@ interface OrderTutorialProps {
   message: string;
   platform: 'wa' | 'tg';
   actionUrl: string;
-  onComplete: () => void;
+  onComplete: (isAutoSave?: boolean) => void;
   isLoading?: boolean;
 }
 
@@ -29,10 +29,14 @@ const OrderTutorial: React.FC<OrderTutorialProps> = ({ message, platform, action
     navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    // Auto-save the order when the user interacts
+    onComplete(true);
   };
 
   const handleOpenApp = () => {
     window.open(actionUrl, '_blank');
+    // Auto-save the order when the user interacts
+    onComplete(true);
   };
 
   return (
@@ -169,7 +173,7 @@ const OrderTutorial: React.FC<OrderTutorialProps> = ({ message, platform, action
         </div>
 
         <button 
-            onClick={onComplete}
+            onClick={() => onComplete(false)}
             disabled={isLoading}
             className="w-full py-3 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
