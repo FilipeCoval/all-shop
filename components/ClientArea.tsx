@@ -355,8 +355,127 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
   // ... (Keep handlePrintOrder) ...
   const handlePrintOrder = (order: Order) => {
-      // (Simplified for brevity, assume existing implementation)
-      alert("A iniciar impressão...");
+      const printWindow = window.open('', '_blank', 'width=800,height=800');
+      if (!printWindow) return;
+
+      const itemsHtml = getSafeItems(order.items).map((item: any) => {
+          const product = publicProducts.find(p => p.id === item.productId);
+          const serials = item.serialNumbers && item.serialNumbers.length > 0 
+              ? `<br><span style="font-size: 10px; color: #666;">S/N: ${item.serialNumbers.join(', ')}</span>` 
+              : '';
+          return `
+              <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #eee;">${product?.name || 'Produto'}${serials}</td>
+                  <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity || 1}</td>
+                  <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${(item.price || 0).toFixed(2)}€</td>
+                  <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${((item.price || 0) * (item.quantity || 1)).toFixed(2)}€</td>
+              </tr>
+          `;
+      }).join('');
+
+      const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Fatura / Garantia - ${order.id}</title>
+              <style>
+                  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; }
+                  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #f0f0f0; padding-bottom: 20px; }
+                  .store-info h1 { margin: 0 0 5px 0; color: #2563eb; font-size: 24px; }
+                  .store-info p { margin: 0; color: #666; font-size: 14px; }
+                  .doc-info { text-align: right; }
+                  .doc-info h2 { margin: 0 0 5px 0; color: #333; font-size: 20px; text-transform: uppercase; }
+                  .doc-info p { margin: 0; color: #666; font-size: 14px; }
+                  .customer-info { margin-bottom: 40px; padding: 20px; background: #f9fafb; border-radius: 8px; }
+                  .customer-info h3 { margin: 0 0 10px 0; font-size: 16px; color: #333; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+                  .customer-info p { margin: 5px 0; font-size: 14px; }
+                  table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                  th { background: #f3f4f6; padding: 12px 10px; text-align: left; font-size: 14px; color: #374151; border-bottom: 2px solid #e5e7eb; }
+                  th.text-right { text-align: right; }
+                  th.text-center { text-align: center; }
+                  .totals { width: 300px; margin-left: auto; margin-bottom: 40px; }
+                  .totals-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+                  .totals-row.bold { font-weight: bold; font-size: 16px; border-bottom: 2px solid #333; color: #000; }
+                  .warranty-box { border: 2px dashed #10b981; padding: 20px; border-radius: 8px; background: #ecfdf5; text-align: center; }
+                  .warranty-box h4 { margin: 0 0 10px 0; color: #047857; font-size: 16px; }
+                  .warranty-box p { margin: 0; color: #065f46; font-size: 13px; }
+                  @media print {
+                      body { padding: 0; }
+                      .no-print { display: none; }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="no-print" style="margin-bottom: 20px; text-align: right;">
+                  <button onclick="window.print()" style="background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Imprimir</button>
+              </div>
+              <div class="header">
+                  <div class="store-info">
+                      <h1>All-Shop</h1>
+                      <p>Loja de Tecnologia</p>
+                      <p>Portugal</p>
+                  </div>
+                  <div class="doc-info">
+                      <h2>Fatura / Recibo</h2>
+                      <p><strong>Nº:</strong> ${order.id.slice(-6).toUpperCase()}</p>
+                      <p><strong>Data:</strong> ${new Date(order.date).toLocaleDateString('pt-PT')}</p>
+                  </div>
+              </div>
+
+              <div class="customer-info">
+                  <h3>Dados do Cliente</h3>
+                  <p><strong>Nome:</strong> ${order.shippingInfo.name}</p>
+                  <p><strong>Morada:</strong> ${order.shippingInfo.street}, ${order.shippingInfo.doorNumber} ${order.shippingInfo.addressExtra || ''}</p>
+                  <p><strong>Cód. Postal:</strong> ${order.shippingInfo.zip} ${order.shippingInfo.city}</p>
+                  ${order.shippingInfo.nif ? `<p><strong>NIF:</strong> ${order.shippingInfo.nif}</p>` : ''}
+              </div>
+
+              <table>
+                  <thead>
+                      <tr>
+                          <th>Artigo</th>
+                          <th class="text-center">Qtd</th>
+                          <th class="text-right">Preço Unit.</th>
+                          <th class="text-right">Total</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${itemsHtml}
+                  </tbody>
+              </table>
+
+              <div class="totals">
+                  <div class="totals-row">
+                      <span>Subtotal:</span>
+                      <span>${(order.total - (order.storeShippingCost || 0)).toFixed(2)}€</span>
+                  </div>
+                  <div class="totals-row">
+                      <span>Portes de Envio:</span>
+                      <span>${(order.storeShippingCost || 0).toFixed(2)}€</span>
+                  </div>
+                  <div class="totals-row bold">
+                      <span>Total Pago:</span>
+                      <span>${order.total.toFixed(2)}€</span>
+                  </div>
+              </div>
+
+              <div class="warranty-box">
+                  <h4>🛡️ Certificado de Garantia - 3 Anos</h4>
+                  <p>Este documento serve como comprovativo de compra e certificado de garantia.<br>Todos os equipamentos novos estão cobertos por 3 anos de garantia contra defeitos de fabrico, conforme a lei portuguesa.</p>
+              </div>
+              
+              <div style="margin-top: 40px; text-align: center; font-size: 12px; color: #999;">
+                  <p>Obrigado pela sua preferência!</p>
+              </div>
+              <script>
+                  window.onload = function() { window.print(); }
+              </script>
+          </body>
+          </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
   };
 
   const getStatusStep = (status: string) => {
