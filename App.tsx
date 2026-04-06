@@ -1,5 +1,38 @@
 
-import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy, Component, ErrorInfo, ReactNode } from 'react';
+
+class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: Error | null, errorInfo: ErrorInfo | null}> {
+  constructor(props: {children: ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', background: '#fee', color: '#900', fontFamily: 'monospace' }}>
+          <h2>Something went wrong.</h2>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo?.componentStack}
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 import { Smartphone, Landmark, Banknote, Search, Loader2, Sun, Moon, Bell, X } from 'lucide-react';
 import Header from './components/Header';
 import CartDrawer from './components/CartDrawer';
@@ -27,7 +60,7 @@ import { useStock } from './hooks/useStock';
 import { usePublicProducts } from './hooks/usePublicProducts';
 import { useStockReservations } from './hooks/useStockReservations';
 import { usePendingOrders } from './hooks/usePendingOrders';
-import { notifyNewOrder } from './services/telegramNotifier.ts';
+import { notifyNewOrder } from './services/telegramNotifier';
 import LoyaltyPage from './components/LoyaltyPage';
 import { trackVisit } from './services/analyticsService';
 
@@ -572,7 +605,7 @@ const App: React.FC = () => {
     catch (error) { console.error("Logout error", error); }
   };
 
-  const handleCheckout = async (newOrder: Order): Promise<boolean> => {
+  const handleCheckout = async (newOrder: Order, isAutoSave: boolean = false): Promise<boolean> => {
       try {
           // Limpar dados para evitar erros de 'undefined' no Firebase
           const cleanOrder = JSON.parse(JSON.stringify(newOrder));
@@ -625,20 +658,22 @@ const App: React.FC = () => {
           }
 
           setOrders(prev => [newOrder, ...prev]);
-          setCartItems([]);
-          notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
-          
-          // Notificar Admins via Push (Nova Funcionalidade)
-          fetch('/api/send-push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  target: 'admins',
-                  title: 'Nova Encomenda! 💰',
-                  body: `Pedido ${newOrder.id} de ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(newOrder.total)} recebido.`,
-                  link: 'https://www.all-shop.net/#dashboard'
-              })
-          }).catch(err => console.error("Falha ao enviar push para admins:", err));
+          if (!isAutoSave) {
+              setCartItems([]);
+              notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
+              
+              // Notificar Admins via Push (Nova Funcionalidade)
+              fetch('/api/send-push', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      target: 'admins',
+                      title: 'Nova Encomenda! 💰',
+                      body: `Pedido ${newOrder.id} de ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(newOrder.total)} recebido.`,
+                      link: 'https://www.all-shop.net/#dashboard'
+                  })
+              }).catch(err => console.error("Falha ao enviar push para admins:", err));
+          }
           
           if (user?.uid) {
             const userRef = db.collection("users").doc(user.uid);
@@ -849,3 +884,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
