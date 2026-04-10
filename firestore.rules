@@ -37,13 +37,22 @@ service cloud.firestore {
     }
 
     // Encomendas: Criar é público (para permitir checkout), Ler só o dono
-    // CORREÇÃO: Adicionada permissão 'delete' para administradores
+    // CORREÇÃO: Adicionada permissão 'delete' para administradores e correção para resource == null
     match /orders/{orderId} {
       allow create: if true;
-      allow read, update: if isAdmin() || (isSignedIn() && (
+      allow read: if isAdmin() || resource == null || (isSignedIn() && (
           resource.data.userId == request.auth.uid ||
           resource.data.shippingInfo.email == request.auth.token.email
       ));
+      allow update: if isAdmin() || (isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.shippingInfo.email == request.auth.token.email
+      )) || (
+          // Permite que qualquer utilizador (mesmo guest) confirme a sua encomenda pendente
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'statusHistory']) &&
+          resource.data.status == 'Pendente' &&
+          request.resource.data.status == 'Processamento'
+      );
       allow delete: if isAdmin();
     }
 
@@ -59,7 +68,8 @@ service cloud.firestore {
     // - Leitura: Admin OU o próprio dono do email (para ver na Área de Cliente)
     match /support_tickets/{ticketId} { 
       allow create: if true; 
-      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.customerEmail == request.auth.token.email); 
+      allow read: if isAdmin() || resource == null || (isSignedIn() && resource.data.customerEmail == request.auth.token.email);
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.customerEmail == request.auth.token.email); 
     }
 
     // Sistema de Reservas e Online: Aberto para garantir funcionamento do stock em tempo real
@@ -71,6 +81,9 @@ service cloud.firestore {
 
     // Movimentos de Stock: Apenas Admin (Necessário para dar baixa de encomendas)
     match /stock_movements/{movementId} { allow read, write: if isAdmin(); }
+
+    // Importações: Apenas Admin
+    match /import_shipments/{shipmentId} { allow read, write: if isAdmin(); }
 
     // Cupões
     match /coupons/{docId} {
