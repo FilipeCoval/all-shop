@@ -294,7 +294,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
         id: currentOrderId,
         date: new Date().toISOString(),
         total: finalTotal,
-        status: 'Processamento',
+        status: 'Pendente',
         stockDeducted: false,
         items: cartItems.map(i => ({ productId: i.id, name: i.name, price: i.price, quantity: i.quantity, selectedVariant: i.selectedVariant || '', image: i.image, addedAt: new Date().toISOString() })),
         shippingInfo: finalUserInfo,
@@ -323,17 +323,29 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
     setSelectedPlatform(platform);
     setCheckoutStep('tutorial');
     setIsFinalizing(false);
+    
+    // Auto-save the order as Pendente immediately when starting checkout
+    onCheckout(newOrder, true);
   };
 
   const handleConfirmSent = async (isAutoSave: boolean = false) => {
       if (!pendingOrder) return;
       setIsFinalizing(true);
-      const success = await onCheckout(pendingOrder, isAutoSave);
+
+      let orderToSave = { ...pendingOrder };
+      if (!isAutoSave) {
+          orderToSave.status = 'Processamento';
+          orderToSave.statusHistory = [
+              ...(orderToSave.statusHistory || []),
+              { status: 'Processamento', date: new Date().toISOString(), notes: 'Pedido confirmado pelo utilizador via tutorial.' }
+          ];
+      }
+
+      // Pass isAutoSave to onCheckout so it knows whether to clear the cart and send notifications
+      const success = await onCheckout(orderToSave, isAutoSave);
       if (success) {
           if (!isAutoSave) {
               setCheckoutStep('success');
-          } else {
-              setPendingOrder(null); // Prevent saving again if they click another button
           }
       }
       setIsFinalizing(false);
@@ -628,4 +640,5 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
+
 
