@@ -29,14 +29,10 @@ const OrderTutorial: React.FC<OrderTutorialProps> = ({ message, platform, action
     navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    // Auto-save the order when the user interacts
-    onComplete(true);
   };
 
   const handleOpenApp = () => {
     window.open(actionUrl, '_blank');
-    // Auto-save the order when the user interacts
-    onComplete(true);
   };
 
   return (
