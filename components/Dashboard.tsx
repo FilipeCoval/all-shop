@@ -231,8 +231,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           snapshot.docChanges().forEach(change => { 
               if (change.type === 'added') { 
                   const order = change.doc.data() as Order; 
-                  // Só notifica encomendas criadas depois de abrir o dashboard (margem de 2s)
-                  if (new Date(order.date).getTime() > (mountTime - 2000)) { 
+                  // Só notifica encomendas criadas depois de abrir o dashboard (margem de 2s) e que não estejam Pendentes
+                  if (new Date(order.date).getTime() > (mountTime - 2000) && order.status !== 'Pendente') { 
                       setNotifications(prev => [order, ...prev]); 
                       setShowToast(order); 
                       
@@ -248,12 +248,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               } 
           }); 
       }); 
+
       return () => unsubscribe(); 
   }, [isAdmin, isSoundEnabled]);
 
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('products_public').onSnapshot(snap => { const loadedProducts: Product[] = []; snap.forEach(doc => { const id = parseInt(doc.id, 10); const data = doc.data(); if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product); }); setPublicProductsList(loadedProducts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('online_users').onSnapshot(snapshot => { const now = Date.now(); const activeUsers: any[] = []; snapshot.forEach(doc => { const data = doc.data(); if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) { activeUsers.push({ id: doc.id, ...data }); } }); setOnlineUsers(activeUsers); }); return () => unsubscribe(); }, [isAdmin]);
-  useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
+  useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)).filter(o => o.status !== 'Pendente')); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
   
   useEffect(() => { 
       // Carregar utilizadores sempre que precisarmos de dados para notificações ou gestão
@@ -525,7 +526,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           if (!prev) return null;
           const updated = { ...prev, image: url };
           // Sincronizar com formData se estiverem ligados
-          if (formData.publicProductId === updated.id) {
+          if (Number(formData.publicProductId) === updated.id) {
               setFormData(f => ({ ...f, image: url }));
           }
           saveStoreProductToDb(updated); // Auto-save
@@ -563,7 +564,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           
           const updated = { ...prev, images: newImages, image: newMainImage, variants: newVariants };
           // Sincronizar com formData se estiverem ligados
-          if (formData.publicProductId === updated.id) {
+          if (Number(formData.publicProductId) === updated.id) {
               setFormData(f => ({ ...f, images: newImages, image: newMainImage }));
           }
           saveStoreProductToDb(updated); // Auto-save
@@ -744,7 +745,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           setFormData(prev => {
               const updated = { ...prev, images: [...prev.images, downloadURL] };
               // Sincronizar com editingStoreProduct se estiverem ligados
-              if (editingStoreProduct && editingStoreProduct.id === updated.publicProductId) {
+              if (editingStoreProduct && editingStoreProduct.id === Number(updated.publicProductId)) {
                   setEditingStoreProduct(s => s ? { ...s, images: updated.images, image: s.image || downloadURL } : null);
               }
               return updated;
