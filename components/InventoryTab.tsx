@@ -27,10 +27,6 @@ interface InventoryTabProps {
   isSyncingStock: boolean;
   onOpenScanner: (mode: 'search' | 'add_unit' | 'sell_unit' | 'tracking' | 'verify_product') => void;
   onOpenCalculator: () => void;
-  onImport: () => void;
-  isImporting: boolean;
-  onRecalculate: () => void;
-  isRecalculating: boolean;
   onAddNew: () => void;
   onOpenInvestedModal: () => void;
   onOpenRevenueModal: () => void;
@@ -52,8 +48,6 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
   onEdit, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
-  onImport, isImporting,
-  onRecalculate, isRecalculating,
   onAddNew,
   onOpenInvestedModal, onOpenRevenueModal, onOpenProfitModal, onOpenCashbackManager, onOpenOnlineDetails,
   onOpenStockAlerts,
@@ -157,12 +151,6 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                     </button>
                     <button onClick={onOpenCalculator} className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1" title="Calculadora de Lucro">
                         <BrainCircuit size={18} />
-                    </button>
-                    <button onClick={onImport} disabled={isImporting} className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-1" title="Importar e Corrigir Produtos">
-                        {isImporting ? '...' : <UploadCloud size={18} />}
-                    </button>
-                    <button onClick={onRecalculate} disabled={isRecalculating} className="bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1" title="Recalcular Stock e Vendas">
-                        {isRecalculating ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                     </button>
                     <button onClick={onAddNew} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
                         <Plus size={18} />
@@ -478,4 +466,3 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
 };
 
 export default InventoryTab;
-
