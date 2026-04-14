@@ -160,17 +160,9 @@ export const useInventory = (isAdmin: boolean = false) => {
       
       // 2. Atualizar ou Criar Produto Público
       if (product.publicProductId !== undefined && product.publicProductId !== null) {
-          // Se já existe ID público, atualizamos os dados gerais (Nome, Imagem, Descrição)
-          // assumindo que o novo lote tem a info mais recente.
-          const publicProduct = mapToPublicProduct(product, publicId);
-          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
-          
-          // Removemos stock e variantes do update direto, deixamos o refresh calcular
-          delete cleanPublicProduct.stock;
-          delete cleanPublicProduct.variants;
-          delete cleanPublicProduct.id;
-
-          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
+          // Se já existe ID público, NÃO atualizamos os metadados (Nome, Imagens, etc)
+          // para não sobrescrever as edições feitas na Gestão da Loja Online.
+          // Apenas o stock e variantes serão atualizados pelo refreshPublicProductStock.
       } else {
           // Se é novo produto sem ID público, cria do zero
           const publicProduct = mapToPublicProduct(product, publicId);
@@ -200,16 +192,8 @@ export const useInventory = (isAdmin: boolean = false) => {
       if (currentData && currentData.publicProductId !== undefined && currentData.publicProductId !== null) {
           const publicId = Number(currentData.publicProductId);
           
-          // Atualiza metadados públicos (Nome, Preço, Imagens)
-          const publicProduct = mapToPublicProduct(currentData, publicId);
-          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
-          
-          // Removemos stock e variantes do update direto para não sobrescrever cálculo
-          delete cleanPublicProduct.stock;
-          delete cleanPublicProduct.variants;
-          delete cleanPublicProduct.id;
-
-          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
+          // NÃO atualizamos metadados públicos (Nome, Preço, Imagens) aqui
+          // para não sobrescrever as edições feitas na Gestão da Loja Online.
 
           // 3. SINCRONIZAÇÃO AUTOMÁTICA DE STOCK
           // Recalcula a soma de todos os lotes
@@ -252,4 +236,3 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
-
