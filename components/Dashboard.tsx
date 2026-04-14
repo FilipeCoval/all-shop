@@ -74,7 +74,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [modalUnits, setModalUnits] = useState<ProductUnit[]>([]);
   const [manualUnitCode, setManualUnitCode] = useState('');
   const [stockAlerts, setStockAlerts] = useState<any[]>([]);
-  const [isImporting, setIsImporting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,7 +135,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [salesSearchTerm, setSalesSearchTerm] = useState('');
   const [detailsModalData, setDetailsModalData] = useState<{ title: string; data: any[]; columns: { header: string; accessor: string | ((item: any) => React.ReactNode); }[]; total: number } | null>(null);
   const [isPublicIdEditable, setIsPublicIdEditable] = useState(false);
-  const [isRecalculating, setIsRecalculating] = useState(false);
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(false);
   const [clientsSearchTerm, setClientsSearchTerm] = useState('');
@@ -213,6 +211,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
 
   const [editingStoreProduct, setEditingStoreProduct] = useState<Product | null>(null);
+  const [newStoreFeature, setNewStoreFeature] = useState('');
+  const [newStoreSpecKey, setNewStoreSpecKey] = useState('');
+  const [newStoreSpecValue, setNewStoreSpecValue] = useState('');
   const activeStoreVariantIndexRef = useRef<number | null>(null);
 
 
@@ -572,7 +573,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       });
   };
 
-  const handleSaveStoreProduct = async () => {
+  const handleSaveStoreProduct = async (silent = false) => {
       if (!editingStoreProduct) return;
       setIsUploading(true);
       try {
@@ -582,10 +583,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct, { merge: true });
           setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
           console.log('Produto da loja atualizado!');
-          alert("Alterações na loja guardadas com sucesso!");
+          if (!silent) alert("Alterações na loja guardadas com sucesso!");
       } catch (error: any) {
           console.error("Erro ao guardar produto:", error);
-          alert(`Erro ao guardar alterações na loja online: ${error.message}. Verifique as suas permissões e se as regras do Firebase foram publicadas.`);
+          if (!silent) alert(`Erro ao guardar alterações na loja online: ${error.message}. Verifique as suas permissões e se as regras do Firebase foram publicadas.`);
       } finally {
           setIsUploading(false);
       }
@@ -607,7 +608,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]); 
       
       try { 
-          if (editingId) await updateProduct(editingId, payload); else await addProduct(payload); 
+          if (editingId) {
+              await updateProduct(editingId, payload);
+              if (editingStoreProduct) {
+                  await handleSaveStoreProduct(true); // Pass true to indicate silent save
+              }
+          } else {
+              await addProduct(payload); 
+          }
           setIsModalOpen(false); 
           if (payload.publicProductId && availableStock > 0 && !payload.comingSoon) { await checkAndProcessStockAlerts(payload.publicProductId, payload.name, availableStock); }
       } catch (err) { alert('Erro ao guardar.'); } 
@@ -766,6 +774,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
 
+  const handleAddStoreFeature = () => { if (newStoreFeature && newStoreFeature.trim() && editingStoreProduct) { setEditingStoreProduct(prev => prev ? ({ ...prev, features: [...(prev.features || []), newStoreFeature.trim()] }) : null); setNewStoreFeature(''); } };
+  const handleRemoveStoreFeature = (indexToRemove: number) => { if (editingStoreProduct) { setEditingStoreProduct(prev => prev ? ({ ...prev, features: (prev.features || []).filter((_, idx) => idx !== indexToRemove) }) : null); } };
+
   const handleAddSpec = () => {
     if (formData.newSpecKey && formData.newSpecValue) {
       setFormData(prev => ({
@@ -783,6 +794,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       delete newSpecs[key];
       return { ...prev, specs: newSpecs };
     });
+  };
+
+  const handleAddStoreSpec = () => {
+    if (newStoreSpecKey && newStoreSpecValue && editingStoreProduct) {
+      setEditingStoreProduct(prev => prev ? ({
+        ...prev,
+        specs: { ...(prev.specs || {}), [newStoreSpecKey]: newStoreSpecValue }
+      }) : null);
+      setNewStoreSpecKey('');
+      setNewStoreSpecValue('');
+    }
+  };
+  const handleRemoveStoreSpec = (keyToRemove: string) => {
+    if (editingStoreProduct) {
+      setEditingStoreProduct(prev => {
+        if (!prev) return null;
+        const newSpecs = { ...(prev.specs || {}) };
+        delete newSpecs[keyToRemove];
+        return { ...prev, specs: newSpecs };
+      });
+    }
   };
   const handleSyncPublicStock = async (silent = false) => {
     if (products.length === 0) {
@@ -1216,10 +1248,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 isSyncingStock={isSyncingStock} 
                 onOpenScanner={(mode) => { setScannerMode(mode); setIsScannerOpen(true); }} 
                 onOpenCalculator={() => setIsCalculatorOpen(true)} 
-                onImport={() => {}} 
-                isImporting={isImporting} 
-                onRecalculate={() => {}} 
-                isRecalculating={isRecalculating} 
                 onAddNew={handleAddNew} 
                 onOpenInvestedModal={handleOpenInvestedModal} 
                 onOpenRevenueModal={handleOpenRevenueModal} 
@@ -1583,7 +1611,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                         </h4>
                         <button 
                             type="button" 
-                            onClick={handleSaveStoreProduct}
+                            onClick={() => handleSaveStoreProduct(false)}
                             className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
                         >
                             <Save size={12}/> Guardar Alterações na Loja
@@ -1791,6 +1819,45 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                                 {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
                                     <p className="text-center text-xs text-gray-400 italic py-2">Sem variantes. O produto é único.</p>
                                 )}
+                            </div>
+                        </div>
+                        
+                        <div className="mt-6">
+                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2 mb-3"><ListPlus size={16} /> Destaques / Características Principais (Loja)</h4>
+                            {editingStoreProduct.features && editingStoreProduct.features.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                    {editingStoreProduct.features.map((feat, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded border border-gray-200 dark:border-slate-700 text-sm">
+                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div>
+                                            <span className="flex-1 text-gray-700 dark:text-gray-300">{feat}</span>
+                                            <button type="button" onClick={() => handleRemoveStoreFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreFeature} onChange={e => setNewStoreFeature(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStoreFeature())}/>
+                                <button type="button" onClick={handleAddStoreFeature} className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 rounded-lg font-bold transition-colors">+ Item</button>
+                            </div>
+                        </div>
+
+                        <div className="mt-6">
+                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2 mb-3"><Settings size={16} /> Especificações Técnicas (Loja)</h4>
+                            {editingStoreProduct.specs && Object.keys(editingStoreProduct.specs).length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                    {Object.entries(editingStoreProduct.specs).map(([key, value]) => (
+                                        <div key={key} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded border border-gray-200 dark:border-slate-700 text-sm">
+                                            <span className="font-bold text-gray-600 dark:text-gray-400">{key}:</span>
+                                            <span className="flex-1 text-gray-800 dark:text-gray-200">{value.toString()}</span>
+                                            <button type="button" onClick={() => handleRemoveStoreSpec(key)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <input type="text" placeholder="Característica (Ex: RAM)" className="w-1/3 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreSpecKey} onChange={e => setNewStoreSpecKey(e.target.value)} />
+                                <input type="text" placeholder="Valor (Ex: 8GB)" className="flex-1 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreSpecValue} onChange={e => setNewStoreSpecValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStoreSpec())} />
+                                <button type="button" onClick={handleAddStoreSpec} className="bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 px-4 rounded-lg font-bold transition-colors">+</button>
                             </div>
                         </div>
                         
@@ -2079,5 +2146,3 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
-
-
