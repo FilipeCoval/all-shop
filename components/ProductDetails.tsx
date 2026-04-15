@@ -307,13 +307,15 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
           <ArrowLeft size={20} /> Voltar à Loja
         </a>
         
-        {/* Botão de Simulação Premium */}
-        <button 
-          onClick={() => setIsPremiumLayout(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
-        >
-          <Sparkles size={16} /> Simular Layout Premium
-        </button>
+        {/* Botão de Simulação Premium (Apenas Admin) */}
+        {currentUser?.email && (["filipe_coval_90@hotmail.com", "mcpoleca@gmail.com"].includes(currentUser.email)) && (
+            <button 
+              onClick={() => setIsPremiumLayout(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            >
+              <Sparkles size={16} /> Simular Layout Premium
+            </button>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div className="space-y-4">
