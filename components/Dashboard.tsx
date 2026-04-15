@@ -18,6 +18,8 @@ import BarcodeScanner from './BarcodeScanner';
 import OrderDetailsModal from './OrderDetailsModal';
 import KpiCard from './KpiCard';
 import InventoryTab from './InventoryTab';
+import CatalogTab from './CatalogTab';
+import CatalogModal from './CatalogModal';
 import OrdersTab from './OrdersTab';
 import ManualOrderModal from './ManualOrderModal';
 import OrderFulfillmentModal from './OrderFulfillmentModal';
@@ -47,10 +49,11 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
   
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products' | 'imports'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products' | 'imports' | 'catalog'>('inventory');
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [selectedProductForSale, setSelectedProductForSale] = useState<InventoryProduct | null>(null);
@@ -211,10 +214,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
 
   const [editingStoreProduct, setEditingStoreProduct] = useState<Product | null>(null);
-  const [newStoreFeature, setNewStoreFeature] = useState('');
-  const [newStoreSpecKey, setNewStoreSpecKey] = useState('');
-  const [newStoreSpecValue, setNewStoreSpecValue] = useState('');
-  const activeStoreVariantIndexRef = useRef<number | null>(null);
+
+
 
 
 
@@ -374,223 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   };
 
   // Store Product Management Helpers
-  const handleStoreProductVariantChange = (index: number, field: keyof ProductVariant, value: any) => {
-      if (!editingStoreProduct) return;
-      const newVariants = [...(editingStoreProduct.variants || [])];
-      newVariants[index] = { ...newVariants[index], [field]: value };
-      setEditingStoreProduct({ ...editingStoreProduct, variants: newVariants });
-  };
 
-  const handleAddStoreProductVariant = () => {
-      if (!editingStoreProduct) return;
-      const newVariant: ProductVariant = {
-          name: 'Nova Opção',
-          price: editingStoreProduct.price,
-          image: ''
-      };
-      setEditingStoreProduct({ 
-          ...editingStoreProduct, 
-          variants: [...(editingStoreProduct.variants || []), newVariant] 
-      });
-  };
-
-  const handleRemoveStoreProductVariant = (index: number) => {
-      if (!editingStoreProduct) return;
-      const newVariants = [...(editingStoreProduct.variants || [])];
-      newVariants.splice(index, 1);
-      setEditingStoreProduct({ ...editingStoreProduct, variants: newVariants });
-  };
-
-  // Helper para gravar produto da loja automaticamente
-  const saveStoreProductToDb = async (product: Product) => {
-      try {
-          // Remover campos undefined para evitar erro no Firestore
-          const cleanProduct = JSON.parse(JSON.stringify(product));
-          delete cleanProduct.id;
-          
-          await db.collection('products_public').doc(product.id.toString()).set(cleanProduct, { merge: true });
-          setPublicProductsList(prev => prev.map(p => p.id === product.id ? product : p));
-      } catch (error: any) {
-          console.error("Erro ao gravar automaticamente:", error);
-          if (error.message && error.message.includes('permission')) {
-              alert("Erro de permissão ao gravar na loja. Verifique se as regras do Firebase foram publicadas.");
-          } else {
-              alert("Erro ao gravar alterações. Verifique a sua ligação.");
-          }
-      }
-  };
-
-  const handleStoreProductImageUpload = async (files: FileList | null, target: 'main' | 'gallery' | number) => {
-      if (!files || files.length === 0) return;
-      
-      console.log(`Iniciando upload para target: ${target}, total de ficheiros: ${files.length}`);
-
-      // Validar tamanho (5MB)
-      for (let i = 0; i < files.length; i++) {
-          if (files[i].size > 5 * 1024 * 1024) {
-              console.warn(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
-              alert(`A imagem ${files[i].name} é demasiado grande. Máximo 5MB.`);
-              return;
-          }
-      }
-
-      setIsUploading(true);
-      setUploadProgress(0);
-      const newImageUrls: string[] = [];
-      let completedUploads = 0;
-
-      const uploadPromises = Array.from(files).map(file => {
-          return new Promise<string>((resolve, reject) => {
-              const storageRef = storage.ref();
-              const fileRef = storageRef.child(`products/${Date.now()}_${file.name}`);
-              let uploadTask: firebase.storage.UploadTask;
-              try {
-                uploadTask = fileRef.put(file);
-              } catch (putError) {
-                console.error(`Erro ao iniciar put para ${file.name}:`, putError);
-                reject(putError);
-                return;
-              }
-
-              uploadTask.on('state_changed', 
-                  (snapshot) => {
-                      const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                      setUploadProgress(progress);
-                      console.log(`Upload progress (${file.name}): ${Math.round(progress)}%`);
-                  }, 
-                  (error) => {
-                      console.error(`Erro no upload de ${file.name}:`, error);
-                      reject(error);
-                  }, 
-                  async () => {
-                      try {
-                          const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                          console.log(`Upload concluído (${file.name}): ${downloadURL}`);
-                          resolve(downloadURL);
-                      } catch (err) {
-                          reject(err);
-                      }
-                  }
-              );
-          });
-      });
-
-      try {
-          const urls = await Promise.all(uploadPromises);
-          newImageUrls.push(...urls);
-          
-          setIsUploading(false);
-          setUploadProgress(null);
-          
-          setEditingStoreProduct(prev => {
-              if (!prev) return null;
-              
-              const currentImages = prev.images || [];
-              const uniqueNewImages = newImageUrls.filter(url => !currentImages.includes(url));
-              const updatedImages = [...currentImages, ...uniqueNewImages];
-              
-              let updates: any = { images: updatedImages };
-
-              if (target === 'main') {
-                  updates.image = newImageUrls[0];
-              } else if (typeof target === 'number') {
-                  const newVariants = [...(prev.variants || [])];
-                  if (newVariants[target]) {
-                      newVariants[target] = { ...newVariants[target], image: newImageUrls[0] };
-                      updates.variants = newVariants;
-                  }
-              } else if (target === 'gallery') {
-                  if (!prev.image && newImageUrls.length > 0) {
-                      updates.image = newImageUrls[0];
-                  }
-              }
-
-              const updatedProduct = { ...prev, ...updates };
-              // Sincronizar com formData se estiverem ligados
-              if (formData.publicProductId === updatedProduct.id) {
-                  setFormData(f => ({ ...f, images: updatedProduct.images, image: updatedProduct.image }));
-              }
-              // Agendar o save para fora do render cycle
-              setTimeout(() => saveStoreProductToDb(updatedProduct), 0);
-              return updatedProduct;
-          });
-      } catch (error) {
-          console.error("Erro geral no upload de imagens da loja:", error);
-          setIsUploading(false);
-          setUploadProgress(null);
-          alert("Erro ao carregar uma ou mais imagens. Tente novamente.");
-      }
-  };
-
-  const handleSetMainImage = (url: string) => {
-      setEditingStoreProduct(prev => {
-          if (!prev) return null;
-          const updated = { ...prev, image: url };
-          // Sincronizar com formData se estiverem ligados
-          if (Number(formData.publicProductId) === updated.id) {
-              setFormData(f => ({ ...f, image: url }));
-          }
-          saveStoreProductToDb(updated); // Auto-save
-          return updated;
-      });
-  };
-
-  const handleSetVariantImage = (variantIndex: number, url: string) => {
-      setEditingStoreProduct(prev => {
-          if (!prev) return null;
-          const newVariants = [...(prev.variants || [])];
-          if (newVariants[variantIndex]) {
-              newVariants[variantIndex] = { ...newVariants[variantIndex], image: url };
-          }
-          const updated = { ...prev, variants: newVariants };
-          saveStoreProductToDb(updated); // Auto-save
-          return updated;
-      });
-  };
-
-  const handleDeleteGalleryImage = (url: string) => {
-      setEditingStoreProduct(prev => {
-          if (!prev) return null;
-          const newImages = (prev.images || []).filter(img => img !== url);
-          
-          let newMainImage = prev.image;
-          if (prev.image === url) {
-              newMainImage = newImages.length > 0 ? newImages[0] : '';
-          }
-          
-          const newVariants = (prev.variants || []).map(v => ({
-              ...v,
-              image: v.image === url ? '' : v.image
-          }));
-          
-          const updated = { ...prev, images: newImages, image: newMainImage, variants: newVariants };
-          // Sincronizar com formData se estiverem ligados
-          if (Number(formData.publicProductId) === updated.id) {
-              setFormData(f => ({ ...f, images: newImages, image: newMainImage }));
-          }
-          saveStoreProductToDb(updated); // Auto-save
-          return updated;
-      });
-  };
-
-  const handleSaveStoreProduct = async (silent = false) => {
-      if (!editingStoreProduct) return;
-      setIsUploading(true);
-      try {
-          const cleanProduct = JSON.parse(JSON.stringify(editingStoreProduct));
-          delete cleanProduct.id;
-          
-          await db.collection('products_public').doc(editingStoreProduct.id.toString()).set(cleanProduct, { merge: true });
-          setPublicProductsList(prev => prev.map(p => p.id === editingStoreProduct.id ? editingStoreProduct : p));
-          console.log('Produto da loja atualizado!');
-          if (!silent) alert("Alterações na loja guardadas com sucesso!");
-      } catch (error: any) {
-          console.error("Erro ao guardar produto:", error);
-          if (!silent) alert(`Erro ao guardar alterações na loja online: ${error.message}. Verifique as suas permissões e se as regras do Firebase foram publicadas.`);
-      } finally {
-          setIsUploading(false);
-      }
-  };
 
   const handleProductSubmit = async (e: React.FormEvent) => { 
       e.preventDefault(); 
@@ -610,9 +395,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       try { 
           if (editingId) {
               await updateProduct(editingId, payload);
-              if (editingStoreProduct) {
-                  await handleSaveStoreProduct(true); // Pass true to indicate silent save
-              }
           } else {
               await addProduct(payload); 
           }
@@ -752,10 +534,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           console.log("Upload de inventário concluído:", downloadURL);
           setFormData(prev => {
               const updated = { ...prev, images: [...prev.images, downloadURL] };
-              // Sincronizar com editingStoreProduct se estiverem ligados
-              if (editingStoreProduct && editingStoreProduct.id === Number(updated.publicProductId)) {
-                  setEditingStoreProduct(s => s ? { ...s, images: updated.images, image: s.image || downloadURL } : null);
-              }
               return updated;
           }); 
           setIsUploading(false); 
@@ -774,8 +552,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAddFeature = () => { if (formData.newFeature && formData.newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...prev.features, formData.newFeature.trim()], newFeature: '' })); } };
   const handleRemoveFeature = (indexToRemove: number) => { setFormData(prev => ({ ...prev, features: prev.features.filter((_, idx) => idx !== indexToRemove) })); };
 
-  const handleAddStoreFeature = () => { if (newStoreFeature && newStoreFeature.trim() && editingStoreProduct) { setEditingStoreProduct(prev => prev ? ({ ...prev, features: [...(prev.features || []), newStoreFeature.trim()] }) : null); setNewStoreFeature(''); } };
-  const handleRemoveStoreFeature = (indexToRemove: number) => { if (editingStoreProduct) { setEditingStoreProduct(prev => prev ? ({ ...prev, features: (prev.features || []).filter((_, idx) => idx !== indexToRemove) }) : null); } };
+
 
   const handleAddSpec = () => {
     if (formData.newSpecKey && formData.newSpecValue) {
@@ -796,26 +573,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     });
   };
 
-  const handleAddStoreSpec = () => {
-    if (newStoreSpecKey && newStoreSpecValue && editingStoreProduct) {
-      setEditingStoreProduct(prev => prev ? ({
-        ...prev,
-        specs: { ...(prev.specs || {}), [newStoreSpecKey]: newStoreSpecValue }
-      }) : null);
-      setNewStoreSpecKey('');
-      setNewStoreSpecValue('');
-    }
-  };
-  const handleRemoveStoreSpec = (keyToRemove: string) => {
-    if (editingStoreProduct) {
-      setEditingStoreProduct(prev => {
-        if (!prev) return null;
-        const newSpecs = { ...(prev.specs || {}) };
-        delete newSpecs[keyToRemove];
-        return { ...prev, specs: newSpecs };
-      });
-    }
-  };
+
   const handleSyncPublicStock = async (silent = false) => {
     if (products.length === 0) {
       if (!silent) alert("O inventário parece estar vazio ou ainda a carregar.");
@@ -1202,7 +960,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             {/* TABS E RESTO DO HEADER MANTIDOS */}
             <div className="w-full md:w-auto flex flex-col md:flex-row bg-gray-100 dark:bg-slate-800 p-1 rounded-lg gap-1 md:gap-0 overflow-x-auto transition-colors">
-                <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Package size={16} /> Inventário</button>
+                <button onClick={() => setActiveTab('catalog')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'catalog' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Globe size={16} /> Catálogo</button>
+                <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Package size={16} /> Stock/Lotes</button>
 
                 <button onClick={() => setActiveTab('orders')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'orders' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><ShoppingCart size={16} /> Encomendas</button>
                 <button onClick={() => setActiveTab('clients')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'clients' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}><Users size={16} /> Clientes</button>
@@ -1232,6 +991,38 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       <div className="container mx-auto px-4 py-8">
         {/* ... Tab Contents ... */}
+        {activeTab === 'catalog' && (
+            <CatalogTab 
+                products={publicProductsList}
+                onEdit={(product) => {
+                    setEditingStoreProduct(product);
+                    setIsCatalogModalOpen(true);
+                }}
+                onAddNew={() => {
+                    setEditingStoreProduct({
+                        id: Date.now(),
+                        name: '',
+                        category: '',
+                        price: 0,
+                        description: '',
+                        stock: 0,
+                        features: [],
+                        images: [],
+                        image: '',
+                    });
+                    setIsCatalogModalOpen(true);
+                }}
+                onDelete={async (id) => {
+                    try {
+                        await db.collection('products_public').doc(id.toString()).delete();
+                        setPublicProductsList(prev => prev.filter(p => p.id !== id));
+                    } catch (error) {
+                        console.error("Erro ao apagar produto público:", error);
+                        alert("Erro ao apagar produto.");
+                    }
+                }}
+            />
+        )}
         {activeTab === 'inventory' && (
             <InventoryTab 
                 products={products} 
@@ -1567,6 +1358,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           />
       )}
       <OrderDetailsModal order={selectedOrderDetails} inventoryProducts={products} onClose={() => setSelectedOrderDetails(null)} onUpdateOrder={(id, u) => setAllOrders(prev => prev.map(o => o.id === id ? {...o, ...u} : o))} onUpdateTracking={handleUpdateTracking} onCopy={handleCopy} />
+      
+      {/* Catalog Modal */}
+      <CatalogModal 
+        isOpen={isCatalogModalOpen} 
+        onClose={() => setIsCatalogModalOpen(false)} 
+        product={editingStoreProduct} 
+        onSave={async (updatedProduct) => {
+          try {
+            const cleanProduct = JSON.parse(JSON.stringify(updatedProduct));
+            const id = Number(cleanProduct.id);
+            delete cleanProduct.id;
+            await db.collection('products_public').doc(id.toString()).set(cleanProduct, { merge: true });
+            setPublicProductsList(prev => {
+              const exists = prev.find(p => p.id === id);
+              if (exists) return prev.map(p => p.id === id ? { ...updatedProduct, id } : p);
+              return [...prev, { ...updatedProduct, id }];
+            });
+            setIsCatalogModalOpen(false);
+          } catch (error) {
+            console.error("Erro ao guardar produto no catálogo:", error);
+            alert("Erro ao guardar produto.");
+          }
+        }} 
+      />
+
       {isModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 transition-colors"><h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? 'Editar Lote / Produto' : 'Novo Lote de Stock'}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400"><X size={24}/></button></div><div className="p-6"><form onSubmit={handleProductSubmit} className="space-y-6">        <div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800/30">
             <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase mb-4 flex items-center gap-2">
                 <LinkIcon size={16} /> Passo 1: Ligar a Produto da Loja (Opcional)
@@ -1602,281 +1418,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                     </div>
                 )}
             </div>
-
-            {formData.publicProductId && editingStoreProduct && (
-                <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
-                    <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2">
-                            <Globe size={16}/> Gestão Loja Online
-                        </h4>
-                        <button 
-                            type="button" 
-                            onClick={() => handleSaveStoreProduct(false)}
-                            className="text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm"
-                        >
-                            <Save size={12}/> Guardar Alterações na Loja
-                        </button>
-                    </div>
-                    
-                    <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-slate-700 shadow-sm">
-                        
-                        {/* Galeria de Imagens */}
-                        <div className="mb-6 pb-6 border-b border-gray-100 dark:border-slate-700">
-                            <div className="flex justify-between items-center mb-3">
-                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase flex items-center gap-2"><ImageIcon size={14}/> Galeria de Imagens</label>
-                                <button 
-                                    type="button"
-                                    onClick={() => document.getElementById('gallery-upload')?.click()}
-                                    disabled={isUploading}
-                                    className="text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
-                                >
-                                    {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14}/>} Adicionar Fotos
-                                </button>
-
-                                <input 
-                                    type="file" 
-                                    id="gallery-upload" 
-                                    multiple 
-                                    className="hidden" 
-                                    accept="image/*"
-                                    onChange={(e) => {
-                                        handleStoreProductImageUpload(e.target.files, 'gallery');
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </div>
-                            
-                            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 overflow-visible">
-                                {editingStoreProduct.images?.map((img, idx) => (
-                                    <div key={idx} className={`relative group aspect-square rounded-lg border overflow-visible bg-gray-50 dark:bg-slate-900 ${editingStoreProduct.image === img ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-200 dark:border-slate-700'}`}>
-                                        <img src={img} className="w-full h-full object-cover rounded-lg" />
-                                        
-                                        {/* Actions Overlay */}
-                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-1 rounded-lg">
-                                            <button 
-                                                type="button"
-                                                onClick={() => handleSetMainImage(img)}
-                                                className={`p-1.5 rounded-full shadow-sm transition-transform hover:scale-110 ${editingStoreProduct.image === img ? 'bg-yellow-400 text-white' : 'bg-white/20 text-white hover:bg-yellow-400'}`}
-                                                title="Definir como Principal"
-                                            >
-                                                <Star size={14} fill={editingStoreProduct.image === img ? "currentColor" : "none"} />
-                                            </button>
-                                            
-                                            <div className="relative group/variant">
-                                                <button type="button" className="p-1.5 rounded-full bg-white/20 text-white hover:bg-blue-500 shadow-sm transition-transform hover:scale-110" title="Associar a Variante">
-                                                    <Layers size={14} />
-                                                </button>
-                                                {/* Dropdown on hover - Fixed positioning to ensure visibility */}
-                                                <div className="absolute left-full top-0 ml-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-2xl py-1 hidden group-hover/variant:block z-[100] max-h-64 overflow-y-auto text-xs border border-gray-200 dark:border-slate-700">
-                                                    <div className="px-3 py-2 font-bold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 sticky top-0">Associar a:</div>
-                                                    {editingStoreProduct.variants?.map((v, vIdx) => (
-                                                        <button 
-                                                            key={vIdx}
-                                                            type="button"
-                                                            onClick={() => handleSetVariantImage(vIdx, img)}
-                                                            className="block w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-slate-700 truncate text-gray-700 dark:text-gray-200"
-                                                        >
-                                                            {v.name}
-                                                        </button>
-                                                    ))}
-                                                    {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
-                                                        <div className="px-3 py-2 text-gray-400 italic">Sem variantes</div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <button 
-                                                type="button"
-                                                onClick={() => handleDeleteGalleryImage(img)}
-                                                className="p-1.5 rounded-full bg-white/20 text-white hover:bg-red-500 shadow-sm transition-transform hover:scale-110"
-                                                title="Apagar"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-
-                                        {/* Badges */}
-                                        {editingStoreProduct.image === img && (
-                                            <div className="absolute top-1 left-1 bg-blue-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm">CAPA</div>
-                                        )}
-                                    </div>
-                                ))}
-                                
-                                {/* Empty State / Add Button in Grid */}
-                                <button 
-                                    type="button"
-                                    onClick={() => document.getElementById('gallery-upload')?.click()}
-                                    className="aspect-square rounded-lg border-2 border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors bg-gray-50 dark:bg-slate-800/50 group"
-                                >
-                                    <Plus size={24} className="group-hover:scale-110 transition-transform" />
-                                    <span className="text-[10px] font-bold mt-1">Add</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Layout Horizontal: Imagem Esquerda, Texto Direita */}
-                        <div className="flex flex-col md:flex-row gap-6 mb-6">
-                            {/* Imagem Principal - Mais Larga */}
-                            <div className="w-full md:w-1/3 max-w-[250px] shrink-0">
-                                <div className="relative group w-full aspect-video bg-gray-100 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                                    {editingStoreProduct.image ? (
-                                        <img src={editingStoreProduct.image} className="w-full h-full object-contain p-2" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={32}/></div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <button 
-                                            type="button"
-                                            onClick={() => { activeStoreVariantIndexRef.current = null; document.getElementById('store-product-file-input')?.click(); }}
-                                            className="text-white p-3 hover:scale-110 transition-transform bg-black/50 rounded-full"
-                                            title="Alterar Imagem Principal"
-                                        >
-                                            <Upload size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Campos de Texto - Preenchem o resto */}
-                            <div className="flex-1 space-y-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Nome do Produto (Loja)</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-lg font-bold text-gray-900 dark:text-white"
-                                        value={editingStoreProduct.name}
-                                        onChange={e => setEditingStoreProduct({...editingStoreProduct, name: e.target.value})}
-                                    />
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Descrição (Loja)</label>
-                                    <textarea 
-                                        rows={4}
-                                        className="w-full h-full min-h-[100px] p-2 border border-gray-300 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-sm text-gray-900 dark:text-white resize-none"
-                                        value={editingStoreProduct.description}
-                                        onChange={e => setEditingStoreProduct({...editingStoreProduct, description: e.target.value})}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Variantes - Abaixo, largura total */}
-                        <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-lg border border-gray-100 dark:border-slate-700">
-                            <div className="flex justify-between items-center mb-3">
-                                <h5 className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2"><Layers size={16}/> Variantes & Imagens</h5>
-                                <button 
-                                    type="button" 
-                                    onClick={handleAddStoreProductVariant}
-                                    className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                                >
-                                    + Adicionar Opção
-                                </button>
-                            </div>
-                            
-                            <div className="space-y-2">
-                                {editingStoreProduct.variants?.map((variant, idx) => (
-                                    <div key={idx} className="flex gap-3 items-center bg-white dark:bg-slate-800 p-2 rounded border border-gray-200 dark:border-slate-600 shadow-sm">
-                                        <div className="relative group w-12 h-12 bg-gray-50 dark:bg-slate-700 rounded border border-gray-200 dark:border-slate-600 overflow-hidden flex-shrink-0">
-                                            {variant.image ? (
-                                                <img src={variant.image} className="w-full h-full object-contain p-0.5" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={14}/></div>
-                                            )}
-                                            <button 
-                                                type="button"
-                                                onClick={() => { activeStoreVariantIndexRef.current = idx; document.getElementById('store-product-file-input')?.click(); }}
-                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
-                                            >
-                                                <Upload size={12} />
-                                            </button>
-                                        </div>
-                                        <div className="flex-1 grid grid-cols-2 gap-3">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Nome (ex: Azul)"
-                                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-sm bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
-                                                value={variant.name}
-                                                onChange={e => handleStoreProductVariantChange(idx, 'name', e.target.value)}
-                                            />
-                                            <input 
-                                                type="number" 
-                                                step="0.01"
-                                                placeholder="Preço"
-                                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-sm bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white"
-                                                value={variant.price}
-                                                onChange={e => handleStoreProductVariantChange(idx, 'price', Number(e.target.value))}
-                                            />
-                                        </div>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => handleRemoveStoreProductVariant(idx)}
-                                            className="text-gray-400 hover:text-red-500 p-2"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                ))}
-                                {(!editingStoreProduct.variants || editingStoreProduct.variants.length === 0) && (
-                                    <p className="text-center text-xs text-gray-400 italic py-2">Sem variantes. O produto é único.</p>
-                                )}
-                            </div>
-                        </div>
-                        
-                        <div className="mt-6">
-                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2 mb-3"><ListPlus size={16} /> Destaques / Características Principais (Loja)</h4>
-                            {editingStoreProduct.features && editingStoreProduct.features.length > 0 && (
-                                <div className="space-y-2 mb-3">
-                                    {editingStoreProduct.features.map((feat, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded border border-gray-200 dark:border-slate-700 text-sm">
-                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></div>
-                                            <span className="flex-1 text-gray-700 dark:text-gray-300">{feat}</span>
-                                            <button type="button" onClick={() => handleRemoveStoreFeature(idx)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Ex: Bateria de 24h, WiFi 6..." className="flex-1 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreFeature} onChange={e => setNewStoreFeature(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStoreFeature())}/>
-                                <button type="button" onClick={handleAddStoreFeature} className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 rounded-lg font-bold transition-colors">+ Item</button>
-                            </div>
-                        </div>
-
-                        <div className="mt-6">
-                            <h4 className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2 mb-3"><Settings size={16} /> Especificações Técnicas (Loja)</h4>
-                            {editingStoreProduct.specs && Object.keys(editingStoreProduct.specs).length > 0 && (
-                                <div className="space-y-2 mb-3">
-                                    {Object.entries(editingStoreProduct.specs).map(([key, value]) => (
-                                        <div key={key} className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded border border-gray-200 dark:border-slate-700 text-sm">
-                                            <span className="font-bold text-gray-600 dark:text-gray-400">{key}:</span>
-                                            <span className="flex-1 text-gray-800 dark:text-gray-200">{value.toString()}</span>
-                                            <button type="button" onClick={() => handleRemoveStoreSpec(key)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Característica (Ex: RAM)" className="w-1/3 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreSpecKey} onChange={e => setNewStoreSpecKey(e.target.value)} />
-                                <input type="text" placeholder="Valor (Ex: 8GB)" className="flex-1 p-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-white" value={newStoreSpecValue} onChange={e => setNewStoreSpecValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddStoreSpec())} />
-                                <button type="button" onClick={handleAddStoreSpec} className="bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 px-4 rounded-lg font-bold transition-colors">+</button>
-                            </div>
-                        </div>
-                        
-                        <input 
-                            type="file" 
-                            id="store-product-file-input"
-                            className="hidden" 
-                            accept="image/*" 
-                            onChange={(e) => {
-                                if (e.target.files && e.target.files.length > 0) {
-                                    const target = activeStoreVariantIndexRef.current === null ? 'main' : activeStoreVariantIndexRef.current;
-                                    handleStoreProductImageUpload(e.target.files, target);
-                                }
-                                e.target.value = '';
-                            }}
-                        />
-                    </div>
-                </div>
-            )}
 
             <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800/30">
                 <div className="flex items-center justify-between mb-2">
