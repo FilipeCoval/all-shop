@@ -8,8 +8,7 @@ service firebase.storage {
     function isAdmin() {
       return request.auth != null && request.auth.token.email in [
         "filipe_coval_90@hotmail.com", 
-        "mcpoleca@gmail.com", 
-        "filipe@teste.com"
+        "mcpoleca@gmail.com"
       ];
     }
 
@@ -21,6 +20,11 @@ service firebase.storage {
     // Imagens de Produtos (Dashboard): Apenas Admin pode escrever.
     match /products/{imageId} {
       allow write: if isAdmin();
+    }
+
+    // Imagens de Produtos Públicos (Nova aba Catálogo): Qualquer utilizador autenticado pode escrever.
+    match /products_public/{imageId} {
+      allow write: if request.auth != null;
     }
 
     // Imagens de Avaliações (ReviewSection): Qualquer utilizador pode escrever.
