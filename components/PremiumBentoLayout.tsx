@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
-import { motion, AnimatePresence, useInView } from 'motion/react';
+import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { ShoppingCart, Cpu, Wifi, Play, Star } from 'lucide-react';
 
 interface PremiumBentoLayoutProps {
