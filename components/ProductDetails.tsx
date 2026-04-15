@@ -4,9 +4,10 @@ import { Product, Review, User, ProductVariant, PointHistory, Order } from '../t
 import { 
     ShoppingCart, ArrowLeft, Check, Share2, ShieldCheck, 
     Truck, AlertTriangle, XCircle, Heart, ArrowRight, 
-    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle, Coins, Timer
+    Eye, Info, X, CalendarClock, Copy, Mail, Loader2, CheckCircle, Coins, Timer, Sparkles
 } from 'lucide-react';
 import ReviewSection from './ReviewSection';
+import PremiumBentoLayout from './PremiumBentoLayout';
 import { STORE_NAME, PUBLIC_URL, SHARE_URL } from '../constants';
 import { db, firebase } from '../services/firebaseConfig';
 
@@ -74,6 +75,12 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   const [selectedImage, setSelectedImage] = useState<string>(product.image);
   const [selectedVariantName, setSelectedVariantName] = useState<string | undefined>();
   const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared' | 'points_earned'>('idle');
+  const [isPremiumLayout, setIsPremiumLayout] = useState(product.isPremium || false);
+  
+  // Update state ONLY when product ID changes
+  useEffect(() => {
+    setIsPremiumLayout(product.isPremium || false);
+  }, [product.id]);
   
   const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
   const [alertStatus, setAlertStatus] = useState<'idle' | 'loading' | 'success'>('idle');
@@ -249,15 +256,65 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
   };
 
 
+  if (isPremiumLayout) {
+    return (
+      <div className="relative">
+        <button 
+          onClick={() => setIsPremiumLayout(false)}
+          className="fixed top-24 left-4 z-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 border border-gray-200 dark:border-gray-700 hover:scale-105 transition-transform"
+        >
+          <ArrowLeft size={16} /> Voltar ao Layout Normal
+        </button>
+        <PremiumBentoLayout 
+          product={product} 
+          onBuyNow={() => {
+            console.log("ProductDetails: onBuyNow triggered");
+            setIsPremiumLayout(prev => {
+              console.log("Changing isPremiumLayout from", prev, "to false");
+              return false;
+            });
+            
+            setTimeout(() => {
+              console.log("Attempting scroll to variant-selector or buy-actions");
+              const variantElement = document.getElementById('variant-selector');
+              const buyElement = document.getElementById('buy-actions');
+              const target = variantElement || buyElement;
+              
+              if (target) {
+                console.log("Target found, scrolling...");
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } else {
+                console.log("Target not found, scrolling to top");
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }, 500); // Increased timeout to 500ms
+          }} 
+          currentPrice={currentPrice} 
+          isUnavailable={isUnavailable} 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 animate-fade-in pb-32 md:pb-8 transition-colors duration-300">
-      <a 
-        href="#/" 
-        onClick={(e) => { e.preventDefault(); window.location.hash = '/'; }}
-        className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-white mb-8 font-medium transition-colors"
-      >
-        <ArrowLeft size={20} /> Voltar à Loja
-      </a>
+      <div className="flex items-center justify-between mb-8">
+        <a 
+          href="#/" 
+          onClick={(e) => { e.preventDefault(); window.location.hash = '/'; }}
+          className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-white font-medium transition-colors"
+        >
+          <ArrowLeft size={20} /> Voltar à Loja
+        </a>
+        
+        {/* Botão de Simulação Premium */}
+        <button 
+          onClick={() => setIsPremiumLayout(true)}
+          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all"
+        >
+          <Sparkles size={16} /> Simular Layout Premium
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div className="space-y-4">
           <div className="aspect-square bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700 relative group transition-colors">
@@ -320,7 +377,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
            </div>
 
            {hasVariants && product.variants && (
-               <div className="mb-8">
+               <div id="variant-selector" className="mb-8 scroll-mt-24">
                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">{product.variantLabel || 'Escolha uma opção:'}</label>
                    <div className="flex flex-wrap gap-3">
                        {product.variants.map((v) => {
@@ -394,7 +451,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                )}
            </div>
 
-           <div className="flex gap-4 mb-8">
+           <div id="buy-actions" className="flex gap-4 mb-8 scroll-mt-24">
                <button 
                 onClick={handleAddToCart} 
                 disabled={isUnavailable || (hasVariants && !isVariantSelected) || isProcessing} 
