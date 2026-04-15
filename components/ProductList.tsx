@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2, Scale } from 'lucide-react';
 import QuickViewModal from './QuickViewModal';
+import InteractiveProductCard from './InteractiveProductCard';
 
 interface ProductListProps {
   products: Product[];
@@ -300,69 +301,23 @@ const ProductList: React.FC<ProductListProps> = ({
                 }
 
                 return (
-                <div key={product.id} className="bg-white dark:bg-[#0f172a] rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-slate-800 flex flex-col group relative animate-fade-in">
-                    {badge && (
-                        <div className={`absolute top-4 left-4 z-10 ${badge.color} text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1.5`}>
-                            {badge.icon} {badge.text}
-                        </div>
-                    )}
-                    
-                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }} className="p-2 rounded-full bg-white/90 dark:bg-[#020617]/80 shadow-sm hover:scale-110 transition-all group/btn">
-                            <Heart size={20} className={wishlist.includes(product.id) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-slate-500 group-hover/btn:text-red-500'} />
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); onToggleCompare(product.id); }} className={`p-2 rounded-full shadow-sm hover:scale-110 transition-all group/btn ${compareList.includes(product.id) ? 'bg-primary text-white' : 'bg-white/90 dark:bg-[#020617]/80 text-gray-400 dark:text-slate-500'}`} title="Comparar">
-                            <Scale size={20} className={compareList.includes(product.id) ? 'text-white' : 'group-hover/btn:text-primary'} />
-                        </button>
-                    </div>
-
-                    <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block relative h-64 overflow-hidden bg-gray-100 dark:bg-slate-900 group/image">
-                        <img src={product.image} alt={product.name} className={`w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-70' : ''}`} />
-                        
-                        {/* Quick View Button - Visible on Hover */}
-                        {!isOutOfStock && !product.comingSoon && (
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/image:opacity-100 transition-opacity bg-black/20 backdrop-blur-[1px]">
-                                <button 
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setQuickViewProduct(product); }}
-                                    className="bg-white text-gray-900 px-4 py-2 rounded-full font-bold shadow-lg transform translate-y-4 group-hover/image:translate-y-0 transition-all flex items-center gap-2 hover:bg-primary hover:text-white"
-                                >
-                                    <Eye size={16} /> Vista Rápida
-                                </button>
-                            </div>
-                        )}
-
-                        {isOutOfStock && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
-                                <span className="bg-red-600 text-white px-4 py-1 rounded text-sm font-bold uppercase transform -rotate-12 border border-white">Esgotado</span>
-                            </div>
-                        )}
-                    </a>
-                    
-                    <div className="p-5 flex flex-col flex-grow">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs font-bold text-primary uppercase tracking-wider">{product.category}</span>
-                        </div>
-                        <a href={`#product/${product.id}`} onClick={handleProductClick(product.id)} className="block hover:text-primary transition-colors mb-2"><h3 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-1">{product.name}</h3></a>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-4 flex-grow line-clamp-2">{product.description}</p>
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-slate-800">
-                            <div>
-                                {pricePrefix && <span className="text-xs text-gray-500 dark:text-slate-400 block">{pricePrefix}</span>}
-                                {showPromo && <span className="text-xs text-gray-400 line-through font-medium block">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(product.originalPrice!)}</span>}
-                                <span className={`text-2xl font-bold ${showPromo ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}</span>
-                                {product.comingSoon && <span className="text-xs text-purple-600 dark:text-purple-400 font-bold block uppercase">Em Breve</span>}
-                            </div>
-                            {hasVariants ? (
-                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-secondary text-white hover:bg-primary rounded-full transition-colors shadow-md" title="Ver Opções"><Eye size={20} /></button>
-                            ) : product.comingSoon ? (
-                                <button onClick={handleProductClick(product.id)} className="p-2.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full" title="Ver Detalhes"><CalendarClock size={20} /></button>
-                            ) : (
-                                <button onClick={() => onAddToCart(product)} disabled={isOutOfStock || isProcessing} className={`p-2.5 rounded-full shadow-md active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-200 dark:bg-slate-700 text-gray-400' : 'bg-secondary hover:bg-primary text-white'}`}>
-                                    {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                    <InteractiveProductCard 
+                        key={product.id}
+                        product={product}
+                        onAddToCart={onAddToCart}
+                        isProcessing={isProcessing}
+                        isOutOfStock={isOutOfStock}
+                        badge={badge}
+                        wishlist={wishlist}
+                        onToggleWishlist={onToggleWishlist}
+                        compareList={compareList}
+                        onToggleCompare={onToggleCompare}
+                        handleProductClick={handleProductClick}
+                        setQuickViewProduct={setQuickViewProduct}
+                        displayPrice={displayPrice}
+                        pricePrefix={pricePrefix}
+                        showPromo={!!showPromo}
+                    />
                 );
             })}
             </div>
@@ -394,4 +349,3 @@ const ProductList: React.FC<ProductListProps> = ({
 };
 
 export default ProductList;
-
