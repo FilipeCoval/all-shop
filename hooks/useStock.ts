@@ -21,6 +21,8 @@ export const useStock = (isAdmin: boolean) => {
             resList.push({ id: doc.id, ...doc.data() } as StockReservation);
         });
         setReservations(resList);
+      }, (error) => {
+        console.error("Erro no listener de reservas:", error);
       });
 
     // Se o utilizador não for admin, não tenta aceder a dados privados.
@@ -42,6 +44,7 @@ export const useStock = (isAdmin: boolean) => {
       },
       (error) => {
         console.error("Erro no listener de inventário (Admin):", error);
+        setLoading(false);
       }
     );
 
@@ -70,6 +73,9 @@ export const useStock = (isAdmin: boolean) => {
               }
           });
           setPendingOrders(ordersList);
+          setLoading(false);
+      }, (error) => {
+          console.error("Erro no listener de encomendas (Admin):", error);
           setLoading(false);
       });
 
