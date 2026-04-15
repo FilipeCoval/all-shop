@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Product } from '../types';
 import { ShoppingCart, Eye, Heart, Scale, Plus, Loader2, Star } from 'lucide-react';
 
