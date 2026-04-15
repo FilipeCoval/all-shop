@@ -46,7 +46,7 @@ export interface Order {
   id: string;
   date: string;
   total: number;
-  status: 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Reclamação' | 'Devolvido' | 'Levantamento em Loja';
+  status: 'Pendente' | 'Processamento' | 'Pago' | 'Enviado' | 'Entregue' | 'Cancelado' | 'Reclamação' | 'Devolvido' | 'Levantamento em Loja';
   items: (OrderItem | string)[];
   userId?: string | null;
   shippingInfo: UserCheckoutInfo;
@@ -126,6 +126,57 @@ export interface CartItem {
   reservedUntil?: string; // ISO String para expiração da reserva
 }
 
+export interface PremiumBlock {
+  id: string;
+  type: 'square' | 'rectangle' | 'full' | 'tall';
+  title?: string;
+  description?: string;
+  image?: string;
+  textColor?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  textVerticalAlign?: 'top' | 'center' | 'bottom';
+  showIcon?: boolean;
+  iconType?: 'cpu' | 'wifi' | 'play' | 'star' | 'none';
+}
+
+export interface PremiumBentoData {
+  heroSubtitle?: string;
+  heroTitle?: string;
+  heroImage?: string;
+  heroTextColor?: string;
+  heroAlign?: 'left' | 'center' | 'right';
+  showBuyButton?: boolean;
+  blocks?: PremiumBlock[];
+  
+  // Mantidos para compatibilidade temporária
+  box1Title?: string;
+  box1Desc?: string;
+  box1Image?: string;
+  box1TextColor?: string;
+  box1Align?: 'left' | 'center' | 'right';
+  
+  box2Title?: string;
+  box2Desc?: string;
+  box2Image?: string;
+  box2TextColor?: string;
+  box2Align?: 'left' | 'center' | 'right';
+  box2ShowIcon?: boolean;
+
+  box3Title?: string;
+  box3Desc?: string;
+  box3Image?: string;
+  box3TextColor?: string;
+  box3Align?: 'left' | 'center' | 'right';
+  box3ShowIcon?: boolean;
+
+  box4Title?: string;
+  box4Desc?: string;
+  box4Image?: string;
+  box4TextColor?: string;
+  box4Align?: 'left' | 'center' | 'right';
+  box4ShowIcon?: boolean;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -138,6 +189,9 @@ export interface Product {
   stock: number;
   variants?: ProductVariant[];
   features: string[];
+  isPremium?: boolean; // Layout Apple-style
+  premiumData?: PremiumBentoData;
+  cardHoverColor?: string; // NOVO: Cor do efeito hover no card do produto
   comingSoon?: boolean;
   badges?: string[];
   images?: string[];
