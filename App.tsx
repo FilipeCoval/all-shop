@@ -610,39 +610,48 @@ const App: React.FC = () => {
           // Limpar dados para evitar erros de 'undefined' no Firebase
           const cleanOrder = JSON.parse(JSON.stringify(newOrder));
           
-          await db.runTransaction(async (transaction) => {
-              // 1. Validar e preparar decremento de stock
+          const alreadyExists = await db.runTransaction(async (transaction) => {
+              const orderRef = db.collection("orders").doc(cleanOrder.id);
+              const existingOrderDoc = await transaction.get(orderRef);
+              const exists = existingOrderDoc.exists;
+
+              // 1. Validar e preparar decremento de stock (apenas se a encomenda for nova)
               const productUpdates = [];
-              for (const item of cleanOrder.items) {
-                  // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
-                  if (typeof item !== 'object' || item === null) continue;
-                  
-                  const productRef = db.collection('products_public').doc(item.productId.toString());
-                  const productDoc = await transaction.get(productRef);
-                  
-                  if (!productDoc.exists) {
-                      throw new Error(`Produto ${item.name} não encontrado.`);
+              if (!exists) {
+                  for (const item of cleanOrder.items) {
+                      // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
+                      if (typeof item !== 'object' || item === null) continue;
+                      
+                      const productRef = db.collection('products_public').doc(item.productId.toString());
+                      const productDoc = await transaction.get(productRef);
+                      
+                      if (!productDoc.exists) {
+                          throw new Error(`Produto ${item.name} não encontrado.`);
+                      }
+                      
+                      const productData = productDoc.data() as Product;
+                      if (productData.stock < item.quantity) {
+                          throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
+                      }
+                      
+                      productUpdates.push({
+                          ref: productRef,
+                          newStock: productData.stock - item.quantity
+                      });
                   }
-                  
-                  const productData = productDoc.data() as Product;
-                  if (productData.stock < item.quantity) {
-                      throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
-                  }
-                  
-                  productUpdates.push({
-                      ref: productRef,
-                      newStock: productData.stock - item.quantity
-                  });
               }
 
               // 2. Guardar a encomenda
-              const orderRef = db.collection("orders").doc(cleanOrder.id);
               transaction.set(orderRef, cleanOrder);
 
-              // 3. Decrementar stock público imediatamente para outros utilizadores verem
-              for (const update of productUpdates) {
-                  transaction.update(update.ref, { stock: update.newStock });
+              // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
+              if (!exists) {
+                  for (const update of productUpdates) {
+                      transaction.update(update.ref, { stock: update.newStock });
+                  }
               }
+              
+              return exists;
           });
 
           // 4. Limpar reservas do carrinho (fora da transação principal para não bloquear se falhar)
@@ -657,7 +666,14 @@ const App: React.FC = () => {
               console.error("Erro ao limpar reservas:", resErr);
           }
 
-          setOrders(prev => [newOrder, ...prev]);
+          setOrders(prev => {
+              const exists = prev.some(o => o.id === newOrder.id);
+              if (exists) {
+                  return prev.map(o => o.id === newOrder.id ? newOrder : o);
+              }
+              return [newOrder, ...prev];
+          });
+          
           if (!isAutoSave) {
               setCartItems([]);
               notifyNewOrder(newOrder, user ? user.name : newOrder.shippingInfo.name);
@@ -675,7 +691,7 @@ const App: React.FC = () => {
               }).catch(err => console.error("Falha ao enviar push para admins:", err));
           }
           
-          if (user?.uid) {
+          if (user?.uid && !alreadyExists) {
             const userRef = db.collection("users").doc(user.uid);
             await db.runTransaction(async (transaction) => {
               const userDoc = await transaction.get(userRef);
@@ -745,7 +761,7 @@ const App: React.FC = () => {
     
     if (route === '#account') {
       if (!user) { setTimeout(() => { window.location.hash = '/'; setIsLoginOpen(true); }, 0); return null; }
-      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={dbProducts} onOpenSupportChat={() => setIsAIChatOpen(true)} />;
+      return <ClientArea user={user} orders={orders} onLogout={handleLogout} onUpdateUser={handleUpdateUser} wishlist={wishlist} onToggleWishlist={toggleWishlist} onAddToCart={addToCart} publicProducts={dbProducts} onOpenSupportChat={() => setIsAIChatOpen(true)} onCheckout={handleCheckout} />;
     }
     if (route.startsWith('#product/')) {
         const id = parseInt(route.split('/')[1]);
@@ -884,4 +900,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
