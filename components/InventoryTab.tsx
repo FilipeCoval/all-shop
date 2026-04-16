@@ -19,6 +19,7 @@ interface InventoryTabProps {
   onlineUsersCount: number;
   stockAlerts: any[];
   onEdit: (product: InventoryProduct) => void;
+  onEditProduct?: (product: InventoryProduct) => void;
   onCreateVariant: (product: InventoryProduct) => void;
   onDeleteGroup: (groupId: string, items: InventoryProduct[]) => void;
   onSale: (product: InventoryProduct) => void;
@@ -45,7 +46,7 @@ const formatCurrency = (value: number) =>
 
 const InventoryTab: React.FC<InventoryTabProps> = ({
   products, pendingOrders, stats, onlineUsersCount, stockAlerts,
-  onEdit, onCreateVariant, onDeleteGroup, onSale, onDelete,
+  onEdit, onEditProduct, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
   onAddNew,
@@ -276,13 +277,15 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                                     </button>
                                                 )}
                                                 
-                                                <button onClick={() => onEdit(mainItem)} className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
-                                                    <Edit2 size={14} /> Editar Lote
+                                                {onEditProduct && mainItem.publicProductId && (
+                                                    <button onClick={() => onEditProduct(mainItem)} className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Atalho focado: Editar Imagens, Descrição e Modo Em Breve no Catálogo">
+                                                        <Globe size={14} /> Atalho Catálogo
+                                                    </button>
+                                                )}
+                                                <button onClick={() => onCreateVariant(mainItem)} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors" title="Adicionar um novo lote ou opção (variante) a este produto">
+                                                    <Layers size={14} /> + Lote
                                                 </button>
-                                                <button onClick={() => onCreateVariant(mainItem)} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
-                                                    <Layers size={16} />
-                                                </button>
-                                                <button onClick={() => onDeleteGroup(groupId, items)} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">
+                                                <button onClick={() => onDeleteGroup(groupId, items)} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Apagar todos os lotes deste produto">
                                                     <Trash2 size={16} />
                                                 </button>
                                             </div>
