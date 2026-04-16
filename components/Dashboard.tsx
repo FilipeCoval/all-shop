@@ -52,6 +52,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products' | 'imports' | 'catalog'>('inventory');
   
   // Modal States
+  // TEMPORARY: Inspect inventory fields
+  useEffect(() => {
+    const inspectInventory = async () => {
+      try {
+        const snapshot = await db.collection('inventory').limit(1).get();
+        if (!snapshot.empty) {
+          console.log("Campos encontrados no inventory:", Object.keys(snapshot.docs[0].data()));
+        }
+      } catch (e) { console.error(e); }
+    };
+    inspectInventory();
+  }, []);
+  // END TEMPORARY
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
