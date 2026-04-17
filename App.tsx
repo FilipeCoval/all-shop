@@ -368,6 +368,8 @@ const App: React.FC = () => {
                             localStorage.setItem('wishlist', JSON.stringify(userData.wishlist));
                         }
                     }
+                }, (error) => {
+                    console.error("Erro ao escutar dados do utilizador:", error);
                 });
                 
                 ordersUnsubscribe = db.collection("orders")
@@ -516,6 +518,12 @@ const App: React.FC = () => {
         const existingItem = cartItems.find(item => item.cartItemId === cartItemId);
         const newQty = existingItem ? existingItem.quantity + 1 : 1;
 
+        if (product.maxQuantityPerOrder && newQty > product.maxQuantityPerOrder) {
+            alert(`Pode adicionar no máximo ${product.maxQuantityPerOrder} unidade(s) deste produto por encomenda.`);
+            setProcessingProductIds(prev => prev.filter(id => id !== product.id));
+            return;
+        }
+
         const success = await updateReservationInFirebase(product.id, variant?.name, newQty);
         if (!success) return;
 
@@ -540,7 +548,7 @@ const App: React.FC = () => {
                 return item;
             });
           }
-          return [...prev, { ...product, price: finalPrice, image: variant?.image || product.image, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
+          return [...prev, { ...product, price: finalPrice, maxQuantityPerOrder: product.maxQuantityPerOrder, image: variant?.image || product.image, selectedVariant: variant?.name, cartItemId, quantity: 1, reservedUntil }];
         });
         setIsCartOpen(true);
     } catch (err) {
@@ -562,6 +570,11 @@ const App: React.FC = () => {
     const itemToUpdate = cartItems.find(i => i.cartItemId === cartItemId);
     if (!itemToUpdate) return;
     const newQty = itemToUpdate.quantity + delta;
+
+    if (itemToUpdate.maxQuantityPerOrder && newQty > itemToUpdate.maxQuantityPerOrder) {
+        alert(`Pode adicionar no máximo ${itemToUpdate.maxQuantityPerOrder} unidade(s) deste produto por encomenda.`);
+        return;
+    }
 
     if (newQty < itemToUpdate.quantity) {
         setCartItems(prev => {
