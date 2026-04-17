@@ -459,77 +459,86 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
   const handleDeleteSale = async (saleId: string, isOnline: boolean = false) => { 
     if(!editingId || !window.confirm("Anular venda e repor stock?")) return; 
-    const product = products.find(p => p.id === editingId); 
-    if(!product) return; 
     
-    let newSold = product.quantitySold || 0;
-    let newHistory = product.salesHistory || [];
-    let newUnits = [...(product.units || [])];
-    let quantityToRestock = 0;
-
     try {
-      if (!isOnline) {
-        const sale = product.salesHistory?.find(s => s.id === saleId);
-        if(!sale) return;
-        quantityToRestock = sale.quantity;
-        newHistory = newHistory.filter(s => s.id !== saleId);
+      await db.runTransaction(async (transaction) => {
+        const productRef = db.collection('products_inventory').doc(editingId);
+        const productDoc = await transaction.get(productRef);
+        if (!productDoc.exists) throw new Error("Produto não encontrado.");
         
-        if (sale.serialNumbers && sale.serialNumbers.length > 0) {
-          newUnits = newUnits.map(u => sale.serialNumbers?.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
-        }
-      } else {
-        const order = allOrders.find(o => o.id === saleId);
-        if (!order) {
-            alert("Erro: Encomenda não encontrada no histórico local.");
-            return;
-        }
-        
-        const safeItems = getSafeItems(order.items);
-        const relevantItems = safeItems.filter(item => 
-          typeof item !== 'string' && 
-          item.productId?.toString() === product.publicProductId?.toString() && 
-          (!product.variant || item.selectedVariant === product.variant)
-        ) as OrderItem[];
+        const product = { id: productDoc.id, ...productDoc.data() } as InventoryProduct;
+        let newSold = product.quantitySold || 0;
+        let newHistory = product.salesHistory || [];
+        let newUnits = [...(product.units || [])];
+        let quantityToRestock = 0;
 
-        quantityToRestock = relevantItems.reduce((acc, i) => acc + i.quantity, 0);
+        if (!isOnline) {
+          const sale = product.salesHistory?.find(s => s.id === saleId);
+          if(!sale) throw new Error("Registo de venda manual não encontrado.");
+          quantityToRestock = sale.quantity;
+          newHistory = newHistory.filter(s => s.id !== saleId);
+          
+          if (sale.serialNumbers && sale.serialNumbers.length > 0) {
+            newUnits = newUnits.map(u => sale.serialNumbers?.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
+          }
+        } else {
+          const orderRef = db.collection('orders').doc(saleId);
+          const orderDoc = await transaction.get(orderRef);
+          if (!orderDoc.exists) throw new Error("Encomenda não encontrada no sistema.");
+          const order = { id: orderDoc.id, ...orderDoc.data() } as Order;
+          
+          const safeItems = getSafeItems(order.items);
+          const relevantItems = safeItems.filter(item => 
+            typeof item !== 'string' && 
+            item.productId?.toString() === product.publicProductId?.toString() && 
+            (!product.variant || item.selectedVariant === product.variant)
+          ) as OrderItem[];
+
+          quantityToRestock = relevantItems.reduce((acc, i) => acc + i.quantity, 0);
+          
+          const serialsToRevert: string[] = [];
+          relevantItems.forEach(i => {
+              if (i.serialNumbers) serialsToRevert.push(...i.serialNumbers);
+              if (i.unitIds) serialsToRevert.push(...i.unitIds);
+          });
+          
+          if (serialsToRevert.length > 0) {
+            newUnits = newUnits.map(u => serialsToRevert.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
+          }
+
+          transaction.update(orderRef, {
+              status: 'Pago',
+              stockDeducted: false,
+              fulfilledAt: null,
+              fulfilledBy: null,
+              fulfillmentStatus: 'PENDING',
+              serialNumbersUsed: [],
+              pointsAwarded: false,
+              items: order.items.map(item => {
+                  if (typeof item === 'string') return item;
+                  if (item.productId?.toString() === product.publicProductId?.toString() && (!product.variant || item.selectedVariant === product.variant)) {
+                      return { ...item, serialNumbers: [], unitIds: [] };
+                  }
+                  return item;
+              })
+          });
+        }
+
+        newSold = Math.max(0, newSold - quantityToRestock);
+        const newStatus = newSold >= (product.quantityBought || 0) ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; 
         
-        const serialsToRevert: string[] = [];
-        relevantItems.forEach(i => {
-            if (i.serialNumbers) serialsToRevert.push(...i.serialNumbers);
-            if (i.unitIds) serialsToRevert.push(...i.unitIds);
+        transaction.update(productRef, { 
+          quantitySold: newSold, 
+          salesHistory: newHistory, 
+          status: newStatus as ProductStatus, 
+          units: newUnits 
         });
-        
-        if (serialsToRevert.length > 0) {
-          newUnits = newUnits.map(u => serialsToRevert.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
-        }
-
-        await db.collection('orders').doc(saleId).update({
-            status: 'Pago',
-            stockDeducted: false,
-            items: order.items.map(item => {
-                if (typeof item === 'string') return item;
-                if (item.productId?.toString() === product.publicProductId?.toString() && (!product.variant || item.selectedVariant === product.variant)) {
-                    return { ...item, serialNumbers: [], unitIds: [] };
-                }
-                return item;
-            })
-        });
-      }
-
-      newSold = Math.max(0, newSold - quantityToRestock);
-      const newStatus = newSold >= (product.quantityBought || 0) ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; 
-      
-      await updateProduct(editingId, { 
-        quantitySold: newSold, 
-        salesHistory: newHistory, 
-        status: newStatus as ProductStatus, 
-        units: newUnits 
-      }); 
+      });
       
       alert("Venda anulada e stock reposto com sucesso!");
-    } catch(e) { 
+    } catch(e: any) { 
         console.error("Erro ao anular:", e);
-        alert("Erro ao anular venda."); 
+        alert("Erro ao anular venda: " + e.message); 
     } 
   };
   const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes, serialNumbers: selectedUnitsForSale };    try { 
@@ -1864,3 +1873,4 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 };
 
 export default Dashboard;
+
