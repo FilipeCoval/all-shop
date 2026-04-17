@@ -216,7 +216,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 {(() => {
-                                                    const catalogProd = catalogProducts?.find(p => p.id === mainItem.publicProductId);
+                                                    const catalogProd = catalogProducts?.find(p => String(p.id) === String(mainItem.publicProductId));
                                                     const imgUrl = catalogProd?.image || (catalogProd?.images && catalogProd.images[0]) || (mainItem.images && mainItem.images[0]);
                                                     return imgUrl ? (
                                                         <img src={imgUrl} className="w-10 h-10 object-cover rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600" alt="" />
@@ -274,7 +274,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                             <div className="flex justify-end gap-1">
                                                 {alertsCount > 0 && (
                                                     <button 
-                                                        onClick={() => onOpenStockAlerts(mainItem)} 
+                                                        onClick={(e) => { e.stopPropagation(); onOpenStockAlerts(mainItem); }} 
                                                         className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors animate-pulse"
                                                         title="Notificar Clientes"
                                                     >
@@ -283,14 +283,14 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                                 )}
                                                 
                                                 {onEditProduct && mainItem.publicProductId && (
-                                                    <button onClick={() => onEditProduct(mainItem)} className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Atalho focado: Editar Imagens, Descrição e Modo Em Breve no Catálogo">
+                                                    <button onClick={(e) => { e.stopPropagation(); onEditProduct(mainItem); }} className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Atalho focado: Editar Imagens, Descrição e Modo Em Breve no Catálogo">
                                                         <Globe size={14} /> Atalho Catálogo
                                                     </button>
                                                 )}
-                                                <button onClick={() => onCreateVariant(mainItem)} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors" title="Adicionar um novo lote ou opção (variante) a este produto">
+                                                <button onClick={(e) => { e.stopPropagation(); onCreateVariant(mainItem); }} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors" title="Adicionar um novo lote ou opção (variante) a este produto">
                                                     <Layers size={14} /> + Lote
                                                 </button>
-                                                <button onClick={() => onDeleteGroup(groupId, items)} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Apagar todos os lotes deste produto">
+                                                <button onClick={(e) => { e.stopPropagation(); onDeleteGroup(groupId, items); }} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Apagar todos os lotes deste produto">
                                                     <Trash2 size={16} />
                                                 </button>
                                             </div>
