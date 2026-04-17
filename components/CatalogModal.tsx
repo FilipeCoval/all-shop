@@ -321,7 +321,12 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Preço Original (Riscado) (€)</label>
-                  <input type="number" step="0.01" value={formData.originalPrice || ''} onChange={e => setFormData({...formData, originalPrice: e.target.value ? Number(e.target.value) : undefined})} className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" />
+                  <input type="number" step="0.01" value={formData.originalPrice || ''} onChange={e => setFormData({...formData, originalPrice: e.target.value ? Number(e.target.value) : null as any})} className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Limite por Encomenda</label>
+                  <input type="number" min="1" value={formData.maxQuantityPerOrder || ''} onChange={e => setFormData({...formData, maxQuantityPerOrder: e.target.value ? Number(e.target.value) : null as any})} placeholder="Ex: 1 (Opcional)" className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" />
+                  <p className="text-[10px] text-gray-500 mt-1">Deixe vazio para não ter limite.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Cor do Efeito Hover (Card)</label>
