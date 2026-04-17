@@ -1040,6 +1040,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
         {activeTab === 'inventory' && (
             <InventoryTab 
                 products={products} 
+                catalogProducts={publicProductsList}
                 pendingOrders={pendingOrders}
                 stats={stats} 
                 onlineUsersCount={onlineUsers.length} 
