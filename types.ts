@@ -280,6 +280,7 @@ export interface SaleRecord {
   unitPrice: number;
   shippingCost?: number;
   notes?: string;
+  serialNumbers?: string[];
 }
 
 export interface Coupon {
