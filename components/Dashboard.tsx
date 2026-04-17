@@ -457,8 +457,82 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
   const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
-  const handleDeleteSale = async (saleId: string) => { if(!editingId || !window.confirm("Anular venda e repor stock?")) return; const product = products.find(p => p.id === editingId); if(!product) return; const sale = product.salesHistory?.find(s => s.id === saleId); if(!sale) return; const newSold = Math.max(0, (product.quantitySold || 0) - sale.quantity); const newHistory = product.salesHistory?.filter(s => s.id !== saleId) || []; const newStatus = newSold >= product.quantityBought ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; try { await updateProduct(editingId, { quantitySold: newSold, salesHistory: newHistory, status: newStatus as ProductStatus }); } catch(e) { alert("Erro ao anular venda."); } };
-  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes };    try { 
+  const handleDeleteSale = async (saleId: string, isOnline: boolean = false) => { 
+    if(!editingId || !window.confirm("Anular venda e repor stock?")) return; 
+    const product = products.find(p => p.id === editingId); 
+    if(!product) return; 
+    
+    let newSold = product.quantitySold || 0;
+    let newHistory = product.salesHistory || [];
+    let newUnits = [...(product.units || [])];
+    let quantityToRestock = 0;
+
+    try {
+      if (!isOnline) {
+        const sale = product.salesHistory?.find(s => s.id === saleId);
+        if(!sale) return;
+        quantityToRestock = sale.quantity;
+        newHistory = newHistory.filter(s => s.id !== saleId);
+        
+        if (sale.serialNumbers && sale.serialNumbers.length > 0) {
+          newUnits = newUnits.map(u => sale.serialNumbers?.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
+        }
+      } else {
+        const order = allOrders.find(o => o.id === saleId);
+        if (!order) {
+            alert("Erro: Encomenda não encontrada no histórico local.");
+            return;
+        }
+        
+        const safeItems = getSafeItems(order.items);
+        const relevantItems = safeItems.filter(item => 
+          typeof item !== 'string' && 
+          item.productId?.toString() === product.publicProductId?.toString() && 
+          (!product.variant || item.selectedVariant === product.variant)
+        ) as OrderItem[];
+
+        quantityToRestock = relevantItems.reduce((acc, i) => acc + i.quantity, 0);
+        
+        const serialsToRevert: string[] = [];
+        relevantItems.forEach(i => {
+            if (i.serialNumbers) serialsToRevert.push(...i.serialNumbers);
+            if (i.unitIds) serialsToRevert.push(...i.unitIds);
+        });
+        
+        if (serialsToRevert.length > 0) {
+          newUnits = newUnits.map(u => serialsToRevert.includes(u.id) ? { ...u, status: 'AVAILABLE' as const } : u);
+        }
+
+        await db.collection('orders').doc(saleId).update({
+            status: 'Pago',
+            stockDeducted: false,
+            items: order.items.map(item => {
+                if (typeof item === 'string') return item;
+                if (item.productId?.toString() === product.publicProductId?.toString() && (!product.variant || item.selectedVariant === product.variant)) {
+                    return { ...item, serialNumbers: [], unitIds: [] };
+                }
+                return item;
+            })
+        });
+      }
+
+      newSold = Math.max(0, newSold - quantityToRestock);
+      const newStatus = newSold >= (product.quantityBought || 0) ? 'SOLD' : newSold > 0 ? 'PARTIAL' : 'IN_STOCK'; 
+      
+      await updateProduct(editingId, { 
+        quantitySold: newSold, 
+        salesHistory: newHistory, 
+        status: newStatus as ProductStatus, 
+        units: newUnits 
+      }); 
+      
+      alert("Venda anulada e stock reposto com sucesso!");
+    } catch(e) { 
+        console.error("Erro ao anular:", e);
+        alert("Erro ao anular venda."); 
+    } 
+  };
+  const handleSaleSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!selectedProductForSale) return; const qty = parseInt(saleForm.quantity) || 1; const price = parseFloat(saleForm.unitPrice) || 0; const shipping = parseFloat(saleForm.shippingCost) || 0; const newSale: SaleRecord = { id: `MANUAL-${Date.now()}`, date: saleForm.date, quantity: qty, unitPrice: price, shippingCost: shipping, notes: saleForm.notes, serialNumbers: selectedUnitsForSale };    try { 
         const currentSold = (selectedProductForSale.quantitySold || 0) + qty; 
         const status = currentSold >= selectedProductForSale.quantityBought ? 'SOLD' : 'PARTIAL'; 
         let updatedUnits = selectedProductForSale.units || []; 
@@ -1551,7 +1625,86 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           </div>
       </div>
       {/* (Fim Seção Promoções) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div> <div className="border-t pt-4 border-gray-100"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Scale size={16} /> Logística & Peso</h4><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Peso Unitário (kg)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400 text-xs font-bold">KG</span><input type="number" step="0.001" className="w-full pl-10 p-3 border border-gray-300 rounded-lg" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} placeholder="Ex: 0.350" /></div><p className="text-[10px] text-gray-500 mt-1">Essencial para calcular portes de envio automáticos no futuro.</p></div></div> {editingId && (<div className="border-t pt-6"><h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>{products.find(p => p.id === editingId)?.salesHistory?.length ? (<div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200"><table className="w-full text-sm text-left"><thead className="bg-gray-100 text-xs text-gray-500 uppercase"><tr><th className="px-4 py-2">Data</th><th className="px-4 py-2">Qtd</th><th className="px-4 py-2">Valor</th><th className="px-4 py-2 text-right">Ação</th></tr></thead><tbody className="divide-y divide-gray-200">{products.find(p => p.id === editingId)?.salesHistory?.map((sale) => (<tr key={sale.id}><td className="px-4 py-2">{sale.date}</td><td className="px-4 py-2 font-bold">{sale.quantity}</td><td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td><td className="px-4 py-2 text-right"><button type="button" onClick={() => handleDeleteSale(sale.id)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Anular (Repor Stock)</button></td></tr>))}</tbody></table></div>) : (<p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>)}</div>)} <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>)}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Preço Alvo (Estimado)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400">€</span><input type="number" step="0.01" className="w-full pl-8 p-3 border border-gray-300 rounded-lg text-gray-500" value={formData.targetSalePrice} onChange={e => setFormData({...formData, targetSalePrice: e.target.value})} /></div></div></div> <div className="border-t pt-4 border-gray-100"><h4 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3"><Scale size={16} /> Logística & Peso</h4><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Peso Unitário (kg)</label><div className="relative"><span className="absolute left-3 top-3 text-gray-400 text-xs font-bold">KG</span><input type="number" step="0.001" className="w-full pl-10 p-3 border border-gray-300 rounded-lg" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} placeholder="Ex: 0.350" /></div><p className="text-[10px] text-gray-500 mt-1">Essencial para calcular portes de envio automáticos no futuro.</p></div></div> {editingId && (() => {
+    const p = products.find(prod => prod.id === editingId);
+    let history: any[] = [];
+    if (p?.salesHistory && Array.isArray(p.salesHistory)) {
+        history = p.salesHistory.map((s: any) => ({
+            id: s.id,
+            date: s.date,
+            quantity: s.quantity,
+            unitPrice: s.unitPrice,
+            isOnline: false,
+            source: 'Venda Manual / Baixa'
+        }));
+    }
+    if (p?.publicProductId) {
+        allOrders.forEach(order => {
+            if (['Cancelado', 'Reclamação', 'Pendente'].includes(order.status)) return;
+            const relevantItems = order.items.filter((item) => {
+                if (typeof item === 'string') return false;
+                const orderItem = item as OrderItem;
+                return orderItem.productId?.toString() === p.publicProductId?.toString() && 
+                       (!p.variant || orderItem.selectedVariant === p.variant);
+            });
+            if (relevantItems.length > 0) {
+                const quantity = relevantItems.reduce((sum: number, item: any) => sum + ((item as OrderItem).quantity || 1), 0);
+                const unitPrice = (relevantItems[0] as OrderItem).price || 0;
+                history.push({
+                    id: order.id,
+                    date: order.date.split('T')[0],
+                    quantity,
+                    unitPrice,
+                    isOnline: true,
+                    orderStatus: order.status,
+                    source: `Online (${order.id.slice(-5)})`
+                });
+            }
+        });
+    }
+    history.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return (
+        <div className="border-t pt-6">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={20} /> Histórico de Vendas deste Lote</h3>
+            {history.length > 0 ? (
+                <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-100 text-xs text-gray-500 uppercase">
+                            <tr>
+                                <th className="px-4 py-2">Data</th>
+                                <th className="px-4 py-2">Origem</th>
+                                <th className="px-4 py-2">Qtd</th>
+                                <th className="px-4 py-2">Valor</th>
+                                <th className="px-4 py-2 text-right">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {history.map((sale, idx) => (
+                                <tr key={`${sale.id}-${idx}`}>
+                                    <td className="px-4 py-2">{sale.date}</td>
+                                    <td className="px-4 py-2 text-xs font-medium text-gray-600">{sale.source}</td>
+                                    <td className="px-4 py-2 font-bold">{sale.quantity}</td>
+                                    <td className="px-4 py-2">{formatCurrency(sale.unitPrice * sale.quantity)}</td>
+                                    <td className="px-4 py-2 text-right">
+                                        <button type="button" onClick={() => handleDeleteSale(sale.id, sale.isOnline)} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">
+                                            {sale.isOnline ? 'Anular Envio' : 'Anular'}
+                                        </button>
+                                        {sale.isOnline && (
+                                            <div className="text-[10px] text-gray-400 mt-0.5">{sale.orderStatus}</div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <p className="text-gray-500 text-sm italic">Nenhuma venda registada para este lote ainda.</p>
+            )}
+        </div>
+    );
+})()} <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">Cancelar</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center justify-center gap-2"><Save size={20} /> Guardar Lote</button></div></form></div></div></div>)}
       {/* Sale Modal */}
       {isSaleModalOpen && selectedProductForSale && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 transition-colors"><h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2"><DollarSign size={20} className="text-green-600 dark:text-green-400"/> Registar Venda / Baixa</h3><button onClick={() => setIsSaleModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24}/></button></div><form onSubmit={handleSaleSubmit} className="p-6 space-y-6"><div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700"><p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Produto</p><p className="font-bold text-gray-900 dark:text-white">{selectedProductForSale.name}</p><p className="text-xs text-blue-600 dark:text-blue-400">{selectedProductForSale.variant}</p></div><div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Passo 1: Encomenda Online (Obrigatório)</label><select required value={linkedOrderId} onChange={(e) => setLinkedOrderId(e.target.value)} className={`w-full p-2 border rounded-lg focus:ring-2 outline-none transition-colors dark:bg-slate-800 dark:text-white ${orderMismatchWarning ? 'border-red-300 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-300 dark:border-slate-600 focus:ring-green-500'}`}><option value="">-- Selecione uma encomenda --</option>{pendingOrders.map(o => (<option key={o.id} value={o.id}>{o.id} - {o.shippingInfo?.name} ({formatCurrency(o.total)})</option>))}</select></div>{orderMismatchWarning && (<div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded animate-shake flex items-start gap-2"><ShieldAlert size={20} className="shrink-0 mt-0.5" /><div><p className="font-bold text-sm">PRODUTO ERRADO!</p><p className="text-xs">{orderMismatchWarning}</p></div></div>)}{linkedOrderId && !orderMismatchWarning && (<div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30 p-4 animate-fade-in-down space-y-4"><h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2 border-b border-blue-200 dark:border-blue-800/30 pb-2"><FileText size={14}/> Conferência de Valores</h4><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Preço Venda (Real)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-sm font-bold text-gray-800 dark:text-white" value={saleForm.unitPrice} onChange={e => setSaleForm({...saleForm, unitPrice: e.target.value})}/></div><div><label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Portes Envio (Cliente)</label><input type="number" step="0.01" className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-sm text-gray-800 dark:text-white" value={saleForm.shippingCost} onChange={e => setSaleForm({...saleForm, shippingCost: e.target.value})}/></div></div><div className="border-t border-blue-200 dark:border-blue-800/30 pt-4"><h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 uppercase flex items-center gap-2 mb-3"><ShieldCheck size={14}/> Verificação de Segurança</h4><div className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${securityCheckPassed ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'}`}>{securityCheckPassed ? (<><CheckCircle size={32} className="text-green-600 dark:text-green-400"/><div className="text-center"><p className="font-bold text-green-800 dark:text-green-300">Produto Confirmado!</p><p className="text-xs text-green-700 dark:text-green-400">Pode finalizar a venda.</p></div></>) : (<><div className="w-full flex gap-2"><button type="button" onClick={() => { setScannerMode('verify_product'); setIsScannerOpen(true); }} className="bg-gray-800 dark:bg-slate-700 text-white p-2 rounded-lg hover:bg-black dark:hover:bg-slate-600 transition-colors"><Camera size={20}/></button><input type="text" placeholder="Escanear produto para libertar..." className="flex-1 p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm text-center font-mono uppercase focus:ring-2 focus:ring-red-500 outline-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleVerifyProduct((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}/></div><p className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-1"><Lock size={12}/> Venda Bloqueada: Confirme o produto físico.</p></>)}</div></div></div>)}{selectedProductForSale.units && selectedProductForSale.units.length > 0 ? (<div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Selecionar Unidades (S/N) a vender</label><div className="flex gap-2 mb-2"><button type="button" onClick={() => { setScannerMode('sell_unit'); setIsScannerOpen(true); }} className="bg-gray-200 dark:bg-slate-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-white"><Camera size={14}/> Escanear S/N</button><select value={manualUnitSelect} onChange={(e) => { if(e.target.value) handleSelectUnitForSale(e.target.value); setManualUnitSelect(''); }} className="flex-1 p-2 border border-gray-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-white"><option value="">-- Selecionar Manualmente --</option>{selectedProductForSale.units.filter(u => u.status === 'AVAILABLE' && !selectedUnitsForSale.includes(u.id)).map(u => (<option key={u.id} value={u.id}>{u.id}</option>))}</select></div><div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700">{selectedUnitsForSale.map(sn => (<div key={sn} className="bg-white dark:bg-slate-700 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-xs font-mono px-2 py-1 rounded flex items-center gap-1 shadow-sm">{sn} <button type="button" onClick={() => setSelectedUnitsForSale(prev => prev.filter(s => s !== sn))} className="text-red-400 hover:text-red-600"><X size={12}/></button></div>))}{selectedUnitsForSale.length === 0 && <span className="text-gray-400 text-xs italic">Nenhuma unidade selecionada.</span>}</div><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Quantidade será calculada com base nas unidades selecionadas.</p></div>) : (<div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Quantidade</label><input type="number" min="1" max={selectedProductForSale.quantityBought - selectedProductForSale.quantitySold} required value={saleForm.quantity} onChange={(e) => setSaleForm({...saleForm, quantity: e.target.value})} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" /></div>)}<button type="submit" disabled={!!orderMismatchWarning || !securityCheckPassed} className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors ${orderMismatchWarning || !securityCheckPassed ? 'bg-gray-400 dark:bg-slate-600 cursor-not-allowed text-gray-200 dark:text-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}`}>{!securityCheckPassed ? <Lock size={18}/> : <CheckCircle size={18}/>} {orderMismatchWarning ? 'Bloqueado: Produto Errado' : !securityCheckPassed ? 'Bloqueado: Verificação Pendente' : 'Confirmar Venda'}</button></form></div></div>)}
       {detailsModalData && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col transition-colors"><div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 transition-colors"><h3 className="text-xl font-bold text-gray-900 dark:text-white">{detailsModalData.title}</h3><button onClick={() => setDetailsModalData(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full text-gray-500 dark:text-gray-400 transition-colors"><X size={24}/></button></div><div className="flex-1 overflow-y-auto p-0"><table className="w-full text-left text-sm"><thead className="bg-gray-50 dark:bg-slate-800 text-xs uppercase text-gray-500 dark:text-gray-400 sticky top-0 transition-colors"><tr>{detailsModalData.columns.map((col, idx) => <th key={idx} className="px-6 py-3">{col.header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-800">{detailsModalData.data.map((item, rowIdx) => (<tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-700 dark:text-gray-300">{detailsModalData.columns.map((col, colIdx) => (<td key={colIdx} className="px-6 py-3">{typeof col.accessor === 'function' ? col.accessor(item) : item[col.accessor]}</td>))}</tr>))}</tbody></table></div><div className="p-6 border-t border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 rounded-b-2xl flex justify-between items-center transition-colors"><span className="font-bold text-gray-500 dark:text-gray-400">TOTAL</span><span className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(detailsModalData.total)}</span></div></div></div>)}
