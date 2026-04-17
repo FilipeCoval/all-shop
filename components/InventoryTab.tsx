@@ -3,11 +3,12 @@ import {
   Search, Edit2, Trash2, RefreshCw, Camera, BrainCircuit, UploadCloud, Plus, 
   ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Loader2, Layers, BellRing, Info, X
 } from 'lucide-react';
-import { InventoryProduct, Order } from '../types';
+import { InventoryProduct, Order, Product } from '../types';
 import KpiCard from './KpiCard';
 
 interface InventoryTabProps {
   products: InventoryProduct[];
+  catalogProducts?: Product[]; // NOVO: Para poder ir buscar imagens
   pendingOrders: Order[];
   stats: {
     totalInvested: number;
@@ -45,7 +46,7 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
 const InventoryTab: React.FC<InventoryTabProps> = ({
-  products, pendingOrders, stats, onlineUsersCount, stockAlerts,
+  products, catalogProducts, pendingOrders, stats, onlineUsersCount, stockAlerts,
   onEdit, onEditProduct, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
@@ -214,9 +215,13 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                {mainItem.images && mainItem.images[0] && (
-                                                    <img src={mainItem.images[0]} className="w-10 h-10 object-cover rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600" alt="" />
-                                                )}
+                                                {(() => {
+                                                    const catalogProd = catalogProducts?.find(p => p.id === mainItem.publicProductId);
+                                                    const imgUrl = catalogProd?.image || (catalogProd?.images && catalogProd.images[0]) || (mainItem.images && mainItem.images[0]);
+                                                    return imgUrl ? (
+                                                        <img src={imgUrl} className="w-10 h-10 object-cover rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600" alt="" />
+                                                    ) : null;
+                                                })()}
                                                 <div>
                                                     <div className="font-bold text-gray-900 dark:text-white">{mainItem.name}</div>
                                                     <div className="text-xs text-gray-500 dark:text-gray-400">{mainItem.category} • {items.length} Lote(s)</div>
