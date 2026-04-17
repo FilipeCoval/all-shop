@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { X, ShoppingCart } from 'lucide-react';
+import { X, ShoppingCart, Info } from 'lucide-react';
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -100,6 +100,13 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, onClose, onAdd
                    </div>
                 )}
 
+                {product.maxQuantityPerOrder && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mb-3">
+                        <Info size={14} />
+                        Limite de {product.maxQuantityPerOrder} unidade(s) por encomenda.
+                    </p>
+                )}
+
                 <button 
                     onClick={handleAddToCart}
                     disabled={isOutOfStock || (hasVariants && !isVariantSelected)}
@@ -124,3 +131,4 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, onClose, onAdd
 };
 
 export default QuickViewModal;
+
