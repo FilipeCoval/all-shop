@@ -446,9 +446,17 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({
                         )}
                     </div>
                ) : (
-                   <div className="flex items-center gap-2 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg border border-green-100 dark:border-green-900/50 w-fit">
-                       <Check size={20} /><span className="font-bold">Em Stock</span>
-                       {isLowStock && <span className="ml-2 text-orange-600 dark:text-orange-400 text-sm font-normal flex items-center gap-1"><AlertTriangle size={14} /> Restam apenas {currentStock}</span>}
+                   <div className="flex flex-col gap-2">
+                       <div className="flex items-center gap-2 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg border border-green-100 dark:border-green-900/50 w-fit">
+                           <Check size={20} /><span className="font-bold">Em Stock</span>
+                           {isLowStock && <span className="ml-2 text-orange-600 dark:text-orange-400 text-sm font-normal flex items-center gap-1"><AlertTriangle size={14} /> Restam apenas {currentStock}</span>}
+                       </div>
+                       {product.maxQuantityPerOrder && (
+                           <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
+                               <Info size={14} />
+                               Limite de {product.maxQuantityPerOrder} unidade(s) por encomenda.
+                           </p>
+                       )}
                    </div>
                )}
            </div>
