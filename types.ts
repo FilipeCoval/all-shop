@@ -124,6 +124,7 @@ export interface CartItem {
   quantity: number;
   selectedVariant?: string;
   reservedUntil?: string; // ISO String para expiração da reserva
+  maxQuantityPerOrder?: number;
 }
 
 export interface PremiumBlock {
@@ -193,6 +194,7 @@ export interface Product {
   premiumData?: PremiumBentoData;
   cardHoverColor?: string; // NOVO: Cor do efeito hover no card do produto
   comingSoon?: boolean;
+  maxQuantityPerOrder?: number; // NOVO: Limite de quantidade por encomenda
   badges?: string[];
   images?: string[];
   variantLabel?: string;
@@ -377,3 +379,4 @@ export interface TicketMessage {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
+
