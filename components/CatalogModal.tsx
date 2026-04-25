@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, ProductVariant, Review } from '../types';
-import { X, Save, Image as ImageIcon, Plus, Trash2, Star, Layers, ListPlus, Settings, Upload, Loader2, MessageSquare, Globe } from 'lucide-react';
+import { X, Save, Image as ImageIcon, Plus, Trash2, Star, Layers, ListPlus, Settings, Upload, Loader2, MessageSquare, Globe, ArrowRight as ArrowRightIcon } from 'lucide-react';
 import { db, storage } from '../services/firebaseConfig';
 
 interface CatalogModalProps {
@@ -191,6 +191,16 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
 
   if (!isOpen || !formData) return null;
 
+  const moveImage = (index: number, direction: 'left' | 'right') => {
+    if (!formData || !formData.images) return;
+    const images = [...formData.images];
+    const newIndex = direction === 'left' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= images.length) return;
+    
+    [images[index], images[newIndex]] = [images[newIndex], images[index]];
+    setFormData({ ...formData, images });
+  };
+
   const handleSave = async () => {
     await onSave(formData);
     onClose();
@@ -377,6 +387,14 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
                         <button type="button" onClick={() => setFormData({...formData, images: formData.images?.filter(i => i !== img)})} className="p-2 rounded-full bg-white/20 text-white hover:bg-red-500" title="Apagar">
                           <Trash2 size={16} />
                         </button>
+                        <div className="flex gap-1">
+                          <button type="button" onClick={() => moveImage(idx, 'left')} disabled={idx === 0} className="p-1 px-2 rounded-lg bg-white/20 text-white hover:bg-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para Esquerda">
+                            <ArrowRightIcon size={12} className="rotate-180" />
+                          </button>
+                          <button type="button" onClick={() => moveImage(idx, 'right')} disabled={idx === (formData.images?.length || 0) - 1} className="p-1 px-2 rounded-lg bg-white/20 text-white hover:bg-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para Direita">
+                            <ArrowRightIcon size={12} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
