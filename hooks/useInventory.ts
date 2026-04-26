@@ -45,11 +45,14 @@ export const useInventory = (isAdmin: boolean = false) => {
           const publicId = Number(publicIdRaw);
           if (isNaN(publicId)) return;
 
-          const idStr = publicId.toString();
-          
           // 0. Buscar dados atuais do produto público para preservar variantes e imagens manuais
-          const publicDoc = await db.collection('products_public').doc(idStr).get();
-          const publicData = publicDoc.exists ? publicDoc.data() as Product : null;
+          const publicQuery = await db.collection('products_public').where('id', '==', publicId).limit(1).get();
+          const publicDoc = !publicQuery.empty ? publicQuery.docs[0] : null;
+          const publicData = publicDoc ? publicDoc.data() as Product : null;
+          const publicRef = publicDoc ? publicDoc.ref : null;
+
+          // Se não existir na coleção pública e não o conseguimos referenciar, não podemos atualizar as variantes
+          if (!publicRef) return;
 
           // 1. Buscar todos os lotes deste produto
           const snapshot = await db.collection('products_inventory')
@@ -59,7 +62,7 @@ export const useInventory = (isAdmin: boolean = false) => {
           if (snapshot.empty) {
               // Se não houver lotes, coloca stock a 0 mas não apaga o produto (para manter SEO/Histórico)
               // Preservamos as variantes existentes mas com stock 0
-              await db.collection('products_public').doc(idStr).set({ stock: 0 }, { merge: true }).catch(() => {});
+              await publicRef.set({ stock: 0 }, { merge: true }).catch(() => {});
               return;
           }
 
@@ -99,7 +102,7 @@ export const useInventory = (isAdmin: boolean = false) => {
           const variants = Array.from(variantsMap.values());
 
           // 2. Atualizar a Loja Pública com a SOMA TOTAL
-          await db.collection('products_public').doc(idStr).set({
+          await publicRef.set({
               stock: totalStock,
               variants: variants
           }, { merge: true });
@@ -236,3 +239,4 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
+
