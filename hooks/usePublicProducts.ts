@@ -28,17 +28,19 @@ export const usePublicProducts = () => {
         const items: Product[] = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
-          const docId = parseInt(doc.id, 10);
+          // Use the docId as a fallback if 'id' field is missing
+          const docIdNum = parseInt(doc.id, 10);
+          const productId = (data.id !== undefined && data.id !== null) ? Number(data.id) : (isNaN(docIdNum) ? null : docIdNum);
           
-          if (data && (typeof data.id === 'number' || !isNaN(docId))) {
-             const product = { ...data, id: data.id || docId } as Product;
+          if (data && productId !== null) {
+             const product = { ...data, id: productId } as Product;
              // MERGE SPECS: Se o produto não tiver specs na DB, injeta as specs mockadas/hardcoded
              if (!product.specs || Object.keys(product.specs).length === 0) {
                  product.specs = getSpecsForProduct(product);
              }
              items.push(product);
           } else {
-            console.warn(`[usePublicProducts] Documento '${doc.id}' foi ignorado por não ter um campo 'id' numérico válido.`);
+            console.warn(`[usePublicProducts] Documento '${doc.id}' foi ignorado por não ter um ID válido.`);
           }
         });
 
@@ -69,3 +71,4 @@ export const usePublicProducts = () => {
 
   return { products, loading };
 };
+
