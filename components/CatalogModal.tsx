@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Product, ProductVariant, Review } from '../types';
 import { X, Save, Image as ImageIcon, Plus, Trash2, Star, Layers, ListPlus, Settings, Upload, Loader2, MessageSquare, Globe, ArrowRight as ArrowRightIcon } from 'lucide-react';
 import { db, storage } from '../services/firebaseConfig';
+import { PRODUCT_CATEGORIES } from '../constants';
 
 interface CatalogModalProps {
   isOpen: boolean;
@@ -323,7 +324,12 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
-                  <input type="text" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white" />
+                  <select value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white">
+                    <option value="" disabled>Selecione uma categoria</option>
+                    {PRODUCT_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Preço de Venda (€)</label>
