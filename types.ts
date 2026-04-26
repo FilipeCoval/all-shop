@@ -1,6 +1,13 @@
 
 // Tipos principais da aplicação
 
+export interface Category {
+  id?: string;
+  name: string;
+  image: string;
+  order?: number;
+}
+
 export interface User {
   uid: string;
   name: string;
@@ -380,4 +387,3 @@ export interface TicketMessage {
 }
 
 export type UserTier = 'Bronze' | 'Prata' | 'Ouro';
-
