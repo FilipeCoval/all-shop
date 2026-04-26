@@ -162,14 +162,16 @@ export const useInventory = (isAdmin: boolean = false) => {
         : Date.now();
       
       // 2. Atualizar ou Criar Produto Público
+      const publicProduct = mapToPublicProduct(product, publicId);
+      // Ensure the id field is explicitly present
+      publicProduct.id = publicId;
+      const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
+
       if (product.publicProductId !== undefined && product.publicProductId !== null) {
-          // Se já existe ID público, NÃO atualizamos os metadados (Nome, Imagens, etc)
-          // para não sobrescrever as edições feitas na Gestão da Loja Online.
-          // Apenas o stock e variantes serão atualizados pelo refreshPublicProductStock.
+          // If publicProductId exists, ensure the document exists and has the 'id' field
+          await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct, { merge: true });
       } else {
-          // Se é novo produto sem ID público, cria do zero
-          const publicProduct = mapToPublicProduct(product, publicId);
-          const cleanPublicProduct = JSON.parse(JSON.stringify(publicProduct));
+          // If it's a new product, create it
           await db.collection('products_public').doc(publicId.toString()).set(cleanPublicProduct);
           await docRef.update({ publicProductId: publicId });
       }
