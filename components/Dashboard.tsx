@@ -444,7 +444,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const handleAddNew = () => { setEditingId(null); setFormData({ name: '', description: '', category: 'TV Box', publicProductId: '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: '', supplierOrderId: '', quantityBought: '', purchasePrice: '', salePrice: '', targetSalePrice: '', originalPrice: '', promoEndsAt: '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: [], images: [], newImageUrl: '', features: [], newFeature: '', comingSoon: false, weight: '', specs: {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleCreateVariant = (parentProduct: InventoryProduct) => { setEditingId(null); setFormData({ name: parentProduct.name, description: parentProduct.description || '', category: parentProduct.category, publicProductId: parentProduct.publicProductId ? parentProduct.publicProductId.toString() : '', variant: '', purchaseDate: new Date().toISOString().split('T')[0], supplierName: parentProduct.supplierName || '', supplierOrderId: '', quantityBought: '', purchasePrice: parentProduct.purchasePrice.toString(), salePrice: parentProduct.salePrice ? parentProduct.salePrice.toString() : '', targetSalePrice: parentProduct.targetSalePrice ? parentProduct.targetSalePrice.toString() : '', originalPrice: parentProduct.originalPrice ? parentProduct.originalPrice.toString() : '', promoEndsAt: parentProduct.promoEndsAt || '', cashbackValue: '', cashbackStatus: 'NONE', cashbackPlatform: '', cashbackAccount: '', cashbackExpectedDate: '', badges: parentProduct.badges || [], images: parentProduct.images || [], newImageUrl: '', features: parentProduct.features || [], newFeature: '', comingSoon: parentProduct.comingSoon || false, weight: parentProduct.weight ? parentProduct.weight.toString() : '', specs: parentProduct.specs || {}, newSpecKey: '', newSpecValue: '' }); setModalUnits([]); setGeneratedCodes([]); setIsPublicIdEditable(false); setIsModalOpen(true); };
   const handleDelete = async (id: string) => { if (!id) return; if (window.confirm('Apagar registo?')) { try { await deleteProduct(id); } catch (error: any) { alert("Erro: " + error.message); } } };
-  const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; try { const batch = db.batch(); items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); if (items[0].publicProductId) batch.delete(db.collection('products_public').doc(items[0].publicProductId.toString())); await batch.commit(); } catch (e) { alert("Erro ao apagar grupo."); } };
+  const handleDeleteGroup = async (groupId: string, items: InventoryProduct[]) => { 
+      if (!window.confirm(`Apagar grupo "${items[0].name}" e ${items.length} lotes?`)) return; 
+      try { 
+          const batch = db.batch(); 
+          items.forEach(item => batch.delete(db.collection('products_inventory').doc(item.id))); 
+          if (items[0].publicProductId) {
+              const publicQuery = await db.collection('products_public').where('id', '==', Number(items[0].publicProductId)).limit(1).get();
+              if (!publicQuery.empty) {
+                  batch.delete(publicQuery.docs[0].ref);
+              }
+          }
+          await batch.commit(); 
+      } catch (e) { alert("Erro ao apagar grupo."); } 
+  };
   const openSaleModal = (product: InventoryProduct) => { setSelectedProductForSale(product); setSaleForm({ quantity: '1', unitPrice: product.salePrice ? product.salePrice.toString() : product.targetSalePrice ? product.targetSalePrice.toString() : '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: product.supplierName || '', supplierOrderId: product.supplierOrderId || '' }); setSelectedUnitsForSale([]); setLinkedOrderId(''); setSelectedOrderForSaleDetails(null); setOrderMismatchWarning(null); setSecurityCheckPassed(false); setVerificationCode(''); setIsSaleModalOpen(true); };
   const handleDeleteSale = async (saleId: string, isOnline: boolean = false) => { 
     if(!editingId || !window.confirm("Anular venda e repor stock?")) return; 
@@ -707,15 +720,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
       const entries = Object.entries(stockMap);
       const batches = [];
-      for (let i = 0; i < entries.length; i += 500) {
-        const chunk = entries.slice(i, i + 500);
-        const batch = db.batch();
-        chunk.forEach(([publicId, totalStock]) => {
-          const ref = db.collection('products_public').doc(publicId);
-          batch.set(ref, { stock: totalStock }, { merge: true });
-        });
-        batches.push(batch);
+      let currentBatch = db.batch();
+      let operationsInBatch = 0;
+
+      for (const [publicId, totalStock] of entries) {
+        // Find the actual document Ref by querying 'id'
+        const productQuery = await db.collection('products_public').where('id', '==', Number(publicId)).limit(1).get();
+        if (!productQuery.empty) {
+          const ref = productQuery.docs[0].ref;
+          currentBatch.set(ref, { stock: totalStock }, { merge: true });
+          operationsInBatch++;
+          
+          if (operationsInBatch >= 500) {
+            batches.push(currentBatch);
+            currentBatch = db.batch();
+            operationsInBatch = 0;
+          }
+        }
       }
+      
+      if (operationsInBatch > 0) {
+        batches.push(currentBatch);
+      }
+      
       await Promise.all(batches.map(b => b.commit()));
       if (!silent) alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
     } catch (error: any) {
@@ -773,11 +800,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               if (newStatus === 'Cancelado' && currentOrder.status !== 'Cancelado') {
                   for (const item of currentOrder.items) {
                       if (typeof item !== 'object' || item === null) continue;
-                      const productRef = db.collection('products_public').doc(item.productId.toString());
-                      const productDoc = await transaction.get(productRef);
-                      if (productDoc.exists) {
+                      const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
+                      if (!productQuery.empty) {
+                          const productDoc = productQuery.docs[0];
                           const productData = productDoc.data() as Product;
-                          transaction.update(productRef, {
+                          transaction.update(productDoc.ref, {
                               stock: (productData.stock || 0) + item.quantity
                           });
                       }
@@ -836,11 +863,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   await db.runTransaction(async (transaction) => {
                       for (const item of orderData.items) {
                           if (typeof item !== 'object' || item === null) continue;
-                          const productRef = db.collection('products_public').doc(item.productId.toString());
-                          const productDoc = await transaction.get(productRef);
-                          if (productDoc.exists) {
+                          const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
+                          if (!productQuery.empty) {
+                              const productDoc = productQuery.docs[0];
                               const productData = productDoc.data() as Product;
-                              transaction.update(productRef, {
+                              transaction.update(productDoc.ref, {
                                   stock: (productData.stock || 0) + item.quantity
                               });
                           }
@@ -1108,7 +1135,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 }}
                 onDelete={async (id) => {
                     try {
-                        await db.collection('products_public').doc(id.toString()).delete();
+                        const publicQuery = await db.collection('products_public').where('id', '==', id).limit(1).get();
+                        if (!publicQuery.empty) {
+                            await publicQuery.docs[0].ref.delete();
+                        }
                         setPublicProductsList(prev => prev.filter(p => p.id !== id));
                     } catch (error) {
                         console.error("Erro ao apagar produto público:", error);
@@ -1476,7 +1506,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           try {
             const cleanProduct = JSON.parse(JSON.stringify(updatedProduct));
             const id = Number(cleanProduct.id);
-            delete cleanProduct.id;
+            // Ensure id is stored in the document data, as it's required for queries and loading
+            cleanProduct.id = id;
             await db.collection('products_public').doc(id.toString()).set(cleanProduct, { merge: true });
             setPublicProductsList(prev => {
               const exists = prev.find(p => p.id === id);
