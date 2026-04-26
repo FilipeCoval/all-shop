@@ -13,7 +13,8 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.email == "filipe_coval_90@hotmail.com" || 
         request.auth.token.email == "mcpoleca@gmail.com" || 
-        request.auth.token.email == "filipe@teste.com"
+        request.auth.token.email == "filipe@teste.com" ||
+        request.auth.token.email == "filipecoval90@gmail.com"
       );
     }
 
@@ -73,8 +74,9 @@ service cloud.firestore {
     }
 
     // Sistema de Reservas e Online: Aberto para garantir funcionamento do stock em tempo real
-    match /online_users/{sessionId} { allow read, write: if true; }
+    match /online_users/{docId} { allow read, write: if true; }
     match /stock_reservations/{docId} { allow read, write: if true; }
+    match /leads/{docId} { allow create: if true; allow read, write: if isAdmin(); }
 
     // Campanhas de Notificação (Push): Apenas Admin (ESTA É A REGRA QUE FALTAVA)
     match /push_campaigns/{campaignId} { allow read, write: if isAdmin(); }
@@ -84,6 +86,9 @@ service cloud.firestore {
 
     // Importações: Apenas Admin
     match /import_shipments/{shipmentId} { allow read, write: if isAdmin(); }
+
+    // Categorias da Loja
+    match /store_categories/{docId} { allow read: if true; allow write: if isAdmin(); }
 
     // Cupões
     match /coupons/{docId} {
