@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
 import ProductList from './ProductList';
 import { db } from '../services/firebaseConfig';
+import { PRODUCT_CATEGORIES } from '../constants';
 
 interface HomeProps {
   products: Product[];
@@ -99,27 +100,21 @@ const Home: React.FC<HomeProps> = ({
   };
 
   const categoryVisuals = useMemo(() => {
-      const realCats: string[] = ['Todas', ...Array.from(new Set<string>(products.map(p => p.category)))];
-      const testCats = ['Gaming', 'Smart Home', 'Audio', 'Drones'];
-      const uniqueCats: string[] = Array.from(new Set([...realCats, ...testCats]));
+      const allCats = ['Todas', ...PRODUCT_CATEGORIES];
       
-      const mapCats = (list: string[]) => list.map(cat => {
-          let image = '';
-          if (cat === 'Todas') image = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
-          else if (cat === 'Gaming') image = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80";
-          else if (cat === 'Smart Home') image = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&q=80";
-          else if (cat === 'Audio') image = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80";
-          else if (cat === 'Drones') image = "https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&q=80";
-          else {
-              const product = products.find(p => p.category === cat);
-              image = product ? product.image : 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80';
-          }
-          return { name: cat, image };
-      });
+      const getCatImage = (cat: string) => {
+          if (cat === 'Todas') return "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
+          if (cat === 'TV & Streaming') return "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&q=80";
+          if (cat === 'Cabos') return "https://images.unsplash.com/photo-1538370965046-79c0d6907d47?auto=format&fit=crop&q=80";
+          if (cat === 'Acessórios') return "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&q=80";
+          if (cat === 'Audio') return "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80";
+          if (cat === 'Adaptadores') return "https://images.unsplash.com/photo-1624823183424-df359b83b8b6?auto=format&fit=crop&q=80";
+          return "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80"; // Outros
+      };
       
-      const uniqueFinal = mapCats(uniqueCats);
-      return [...uniqueFinal, ...uniqueFinal];
-  }, [products]);
+      const mappedCats = allCats.map(name => ({ name, image: getCatImage(name) }));
+      return [...mappedCats, ...mappedCats]; // Duplicado para o efeito marquee
+  }, []);
 
 
   const handleCategoryClick = (cat: string) => {
