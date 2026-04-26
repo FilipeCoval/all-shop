@@ -427,13 +427,12 @@ const App: React.FC = () => {
   };
 
   const updateReservationInFirebase = async (productId: number, variantName: string | undefined | null, newQuantity: number): Promise<boolean> => {
-      if (isAdmin) return true; 
       await new Promise(resolve => setTimeout(resolve, 200));
 
       try {
-          const productDoc = await db.collection('products_public').doc(productId.toString()).get();
+          const productQuery = await db.collection('products_public').where('id', '==', productId).limit(1).get();
           
-          if (!productDoc.exists) {
+          if (productQuery.empty) {
               const isDemoProduct = INITIAL_PRODUCTS.some(p => p.id === productId);
               if (isDemoProduct) {
                   console.warn("Produto de demonstração (não sincronizado) adicionado ao carrinho.");
@@ -444,6 +443,7 @@ const App: React.FC = () => {
               return false;
           }
 
+          const productDoc = productQuery.docs[0];
           const productData = productDoc.data() as Product;
           const totalStock = productData.stock || 0;
 
@@ -634,13 +634,14 @@ const App: React.FC = () => {
                       // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
                       if (typeof item !== 'object' || item === null) continue;
                       
-                      const productRef = db.collection('products_public').doc(item.productId.toString());
-                      const productDoc = await transaction.get(productRef);
+                      const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
                       
-                      if (!productDoc.exists) {
+                      if (productQuery.empty) {
                           throw new Error(`Produto ${item.name} não encontrado.`);
                       }
                       
+                      const productDoc = productQuery.docs[0];
+                      const productRef = productDoc.ref;
                       const productData = productDoc.data() as Product;
                       if (productData.stock < item.quantity) {
                           throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
