@@ -633,16 +633,15 @@ const App: React.FC = () => {
                       // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
                       if (typeof item !== 'object' || item === null) continue;
                       
-                      const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
+                      const productRef = db.collection('products_public').doc(item.productId.toString());
+                      const productDoc = await transaction.get(productRef);
                       
-                      if (productQuery.empty) {
+                      if (!productDoc.exists) {
                           throw new Error(`Produto ${item.name} não encontrado.`);
                       }
-                      
-                      const productDoc = productQuery.docs[0];
-                      const productRef = productDoc.ref;
                       const productData = productDoc.data() as Product;
-                      if (productData.stock < item.quantity) {
+                      const currentStock = typeof productData.stock === 'number' ? productData.stock : 0;
+                      if (currentStock < item.quantity) {
                           throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
                       }
                       
@@ -912,4 +911,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
