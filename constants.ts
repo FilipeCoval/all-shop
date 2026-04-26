@@ -35,6 +35,15 @@ export const ADMIN_EMAILS = [
   "filipe@teste.com"
 ];
 
+export const PRODUCT_CATEGORIES = [
+  "TV & Streaming",
+  "Cabos",
+  "Acessórios",
+  "Audio",
+  "Adaptadores",
+  "Outros"
+];
+
 export const LOYALTY_TIERS = {
     BRONZE: { threshold: 0, multiplier: 1, label: 'Bronze' },
     SILVER: { threshold: 250, multiplier: 1.5, label: 'Prata' },
