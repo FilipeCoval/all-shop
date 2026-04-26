@@ -46,13 +46,12 @@ export const useInventory = (isAdmin: boolean = false) => {
           if (isNaN(publicId)) return;
 
           // 0. Buscar dados atuais do produto público para preservar variantes e imagens manuais
-          const publicQuery = await db.collection('products_public').where('id', '==', publicId).limit(1).get();
-          const publicDoc = !publicQuery.empty ? publicQuery.docs[0] : null;
-          const publicData = publicDoc ? publicDoc.data() as Product : null;
-          const publicRef = publicDoc ? publicDoc.ref : null;
+          const publicRef = db.collection('products_public').doc(publicId.toString());
+          const publicDoc = await publicRef.get();
+          const publicData = publicDoc.exists ? publicDoc.data() as Product : null;
 
           // Se não existir na coleção pública e não o conseguimos referenciar, não podemos atualizar as variantes
-          if (!publicRef) return;
+          if (!publicDoc.exists) return;
 
           // 1. Buscar todos os lotes deste produto
           const snapshot = await db.collection('products_inventory')
