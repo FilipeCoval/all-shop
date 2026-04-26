@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { Product } from '../types';
 import { INITIAL_PRODUCTS } from '../constants';
-import { getSpecsForProduct } from '../data/productSpecs.ts';
+import { getSpecsForProduct } from '../data/productSpecs';
 
 export const usePublicProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
