@@ -430,9 +430,9 @@ const App: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 200));
 
       try {
-          const productQuery = await db.collection('products_public').where('id', '==', productId).limit(1).get();
+          const productDoc = await db.collection('products_public').doc(productId.toString()).get();
           
-          if (productQuery.empty) {
+          if (!productDoc.exists) {
               const isDemoProduct = INITIAL_PRODUCTS.some(p => p.id === productId);
               if (isDemoProduct) {
                   console.warn("Produto de demonstração (não sincronizado) adicionado ao carrinho.");
@@ -443,7 +443,6 @@ const App: React.FC = () => {
               return false;
           }
 
-          const productDoc = productQuery.docs[0];
           const productData = productDoc.data() as Product;
           const totalStock = productData.stock || 0;
 
@@ -913,3 +912,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
