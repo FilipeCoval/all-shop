@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Product, ProductVariant, Review } from '../types';
 import { X, Save, Image as ImageIcon, Plus, Trash2, Star, Layers, ListPlus, Settings, Upload, Loader2, MessageSquare, Globe, ArrowRight as ArrowRightIcon } from 'lucide-react';
 import { db, storage } from '../services/firebaseConfig';
-import { PRODUCT_CATEGORIES } from '../constants';
+import { useStoreCategories } from '../hooks/useStoreCategories';
 
 interface CatalogModalProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'info' | 'images' | 'features' | 'reviews' | 'premium'>('info');
+  const { categories: storeCategories } = useStoreCategories();
   
   const [newFeature, setNewFeature] = useState('');
   const [newSpecKey, setNewSpecKey] = useState('');
@@ -326,8 +327,8 @@ const CatalogModal: React.FC<CatalogModalProps> = ({ isOpen, onClose, product, o
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
                   <select value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white">
                     <option value="" disabled>Selecione uma categoria</option>
-                    {PRODUCT_CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {storeCategories.map(cat => (
+                      <option key={cat.name} value={cat.name}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
