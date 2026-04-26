@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowRight, Star, Truck, ShieldCheck, CheckCircle, Loader2, Mail, Zap, Flame, Sparkles, Star as StarIcon, CalendarClock, AlertTriangle } from 'lucide-react';
 import ProductList from './ProductList';
 import { db } from '../services/firebaseConfig';
-import { PRODUCT_CATEGORIES } from '../constants';
+import { useStoreCategories } from '../hooks/useStoreCategories';
 
 interface HomeProps {
   products: Product[];
@@ -35,6 +35,7 @@ const Home: React.FC<HomeProps> = ({
     onToggleCompare,
     onOpenComparator
 }) => {
+  const { categories: storeCategories, loading: catsLoading } = useStoreCategories();
   const [email, setEmail] = useState('');
   const [subStatus, setSubStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
@@ -100,21 +101,13 @@ const Home: React.FC<HomeProps> = ({
   };
 
   const categoryVisuals = useMemo(() => {
-      const allCats = ['Todas', ...PRODUCT_CATEGORIES];
+      const allCats = [{ name: 'Todas', image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80" }];
       
-      const getCatImage = (cat: string) => {
-          if (cat === 'Todas') return "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80";
-          if (cat === 'TV & Streaming') return "https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&q=80";
-          if (cat === 'Cabos') return "https://images.unsplash.com/photo-1538370965046-79c0d6907d47?auto=format&fit=crop&q=80";
-          if (cat === 'Acessórios') return "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&q=80";
-          if (cat === 'Audio') return "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80";
-          if (cat === 'Adaptadores') return "https://images.unsplash.com/photo-1624823183424-df359b83b8b6?auto=format&fit=crop&q=80";
-          return "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80"; // Outros
-      };
+      const mappedCats = storeCategories.map(cat => ({ name: cat.name, image: cat.image }));
       
-      const mappedCats = allCats.map(name => ({ name, image: getCatImage(name) }));
-      return [...mappedCats, ...mappedCats]; // Duplicado para o efeito marquee
-  }, []);
+      const finalCats = [...allCats, ...mappedCats];
+      return [...finalCats, ...finalCats]; // Duplicado para o efeito marquee
+  }, [storeCategories]);
 
 
   const handleCategoryClick = (cat: string) => {
