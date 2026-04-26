@@ -150,6 +150,9 @@ const InteractiveProductCard: React.FC<InteractiveProductCardProps> = ({
             <span className={`text-3xl font-black ${showPromo ? 'text-red-600 group-hover:text-white' : 'text-gray-900 dark:text-white group-hover:text-white'} transition-colors`}>
               {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(displayPrice)}
             </span>
+            <span className="text-xs text-gray-500 font-medium mt-1">
+              {product.stock > 0 ? `${product.stock} disponíveis` : 'Esgotado'}
+            </span>
           </div>
 
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-4 group-hover:translate-y-0">
