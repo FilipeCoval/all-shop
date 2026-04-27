@@ -15,10 +15,10 @@ export const usePendingOrders = (isAdmin: boolean) => {
     }
 
     // Escutar encomendas que ainda não foram enviadas ou processadas no inventário físico
-    // Incluímos 'Enviado' e 'Entregue' porque se o admin ainda não "Registou a Venda" no inventário, 
+    // Incluímos 'Pendente', 'Processamento', 'Pago', 'Enviado' e 'Entregue' porque se o admin ainda não "Registou a Venda" no inventário, 
     // o stock físico ainda está lá e precisa de ser subtraído para o público.
     const unsubscribe = db.collection('orders')
-      .where('status', 'in', ['Processamento', 'Pago', 'Enviado', 'Entregue'])
+      .where('status', 'in', ['Pendente', 'Processamento', 'Pago', 'Enviado', 'Entregue'])
       .onSnapshot((snapshot) => {
         const orders: Order[] = [];
         snapshot.forEach(doc => {
@@ -29,7 +29,7 @@ export const usePendingOrders = (isAdmin: boolean) => {
 
           const isExplicitlyPending = data.stockDeducted === false;
           const isOldButStuck = data.stockDeducted === undefined && 
-                               ['Processamento', 'Pago'].includes(data.status) && 
+                               ['Pendente', 'Processamento', 'Pago'].includes(data.status) && 
                                orderDate > thirtyDaysAgo;
           
           if (isExplicitlyPending || isOldButStuck) {
@@ -44,7 +44,8 @@ export const usePendingOrders = (isAdmin: boolean) => {
       });
 
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin]);
 
   return { pendingOrders, loading };
 };
+
