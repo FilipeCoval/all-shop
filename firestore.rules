@@ -84,6 +84,9 @@ service cloud.firestore {
     // Movimentos de Stock: Apenas Admin (Necessário para dar baixa de encomendas)
     match /stock_movements/{movementId} { allow read, write: if isAdmin(); }
 
+    // Resumo de Stock Público (Para leitura segura de stock pendente sem PII)
+    match /public_stock_summary/{docId} { allow read: if true; allow write: if isAdmin(); }
+
     // Importações: Apenas Admin
     match /import_shipments/{shipmentId} { allow read, write: if isAdmin(); }
 
