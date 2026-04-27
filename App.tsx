@@ -161,9 +161,18 @@ const App: React.FC = () => {
   const getStockForProduct = (productId: number, variantName?: string): number => {
     if (isAdmin) return getAdminStock(productId, variantName);
     const product = dbProducts.find(p => p.id === productId);
+    
     let availableStock = product?.stock ?? 0;
     
+    if (variantName && product?.variants) {
+        const variant = product.variants.find(v => v.name === variantName);
+        if (variant && variant.stock !== undefined) {
+            availableStock = variant.stock;
+        }
+    }
+    
     // 1. Subtrair Reservas Temporárias (Carrinhos ativos)
+    // Se for stock de variante, filtra reservas da variante. Senão filtra do produto inteiro.
     const reservedQuantity = reservations
         .filter(r => r.productId === productId && (!variantName || r.variantName === variantName))
         .reduce((sum, r) => sum + r.quantity, 0);
@@ -431,7 +440,14 @@ const App: React.FC = () => {
           }
 
           const productData = productDoc.data() as Product;
-          const totalStock = productData.stock || 0;
+          
+          let totalStock = productData.stock || 0;
+          if (variantName && productData.variants) {
+              const variant = productData.variants.find(v => v.name === variantName);
+              if (variant && variant.stock !== undefined) {
+                  totalStock = variant.stock;
+              }
+          }
 
           const activeReservationsSnap = await db.collection('stock_reservations')
               .where('productId', '==', productId)
@@ -444,8 +460,16 @@ const App: React.FC = () => {
           activeReservationsSnap.forEach(doc => {
               const data = doc.data();
               if (data.expiresAt <= now) return;
+              
+              // Only consider reservations for the same variant, OR if neither has a variant
+              // (If one has variant and other doesn't, they are separate stocks)
+              const dataVariant = data.variantName || null;
+              const targetVariant = variantName || null;
+              
+              if (dataVariant !== targetVariant) return;
+
               const isMine = (data.sessionId === sessionId) || (user?.uid && data.userId === user.uid);
-              if (isMine && data.variantName === (variantName || null)) {
+              if (isMine) {
                   myCurrentResDoc = doc; 
               } else {
                   reservedByOthers += data.quantity; 
@@ -617,7 +641,6 @@ const App: React.FC = () => {
               const productUpdates = [];
               if (!exists) {
                   for (const item of cleanOrder.items) {
-                      // item pode ser string ou objecto, mas no checkout é sempre objecto OrderItem
                       if (typeof item !== 'object' || item === null) continue;
                       
                       const productRef = db.collection('products_public').doc(item.productId.toString());
@@ -627,14 +650,38 @@ const App: React.FC = () => {
                           throw new Error(`Produto ${item.name} não encontrado.`);
                       }
                       const productData = productDoc.data() as Product;
-                      const currentStock = typeof productData.stock === 'number' ? productData.stock : 0;
-                      if (currentStock < item.quantity) {
-                          throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
+                      
+                      let currentStock = typeof productData.stock === 'number' ? productData.stock : 0;
+                      let updatedVariants = productData.variants;
+                      
+                      const variantName = item.selectedVariant;
+                      if (variantName && productData.variants) {
+                          const variantIndex = productData.variants.findIndex(v => v.name === variantName);
+                          if (variantIndex !== -1) {
+                              const variantStock = productData.variants[variantIndex].stock || 0;
+                              if (variantStock < item.quantity) {
+                                  throw new Error(`A variante ${variantName} de ${item.name} já não tem stock suficiente.`);
+                              }
+                              // We need to clone the variants array to update it
+                              updatedVariants = [...productData.variants];
+                              updatedVariants[variantIndex] = {
+                                  ...updatedVariants[variantIndex],
+                                  stock: variantStock - item.quantity
+                              };
+                          }
+                      } else {
+                          // No variant selected, just check global stock
+                          if (currentStock < item.quantity) {
+                              throw new Error(`O produto ${item.name} já não tem stock suficiente.`);
+                          }
                       }
+                      
+                      const updateData: any = { stock: currentStock - item.quantity };
+                      if (updatedVariants) updateData.variants = updatedVariants;
                       
                       productUpdates.push({
                           ref: productRef,
-                          newStock: productData.stock - item.quantity
+                          updateData
                       });
                   }
               }
@@ -642,10 +689,10 @@ const App: React.FC = () => {
               // 2. Guardar a encomenda
               transaction.set(orderRef, cleanOrder);
 
-          // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
+              // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
               if (!exists) {
                   for (const update of productUpdates) {
-                      transaction.update(update.ref, { stock: update.newStock });
+                      transaction.update(update.ref, Object.fromEntries(Object.entries(update.updateData).filter(([_,v]) => v !== undefined)));
                   }
                   // TRIGGER STOCK SUMMARY UPDATE
                   // Não podemos fazer isto dentro da transação, fazemos após
