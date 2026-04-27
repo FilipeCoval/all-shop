@@ -169,21 +169,8 @@ const App: React.FC = () => {
         .reduce((sum, r) => sum + r.quantity, 0);
 
     // 2. Subtrair Encomendas Pendentes (Ainda não processadas no inventário físico)
+    // REMOVIDO: Agora o stock já é decrementado no checkout atomicamente.
     let pendingInOrders = 0;
-    pendingOrders.forEach(order => {
-        if (order.items && Array.isArray(order.items)) {
-            order.items.forEach(item => {
-                if (typeof item === 'object' && item !== null) {
-                    const orderItem = item as any; // Usar any para simplificar acesso ou cast para OrderItem
-                    if (orderItem.productId === productId) {
-                        if (!variantName || orderItem.selectedVariant === variantName) {
-                            pendingInOrders += (orderItem.quantity || 1);
-                        }
-                    }
-                }
-            });
-        }
-    });
 
     availableStock = availableStock - reservedQuantity - pendingInOrders;
     return Math.max(0, availableStock);
