@@ -281,9 +281,23 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                         if (!productQuery.empty) {
                             const productDoc = productQuery.docs[0];
                             const productData = productDoc.data() as Product;
-                            transaction.update(productDoc.ref, {
-                                stock: (productData.stock || 0) + item.quantity
-                            });
+                            
+                            let updatedVariants = productData.variants;
+                            if (item.selectedVariant && productData.variants) {
+                                const vIndex = productData.variants.findIndex((v: any) => v.name === item.selectedVariant);
+                                if (vIndex !== -1) {
+                                    updatedVariants = [...productData.variants];
+                                    updatedVariants[vIndex] = {
+                                        ...updatedVariants[vIndex],
+                                        stock: (updatedVariants[vIndex].stock || 0) + item.quantity
+                                    };
+                                }
+                            }
+                            
+                            const updateData: any = { stock: (productData.stock || 0) + item.quantity };
+                            if (updatedVariants) updateData.variants = updatedVariants;
+                            
+                            transaction.update(productDoc.ref, Object.fromEntries(Object.entries(updateData).filter(([_,v]) => v !== undefined)));
                         }
                     }
                 }
