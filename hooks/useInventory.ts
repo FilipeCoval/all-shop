@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
-import { InventoryProduct, Product, ProductVariant } from '../types';
+import { InventoryProduct, Product, ProductVariant, Order } from '../types';
 import { calculateAvailableStock } from '../services/stockService';
 
 export const useInventory = (isAdmin: boolean = false) => {
@@ -40,22 +40,99 @@ export const useInventory = (isAdmin: boolean = false) => {
   }, [isAdmin]);
 
   // --- FUNÇÃO DE SINCRONIZAÇÃO AUTOMÁTICA ---
-  // Esta função chama agora a API server-side para cálculo seguro
   const refreshPublicProductStock = async (publicIdRaw: number | string) => {
       try {
           const publicId = Number(publicIdRaw);
           if (isNaN(publicId)) return;
 
-          // Chamada à API para cálculo seguro e gestão detalhada de variantes
-          const response = await fetch('/api/update-stock-summary', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ publicProductId: publicId })
+          // 1. Fetch public product 
+          const publicRef = db.collection('products_public').doc(publicId.toString());
+          const publicSnap = await publicRef.get();
+          if (!publicSnap.exists) return;
+          const publicData = publicSnap.data() as Product;
+
+          // 2. Calculate physical stock & variants from inventory
+          const inventorySnap = await db.collection('products_inventory').where('publicProductId', '==', publicId).get();
+          let physicalStock = 0;
+          let variantStock: Record<string, number> = {};
+
+          inventorySnap.forEach(doc => {
+              const data = doc.data() as InventoryProduct;
+              const qty = Math.max(0, (data.quantityBought || 0) - (data.quantitySold || 0));
+              physicalStock += qty;
+              
+              const variant = (data.variant || '').trim();
+              if (!variantStock[variant]) variantStock[variant] = 0;
+              variantStock[variant] += qty;
+          });
+
+          // 3. Subtract pending orders
+          const ordersSnap = await db.collection('orders').where('status', 'in', ['Pendente', 'Processamento', 'Pago', 'Enviado', 'Entregue']).get();
+          let pending = 0;
+          let variantPending: Record<string, number> = {};
+          
+          const now = new Date();
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+          ordersSnap.forEach(doc => {
+              const order = doc.data() as Order;
+              const orderDate = new Date(order.date || new Date());
+              const isExplicitlyPending = order.stockDeducted === false;
+              const isOldButStuck = order.stockDeducted === undefined && 
+                                   ['Pendente', 'Processamento', 'Pago'].includes(order.status) && 
+                                   orderDate > thirtyDaysAgo;
+
+              if (isExplicitlyPending || isOldButStuck) {
+                  order.items.forEach((item: any) => {
+                      if (typeof item === 'object' && item.productId === publicId) {
+                          const qty = item.quantity || 1;
+                          pending += qty;
+                          const variant = (item.selectedVariant || '').trim();
+                          if (!variantPending[variant]) variantPending[variant] = 0;
+                          variantPending[variant] += qty;
+                      }
+                  });
+              }
+          });
+
+          const available = Math.max(0, physicalStock - pending);
+
+          // 4. Update Document
+          const updatedVariants: any[] = [];
+          const allVariantNames = new Set<string>();
+          Object.keys(variantStock).forEach(v => { if (v) allVariantNames.add(v); });
+          (publicData.variants || []).forEach(v => { if (v && v.name) allVariantNames.add(v.name.trim()); });
+
+          const currentVariantsMap = new Map();
+          (publicData.variants || []).forEach(v => { if (v && v.name) currentVariantsMap.set(v.name.trim(), v); });
+
+          allVariantNames.forEach(vName => {
+              const physical = variantStock[vName] || 0;
+              const pend = variantPending[vName] || 0;
+              const variantAvailable = Math.max(0, physical - pend);
+              
+              const existing = currentVariantsMap.get(vName) || {};
+              let cleanImage = existing.image;
+              if (cleanImage === null || cleanImage === undefined) cleanImage = undefined;
+              
+              const varData: any = {
+                  name: vName,
+                  price: Number(existing.price) || 0,
+                  stock: variantAvailable
+              };
+              if (cleanImage) varData.image = cleanImage;
+              
+              updatedVariants.push(varData);
           });
           
-          if (!response.ok) throw new Error("Falha ao atualizar resumo de stock");
+          const updateData: any = { stock: available };
+          if (updatedVariants.length > 0) {
+              updateData.variants = updatedVariants;
+          }
 
-          console.log(`Stock sincronizado via API para Produto ${publicId}.`);
+          await publicRef.set(updateData, { merge: true });
+          console.log(`Stock sincronizado para Produto ${publicId}.`);
 
       } catch (err) {
           console.error("Erro ao sincronizar stock público automaticamente:", err);
