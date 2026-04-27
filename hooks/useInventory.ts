@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebaseConfig';
 import { InventoryProduct, Product, ProductVariant } from '../types';
+import { calculateAvailableStock } from '../services/stockService';
 
 export const useInventory = (isAdmin: boolean = false) => {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -48,27 +49,18 @@ export const useInventory = (isAdmin: boolean = false) => {
           // 0. Buscar dados atuais do produto público para preservar variantes e imagens manuais
           const publicRef = db.collection('products_public').doc(publicId.toString());
           const publicDoc = await publicRef.get();
-          const publicData = publicDoc.exists ? publicDoc.data() as Product : null;
-
-          // Se não existir na coleção pública e não o conseguimos referenciar, não podemos atualizar as variantes
+          
+          // Se não existir na coleção pública não podemos atualizar
           if (!publicDoc.exists) return;
+          const publicData = publicDoc.data() as Product;
 
           // 1. Buscar todos os lotes deste produto
           const snapshot = await db.collection('products_inventory')
               .where('publicProductId', '==', publicId)
               .get();
 
-          if (snapshot.empty) {
-              // Se não houver lotes, coloca stock a 0 mas não apaga o produto (para manter SEO/Histórico)
-              // Preservamos as variantes existentes mas com stock 0
-              await publicRef.set({ stock: 0 }, { merge: true }).catch(() => {});
-              return;
-          }
-
-          let totalStock = 0;
+          // Recalcular variantes baseadas nos lotes existentes
           const variantsMap = new Map<string, ProductVariant>();
-
-          // Inicializar o mapa com as variantes que já existem no produto público
           if (publicData?.variants) {
               publicData.variants.forEach(v => {
                   variantsMap.set(v.name, { ...v });
@@ -77,22 +69,11 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           snapshot.forEach(doc => {
               const item = doc.data() as InventoryProduct;
-              // Cálculo de stock deste lote
-              const itemStock = Math.max(0, (item.quantityBought || 0) - (item.quantitySold || 0));
-              totalStock += itemStock;
-
-              // Reconstruir variantes baseadas nos lotes existentes
               if (item.variant) {
-                  // Se a variante já existe, mantemos a imagem existente se a nova não tiver
                   const existing = variantsMap.get(item.variant);
-                  
                   variantsMap.set(item.variant, {
                       name: item.variant,
                       price: item.salePrice || item.targetSalePrice || (existing?.price || 0),
-                      // Prioridade: 
-                      // 1. Imagem já definida na variante do produto público (se existir)
-                      // 2. Primeira imagem do lote de inventário
-                      // 3. Imagem que já estava no mapa nesta iteração
                       image: (existing?.image) ? existing.image : ((item.images && item.images[0]) ? item.images[0] : undefined)
                   });
               }
@@ -100,13 +81,18 @@ export const useInventory = (isAdmin: boolean = false) => {
 
           const variants = Array.from(variantsMap.values());
 
-          // 2. Atualizar a Loja Pública com a SOMA TOTAL
+          // 2. Usar o novo serviço para calcular stock disponível (considerando reservas)
+          const allInventory = await db.collection('products_inventory').get();
+          const allInventoryProducts = allInventory.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryProduct));
+          const availableStock = await calculateAvailableStock(publicId, allInventoryProducts);
+
+          // 3. Atualizar a Loja Pública
           await publicRef.set({
-              stock: totalStock,
+              stock: availableStock,
               variants: variants
           }, { merge: true });
           
-          console.log(`Stock sincronizado para Produto ${publicId}: ${totalStock} unidades.`);
+          console.log(`Stock sincronizado para Produto ${publicId}: ${availableStock} unidades disponíveis.`);
 
       } catch (err) {
           console.error("Erro ao sincronizar stock público automaticamente:", err);
@@ -240,4 +226,3 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
-
