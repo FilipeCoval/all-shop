@@ -6,7 +6,8 @@ import {
   History, ShoppingCart, User as UserIcon, MapPin, BarChart2, TicketPercent, ToggleLeft, ToggleRight, Save, Bell, Truck, Globe, FileText, CheckCircle, Copy, Bot, Send, Users, Eye, AlertTriangle, Camera, Zap, ZapOff, QrCode, Home, ArrowLeft, RefreshCw, ClipboardEdit, MinusCircle, Calendar, Info, Database, UploadCloud, Tag, Image as ImageIcon, AlignLeft, ListPlus, ArrowRight as ArrowRightIcon, Layers, Lock, Unlock, CalendarClock, Upload, Loader2, ChevronDown, ChevronRight, ShieldAlert, XCircle, Mail, ScanBarcode, ShieldCheck, ZoomIn, BrainCircuit, Wifi, WifiOff, ExternalLink, Key as KeyIcon, Coins, Combine, Printer, Headphones, Wallet, AtSign, Scale, Calculator, Store, Settings, Megaphone, Smartphone, Timer, Volume2, VolumeX, BellRing, Wand2, Star
 } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket, ProductVariant } from '../types';
+import { useStockReservations } from '../hooks/useStockReservations';
+import { InventoryProduct, ProductStatus, CashbackStatus, SaleRecord, Order, Coupon, User as UserType, PointHistory, UserTier, ProductUnit, Product, OrderItem, SupportTicket, ProductVariant, StockReservation } from '../types';
 import { extractSerialNumberFromImage, generateProductContent } from '../services/geminiService';
 import { INITIAL_PRODUCTS, LOYALTY_TIERS, STORE_NAME } from '../constants';
 import { db, storage, firebase } from '../services/firebaseConfig';
@@ -51,6 +52,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useInventory(isAdmin);
+  const { reservations } = useStockReservations();
   const { categories: storeCategories } = useStoreCategories();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'coupons' | 'clients' | 'support' | 'marketing' | 'reports' | 'store_products' | 'imports' | 'catalog' | 'categories'>('inventory');
@@ -1152,6 +1154,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                 products={products} 
                 catalogProducts={publicProductsList}
                 pendingOrders={pendingOrders}
+                reservations={reservations}
                 stats={stats} 
                 onlineUsersCount={onlineUsers.length} 
                 stockAlerts={stockAlerts} 
