@@ -159,7 +159,6 @@ const App: React.FC = () => {
   }, []);
 
   const getStockForProduct = (productId: number, variantName?: string): number => {
-    if (isAdmin) return getAdminStock(productId, variantName);
     const product = dbProducts.find(p => p.id === productId);
     
     let availableStock = product?.stock ?? 0;
@@ -631,6 +630,7 @@ const App: React.FC = () => {
       try {
           // Limpar dados para evitar erros de 'undefined' no Firebase
           const cleanOrder = JSON.parse(JSON.stringify(newOrder));
+          cleanOrder.stockDeducted = true; // Indica que o stock público já foi deduzido na altura da compra
           
           const alreadyExists = await db.runTransaction(async (transaction) => {
               const orderRef = db.collection("orders").doc(cleanOrder.id);
