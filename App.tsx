@@ -663,17 +663,8 @@ const App: React.FC = () => {
                   await batch.commit();
               }
               
-              if (!alreadyExists) {
-                  for (const item of cleanOrder.items) {
-                     if (typeof item === 'object' && item !== null) {
-                        fetch('/api/update-stock-summary', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ publicProductId: item.productId })
-                        }).catch(console.error);
-                     }
-                  }
-              }
+              // Removed logic that tries to call the backend API. 
+              // Stock is already updated via transaction on lines 646-649.
           } catch (resErr) {
               console.error("Erro ao limpar reservas:", resErr);
           }
