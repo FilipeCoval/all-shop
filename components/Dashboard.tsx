@@ -686,15 +686,113 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     try {
       const publicIds = [...new Set(products.map(p => p.publicProductId).filter(id => id !== undefined && id !== null))];
       
+      const batches = [];
+      let currentBatch = db.batch();
+      let operationsInBatch = 0;
+      
       for (const pid of publicIds) {
-          const response = await fetch('/api/update-stock-summary', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ publicProductId: Number(pid) })
+          // 1. Calcular inventário físico
+          const inventorySnap = await db.collection('products_inventory').where('publicProductId', '==', Number(pid)).get();
+          let physicalStock = 0;
+          let variantStock: Record<string, number> = {};
+
+          inventorySnap.forEach(doc => {
+              const data = doc.data() as InventoryProduct;
+              const qty = Math.max(0, (data.quantityBought || 0) - (data.quantitySold || 0));
+              physicalStock += qty;
+              
+              const variant = (data.variant || '').trim();
+              if (!variantStock[variant]) variantStock[variant] = 0;
+              variantStock[variant] += qty;
           });
-          if (!response.ok) console.warn("Failed to update stock for", pid);
+          
+          // 2. Calcular encomendas pendentes
+          let pending = 0;
+          let variantPending: Record<string, number> = {};
+          
+          const now = new Date();
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+          pendingOrders.forEach(order => {
+              const orderDate = new Date(order.date || new Date());
+              const isExplicitlyPending = order.stockDeducted === false;
+              const isOldButStuck = order.stockDeducted === undefined && 
+                                   ['Pendente', 'Processamento', 'Pago'].includes(order.status) && 
+                                   orderDate > thirtyDaysAgo;
+
+              if (isExplicitlyPending || isOldButStuck) {
+                  order.items.forEach((item: any) => {
+                      if (typeof item === 'object' && item.productId === Number(pid)) {
+                          const qty = item.quantity || 1;
+                          pending += qty;
+                          const variant = (item.selectedVariant || '').trim();
+                          if (!variantPending[variant]) variantPending[variant] = 0;
+                          variantPending[variant] += qty;
+                      }
+                  });
+              }
+          });
+          
+          const available = Math.max(0, physicalStock - pending);
+
+          // Update the public document
+          const productQuery = await db.collection('products_public').where('id', '==', Number(pid)).limit(1).get();
+          if (!productQuery.empty) {
+              const docSnap = productQuery.docs[0];
+              const publicData = docSnap.data() as Product;
+              
+              const updatedVariants: any[] = [];
+              const allVariantNames = new Set<string>();
+              Object.keys(variantStock).forEach(v => { if (v) allVariantNames.add(v); });
+              (publicData.variants || []).forEach(v => { if (v && v.name) allVariantNames.add(v.name.trim()); });
+
+              const currentVariantsMap = new Map();
+              (publicData.variants || []).forEach(v => { if (v && v.name) currentVariantsMap.set(v.name.trim(), v); });
+
+              allVariantNames.forEach(vName => {
+                  const physical = variantStock[vName] || 0;
+                  const pend = variantPending[vName] || 0;
+                  const variantAvailable = Math.max(0, physical - pend);
+                  
+                  const existing = currentVariantsMap.get(vName) || {};
+                  
+                  let cleanImage = existing.image;
+                  if (cleanImage === null || cleanImage === undefined) {
+                      cleanImage = undefined;
+                  }
+                  
+                  const varData: any = {
+                      name: vName,
+                      price: Number(existing.price) || 0,
+                      stock: variantAvailable
+                  };
+                  if (cleanImage) varData.image = cleanImage;
+                  
+                  updatedVariants.push(varData);
+              });
+              
+              const updateData: any = { stock: available };
+              if (updatedVariants.length > 0) {
+                  updateData.variants = updatedVariants;
+              }
+
+              currentBatch.set(docSnap.ref, updateData, { merge: true });
+              operationsInBatch++;
+              
+              if (operationsInBatch >= 500) {
+                  batches.push(currentBatch);
+                  currentBatch = db.batch();
+                  operationsInBatch = 0;
+              }
+          }
       }
       
+      if (operationsInBatch > 0) {
+        batches.push(currentBatch);
+      }
+      
+      await Promise.all(batches.map(b => b.commit()));
       if (!silent) alert("Stock sincronizado com sucesso!");
       
     } catch (err) {
@@ -752,9 +850,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
               if (newStatus === 'Cancelado' && currentOrder.status !== 'Cancelado') {
                   for (const item of currentOrder.items) {
                       if (typeof item !== 'object' || item === null) continue;
-                      const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
-                      if (!productQuery.empty) {
-                          const productDoc = productQuery.docs[0];
+                      const productDocRef = db.collection('products_public').doc(item.productId.toString());
+                      const productDoc = await transaction.get(productDocRef);
+                      if (productDoc.exists) {
                           const productData = productDoc.data() as Product;
                           
                           let updatedVariants = productData.variants;
@@ -829,9 +927,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                   await db.runTransaction(async (transaction) => {
                       for (const item of orderData.items) {
                           if (typeof item !== 'object' || item === null) continue;
-                          const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
-                          if (!productQuery.empty) {
-                              const productDoc = productQuery.docs[0];
+                          const productDocRef = db.collection('products_public').doc(item.productId.toString());
+                          const productDoc = await transaction.get(productDocRef);
+                          if (productDoc.exists) {
                               const productData = productDoc.data() as Product;
                               
                               let updatedVariants = productData.variants;
