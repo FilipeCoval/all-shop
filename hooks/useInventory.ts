@@ -46,16 +46,44 @@ export const useInventory = (isAdmin: boolean = false) => {
           const publicId = Number(publicIdRaw);
           if (isNaN(publicId)) return;
 
-          // Chamada à API para cálculo seguro servidor-side
-          const response = await fetch('/api/update-stock-summary', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ publicProductId: publicId })
-          });
-          
-          if (!response.ok) throw new Error("Falha ao atualizar resumo de stock");
+          // 0. Buscar dados atuais do produto público
+          const publicRef = db.collection('products_public').doc(publicId.toString());
+          const publicDoc = await publicRef.get();
+          if (!publicDoc.exists) return;
+          const publicData = publicDoc.data() as Product;
 
-          console.log(`Stock sincronizado via API para Produto ${publicId}.`);
+          // 1. Buscar todos os lotes deste produto
+          const snapshot = await db.collection('products_inventory').where('publicProductId', '==', publicId).get();
+
+          // Recalcular variantes baseadas nos lotes existentes
+          const variantsMap = new Map<string, ProductVariant>();
+          if (publicData?.variants) {
+              publicData.variants.forEach(v => variantsMap.set(v.name, { ...v }));
+          }
+
+          snapshot.forEach(doc => {
+              const item = doc.data() as InventoryProduct;
+              if (item.variant) {
+                  const existing = variantsMap.get(item.variant);
+                  variantsMap.set(item.variant, {
+                      name: item.variant,
+                      price: item.salePrice || item.targetSalePrice || (existing?.price || 0),
+                      image: (existing?.image) ? existing.image : ((item.images && item.images[0]) ? item.images[0] : undefined)
+                  });
+              }
+          });
+
+          // 2. Usar o novo serviço para calcular stock disponível (considerando reservas)
+          const allInventoryProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InventoryProduct));
+          const availableStock = await calculateAvailableStock(publicId, allInventoryProducts);
+
+          // 3. Atualizar a Loja Pública
+          await publicRef.set({
+              stock: availableStock,
+              variants: Array.from(variantsMap.values())
+          }, { merge: true });
+          
+          console.log(`Stock sincronizado para Produto ${publicId}: ${availableStock} unidades disponíveis.`);
 
       } catch (err) {
           console.error("Erro ao sincronizar stock público automaticamente:", err);
@@ -189,3 +217,4 @@ export const useInventory = (isAdmin: boolean = false) => {
 
   return { products, loading, error, addProduct, updateProduct, deleteProduct };
 };
+
