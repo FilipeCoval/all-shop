@@ -24,16 +24,28 @@ export const calculateAvailableStock = async (
     let totalOrderReservations = 0;
     try {
         const ordersSnapshot = await db.collection('orders')
-            .where('status', 'in', ['Pendente', 'Processamento', 'Pago'])
+            .where('status', 'in', ['Pendente', 'Processamento', 'Pago', 'Enviado', 'Entregue'])
             .get();
         
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+
         ordersSnapshot.docs.forEach(doc => {
             const order = doc.data() as Order;
-            order.items.forEach(item => {
-                if (typeof item !== 'string' && item.productId === publicProductId) {
-                    totalOrderReservations += item.quantity;
-                }
-            });
+            const orderDate = new Date(order.date);
+            
+            const isExplicitlyPending = order.stockDeducted === false;
+            const isOldButStuck = order.stockDeducted === undefined && 
+                                 ['Pendente', 'Processamento', 'Pago'].includes(order.status) && 
+                                 orderDate > thirtyDaysAgo;
+
+            if (isExplicitlyPending || isOldButStuck) {
+                order.items.forEach(item => {
+                    if (typeof item !== 'string' && item.productId === publicProductId) {
+                        totalOrderReservations += item.quantity;
+                    }
+                });
+            }
         });
     } catch (e) {
         // Se falhar (ex: permissão negada por não ser admin), assume-se 0 aqui.
@@ -44,3 +56,4 @@ export const calculateAvailableStock = async (
 
     return totalPhysical - totalCartReservations - totalOrderReservations;
 };
+
