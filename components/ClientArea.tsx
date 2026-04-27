@@ -5,7 +5,7 @@ import {
     CheckCircle, Printer, FileText, Heart, ShoppingCart, Truck, XCircle, Award, Gift, 
     ArrowRight, Coins, DollarSign, LayoutDashboard, QrCode, AlertTriangle, Loader2, X, 
     Camera, Home, ChevronDown, ChevronUp, Undo2, MessageSquareWarning,
-    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale, Copy, ExternalLink, Bell, BellOff
+    History, Zap, TicketPercent, ShieldAlert, Bot, Sparkles, Headphones, Clock, MessageSquare, Scale, Copy, ExternalLink, Bell, BellOff, Send
 } from 'lucide-react';
 import { STORE_NAME, LOGO_URL, LOYALTY_TIERS, LOYALTY_REWARDS } from '../constants';
 import { db, firebase, storage, requestPushPermission, messaging } from '../services/firebaseConfig';
@@ -23,6 +23,7 @@ interface ClientAreaProps {
   onAddToCart: (product: Product, variant?: ProductVariant) => void;
   publicProducts: Product[];
   onOpenSupportChat: () => void;
+  onCheckout?: (order: Order, isAutoSave?: boolean) => Promise<boolean>;
 }
 
 type ActiveTab = 'overview' | 'orders' | 'profile' | 'addresses' | 'wishlist' | 'points' | 'support';
@@ -63,7 +64,7 @@ const CircularProgress: React.FC<{ progress: number; size: number; strokeWidth: 
     );
 };
 
-const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts, onOpenSupportChat }) => {
+const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdateUser, wishlist, onToggleWishlist, onAddToCart, publicProducts, onOpenSupportChat, onCheckout }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   
   const [profileForm, setProfileForm] = useState({ 
@@ -265,9 +266,27 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
         const orderRef = db.collection('orders').doc(modalState.order.id);
         const now = new Date().toISOString();
         if (modalState.type === 'cancel') {
-            await orderRef.update({ 
-                status: 'Cancelado', 
-                statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: 'Cancelado', date: now, notes: modalReason.trim() }) 
+            await db.runTransaction(async (transaction) => {
+                // 1. Atualizar o estado da encomenda
+                transaction.update(orderRef, { 
+                    status: 'Cancelado', 
+                    statusHistory: firebase.firestore.FieldValue.arrayUnion({ status: 'Cancelado', date: now, notes: modalReason.trim() }) 
+                });
+
+                // 2. Repor o stock na coleção pública
+                if (modalState.order && modalState.order.items) {
+                    for (const item of modalState.order.items) {
+                        if (typeof item !== 'object' || item === null) continue;
+                        const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
+                        if (!productQuery.empty) {
+                            const productDoc = productQuery.docs[0];
+                            const productData = productDoc.data() as Product;
+                            transaction.update(productDoc.ref, {
+                                stock: (productData.stock || 0) + item.quantity
+                            });
+                        }
+                    }
+                }
             });
         } else if (modalState.type === 'return') {
             await orderRef.update({ 
@@ -476,6 +495,28 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
 
       printWindow.document.write(htmlContent);
       printWindow.document.close();
+  };
+
+  const handleConfirmSentFromClientArea = async (order: Order) => {
+      if (!onCheckout) return;
+      
+      const confirmed = window.confirm("Confirma que já enviou a mensagem via WhatsApp/Telegram para processarmos o seu pedido?");
+      if (!confirmed) return;
+
+      // Update status to 'Processamento'
+      const updatedOrder: Order = {
+          ...order,
+          status: 'Processamento',
+          statusHistory: [
+              ...(order.statusHistory || []),
+              { status: 'Processamento', date: new Date().toISOString(), notes: 'Confirmado pelo cliente na área de cliente.' }
+          ]
+      };
+
+      const success = await onCheckout(updatedOrder, false); // false means it's NOT an auto-save
+      if (success) {
+          alert("Pedido confirmado com sucesso! A nossa equipa irá processar a sua encomenda brevemente.");
+      }
   };
 
   const getStatusStep = (status: string) => {
@@ -822,7 +863,16 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                                     <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                                         <button onClick={() => handlePrintOrder(order)} className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 shadow-sm"><Printer size={16}/> Imprimir Fatura / Garantia</button>
                                         
-                                        {['Processamento', 'Pago'].includes(order.status) && <button onClick={() => setModalState({ type: 'cancel', order })} className="flex items-center gap-2 text-sm font-bold text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50"><XCircle size={16}/> Cancelar Encomenda</button>}
+                                        {order.status === 'Pendente' && (
+                                            <button 
+                                                onClick={() => handleConfirmSentFromClientArea(order)} 
+                                                className="flex items-center gap-2 text-sm font-bold text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-4 py-2 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 shadow-sm"
+                                            >
+                                                <Send size={16}/> Confirmar Envio da Mensagem
+                                            </button>
+                                        )}
+
+                                        {['Pendente', 'Processamento', 'Pago'].includes(order.status) && <button onClick={() => setModalState({ type: 'cancel', order })} className="flex items-center gap-2 text-sm font-bold text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50"><XCircle size={16}/> Cancelar Encomenda</button>}
                                         
                                         {order.status === 'Entregue' && <button onClick={onOpenSupportChat} className="flex items-center gap-2 text-sm font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 border border-purple-200 dark:border-purple-800 px-4 py-2 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 shadow-sm"><Sparkles size={16} /> Ajuda / Garantia (IA)</button>}
                                     </div>
