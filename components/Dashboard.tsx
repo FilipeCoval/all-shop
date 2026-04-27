@@ -680,76 +680,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
       if (!silent) alert("O inventário parece estar vazio ou ainda a carregar.");
       return;
     }
-    if (!silent && !window.confirm("Isto irá recalcular o stock TOTAL da loja pública baseando-se na soma de todos os lotes do inventário físico.\n\nCertifique-se que os 'IDs de Produto da Loja' estão preenchidos nos lotes.\n\nContinuar?")) return;
+    if (!silent && !window.confirm("Isto irá recalcular o stock da loja pública.\n\nContinuar?")) return;
     
     setIsSyncingStock(true);
     try {
-      const stockMap: Record<string, number> = {};
-      let linkedItemsCount = 0;
+      // Obter IDs públicos únicos
+      const publicIds = [...new Set(products.map(p => p.publicProductId).filter(id => id !== undefined && id !== null))];
       
-      products.forEach(p => {
-        if (p.publicProductId !== undefined && p.publicProductId !== null) {
-          const pid = p.publicProductId.toString();
-          const physical = Math.max(0, (p.quantityBought || 0) - (p.quantitySold || 0));
-          
-          // Calcular reservas para este lote específico (se possível) ou produto
-          let pending = 0;
-          pendingOrders.forEach(order => {
-              order.items.forEach((item: any) => {
-                  if (item.productId === p.publicProductId) {
-                      const itemVariant = (item.selectedVariant || '').trim().toLowerCase();
-                      const batchVariant = (p.variant || '').trim().toLowerCase();
-                      if (batchVariant === '' || itemVariant === batchVariant) {
-                          pending += (item.quantity || 1);
-                      }
-                  }
-              });
+      for (const pid of publicIds) {
+          // Chamada à API para cálculo seguro servidor-side
+          const response = await fetch('/api/update-stock-summary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ publicProductId: Number(pid) })
           });
-
-          const available = Math.max(0, physical - pending);
-
-          if (typeof stockMap[pid] === 'undefined') stockMap[pid] = 0;
-          stockMap[pid] += available;
-          linkedItemsCount++;
-        }
-      });
-
-      if (linkedItemsCount === 0) {
-        if (!silent) alert("Nenhum lote tem 'ID de Produto da Loja' configurado. Edite os lotes e associe-os aos produtos públicos.");
-        setIsSyncingStock(false);
-        return;
-      }
-
-      const entries = Object.entries(stockMap);
-      const batches = [];
-      let currentBatch = db.batch();
-      let operationsInBatch = 0;
-
-      for (const [publicId, totalStock] of entries) {
-        // Find the actual document Ref by querying 'id'
-        const productQuery = await db.collection('products_public').where('id', '==', Number(publicId)).limit(1).get();
-        if (!productQuery.empty) {
-          const ref = productQuery.docs[0].ref;
-          currentBatch.set(ref, { stock: totalStock }, { merge: true });
-          operationsInBatch++;
           
-          if (operationsInBatch >= 500) {
-            batches.push(currentBatch);
-            currentBatch = db.batch();
-            operationsInBatch = 0;
-          }
-        }
+          if (!response.ok) throw new Error(`Falha ao atualizar resumo de stock para ${pid}`);
       }
       
-      if (operationsInBatch > 0) {
-        batches.push(currentBatch);
-      }
+      if (!silent) alert("Stock sincronizado com sucesso!");
       
-      await Promise.all(batches.map(b => b.commit()));
-      if (!silent) alert(`Sincronização concluída com sucesso!\n${entries.length} produtos atualizados na loja.`);
-    } catch (error: any) {
-      console.error("Erro ao sincronizar:", error);
-      if (!silent) alert(`Ocorreu um erro ao sincronizar: ${error.message}`);
+    } catch (err) {
+      console.error("Erro ao sincronizar stock:", err);
+      if (!silent) alert("Erro ao sincronizar stock.");
     } finally {
       setIsSyncingStock(false);
     }
