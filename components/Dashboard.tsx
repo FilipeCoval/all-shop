@@ -686,51 +686,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     try {
       const publicIds = [...new Set(products.map(p => p.publicProductId).filter(id => id !== undefined && id !== null))];
       
-      const batches = [];
-      let currentBatch = db.batch();
-      let operationsInBatch = 0;
-      
       for (const pid of publicIds) {
-          // 1. Calcular inventário físico
-          const inventorySnap = await db.collection('products_inventory').where('publicProductId', '==', Number(pid)).get();
-          let physicalStock = 0;
-          inventorySnap.forEach(doc => {
-              const data = doc.data() as InventoryProduct;
-              physicalStock += Math.max(0, (data.quantityBought || 0) - (data.quantitySold || 0));
+          const response = await fetch('/api/update-stock-summary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ publicProductId: Number(pid) })
           });
-          
-          // 2. Calcular encomendas pendentes
-          let pending = 0;
-          pendingOrders.forEach(order => {
-              order.items.forEach((item: any) => {
-                  if (item.productId === Number(pid)) {
-                      pending += (item.quantity || 1);
-                  }
-              });
-          });
-          
-          const available = Math.max(0, physicalStock - pending);
-          
-          // Encontrar e atualizar o doc na coleção pública
-          const productQuery = await db.collection('products_public').where('id', '==', Number(pid)).limit(1).get();
-          if (!productQuery.empty) {
-              const ref = productQuery.docs[0].ref;
-              currentBatch.set(ref, { stock: available }, { merge: true });
-              operationsInBatch++;
-              
-              if (operationsInBatch >= 500) {
-                  batches.push(currentBatch);
-                  currentBatch = db.batch();
-                  operationsInBatch = 0;
-              }
-          }
+          if (!response.ok) console.warn("Failed to update stock for", pid);
       }
       
-      if (operationsInBatch > 0) {
-        batches.push(currentBatch);
-      }
-      
-      await Promise.all(batches.map(b => b.commit()));
       if (!silent) alert("Stock sincronizado com sucesso!");
       
     } catch (err) {
@@ -792,9 +756,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                       if (!productQuery.empty) {
                           const productDoc = productQuery.docs[0];
                           const productData = productDoc.data() as Product;
-                          transaction.update(productDoc.ref, {
-                              stock: (productData.stock || 0) + item.quantity
-                          });
+                          
+                          let updatedVariants = productData.variants;
+                          if (item.selectedVariant && productData.variants) {
+                              const vIndex = productData.variants.findIndex(v => v.name === item.selectedVariant);
+                              if (vIndex !== -1) {
+                                  updatedVariants = [...productData.variants];
+                                  updatedVariants[vIndex] = {
+                                      ...updatedVariants[vIndex],
+                                      stock: (updatedVariants[vIndex].stock || 0) + item.quantity
+                                  };
+                              }
+                          }
+                          
+                          const updateData: any = { stock: (productData.stock || 0) + item.quantity };
+                          if (updatedVariants) updateData.variants = updatedVariants;
+                          
+                          transaction.update(productDoc.ref, Object.fromEntries(Object.entries(updateData).filter(([_,v]) => v !== undefined)));
                       }
                   }
 
@@ -855,9 +833,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
                           if (!productQuery.empty) {
                               const productDoc = productQuery.docs[0];
                               const productData = productDoc.data() as Product;
-                              transaction.update(productDoc.ref, {
-                                  stock: (productData.stock || 0) + item.quantity
-                              });
+                              
+                              let updatedVariants = productData.variants;
+                              if (item.selectedVariant && productData.variants) {
+                                  const vIndex = productData.variants.findIndex(v => v.name === item.selectedVariant);
+                                  if (vIndex !== -1) {
+                                      updatedVariants = [...productData.variants];
+                                      updatedVariants[vIndex] = {
+                                          ...updatedVariants[vIndex],
+                                          stock: (updatedVariants[vIndex].stock || 0) + item.quantity
+                                      };
+                                  }
+                              }
+                              
+                              const updateData: any = { stock: (productData.stock || 0) + item.quantity };
+                              if (updatedVariants) updateData.variants = updatedVariants;
+                              
+                              transaction.update(productDoc.ref, Object.fromEntries(Object.entries(updateData).filter(([_,v]) => v !== undefined)));
                           }
                       }
 
