@@ -642,11 +642,13 @@ const App: React.FC = () => {
               // 2. Guardar a encomenda
               transaction.set(orderRef, cleanOrder);
 
-              // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
+          // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
               if (!exists) {
                   for (const update of productUpdates) {
                       transaction.update(update.ref, { stock: update.newStock });
                   }
+                  // TRIGGER STOCK SUMMARY UPDATE
+                  // Não podemos fazer isto dentro da transação, fazemos após
               }
               
               return exists;
@@ -659,6 +661,18 @@ const App: React.FC = () => {
                   const batch = db.batch();
                   reservationQuery.forEach(doc => batch.delete(doc.ref));
                   await batch.commit();
+              }
+              
+              if (!alreadyExists) {
+                  for (const item of cleanOrder.items) {
+                     if (typeof item === 'object' && item !== null) {
+                        fetch('/api/update-stock-summary', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ publicProductId: item.productId })
+                        }).catch(console.error);
+                     }
+                  }
               }
           } catch (resErr) {
               console.error("Erro ao limpar reservas:", resErr);
