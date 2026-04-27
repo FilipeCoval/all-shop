@@ -72,7 +72,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const available = Math.max(0, physicalStock - reservedInCart - pendingInOrders);
 
-        // 4. Update Summary (Secure)
+        // 4. Update the actual products_public which frontend listens to
+        await db.collection('products_public').doc(String(publicProductId)).set({
+            stock: available
+        }, { merge: true });
+
+        // Update Summary (Secure - optional but keeping it just in case)
         await db.collection('public_stock_summary').doc(String(publicProductId)).set({
             publicProductId: Number(publicProductId),
             availableStock: available,
