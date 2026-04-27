@@ -684,20 +684,53 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     
     setIsSyncingStock(true);
     try {
-      // Obter IDs públicos únicos
       const publicIds = [...new Set(products.map(p => p.publicProductId).filter(id => id !== undefined && id !== null))];
       
+      const batches = [];
+      let currentBatch = db.batch();
+      let operationsInBatch = 0;
+      
       for (const pid of publicIds) {
-          // Chamada à API para cálculo seguro servidor-side
-          const response = await fetch('/api/update-stock-summary', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ publicProductId: Number(pid) })
+          // 1. Calcular inventário físico
+          const inventorySnap = await db.collection('products_inventory').where('publicProductId', '==', Number(pid)).get();
+          let physicalStock = 0;
+          inventorySnap.forEach(doc => {
+              const data = doc.data() as InventoryProduct;
+              physicalStock += Math.max(0, (data.quantityBought || 0) - (data.quantitySold || 0));
           });
           
-          if (!response.ok) throw new Error(`Falha ao atualizar resumo de stock para ${pid}`);
+          // 2. Calcular encomendas pendentes
+          let pending = 0;
+          pendingOrders.forEach(order => {
+              order.items.forEach((item: any) => {
+                  if (item.productId === Number(pid)) {
+                      pending += (item.quantity || 1);
+                  }
+              });
+          });
+          
+          const available = Math.max(0, physicalStock - pending);
+          
+          // Encontrar e atualizar o doc na coleção pública
+          const productQuery = await db.collection('products_public').where('id', '==', Number(pid)).limit(1).get();
+          if (!productQuery.empty) {
+              const ref = productQuery.docs[0].ref;
+              currentBatch.set(ref, { stock: available }, { merge: true });
+              operationsInBatch++;
+              
+              if (operationsInBatch >= 500) {
+                  batches.push(currentBatch);
+                  currentBatch = db.batch();
+                  operationsInBatch = 0;
+              }
+          }
       }
       
+      if (operationsInBatch > 0) {
+        batches.push(currentBatch);
+      }
+      
+      await Promise.all(batches.map(b => b.commit()));
       if (!silent) alert("Stock sincronizado com sucesso!");
       
     } catch (err) {
