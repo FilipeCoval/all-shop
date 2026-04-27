@@ -5,6 +5,7 @@ import { Product, ProductVariant } from '../types';
 import { Plus, Eye, AlertTriangle, ArrowRight, Search, Heart, ArrowUpDown, LayoutGrid, List, ChevronLeft, ChevronRight, Zap, Flame, Sparkles, Star, CalendarClock, Loader2, Scale } from 'lucide-react';
 import QuickViewModal from './QuickViewModal';
 import InteractiveProductCard from './InteractiveProductCard';
+import { useStoreCategories } from '../hooks/useStoreCategories';
 
 interface ProductListProps {
   products: Product[];
@@ -66,11 +67,25 @@ const ProductList: React.FC<ProductListProps> = ({
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, sortOption]);
 
+  const { categories: storeCategories } = useStoreCategories();
+
+  const normalizeString = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
   const categories = useMemo(() => {
     if (!products) return ['Todas'];
-    const cats = products.map(p => p.category || 'Outros').filter(c => c);
-    return ['Todas', ...new Set(cats)];
-  }, [products]);
+    const predefinedCats = storeCategories.map(c => c.name);
+    const predefinedNormalized = new Set(predefinedCats.map(normalizeString));
+    
+    let extraCats = new Set<string>();
+    products.forEach(p => {
+        const cat = p.category || 'Outros';
+        if (!predefinedNormalized.has(normalizeString(cat))) {
+            extraCats.add(cat);
+        }
+    });
+
+    return ['Todas', ...predefinedCats, ...Array.from(extraCats)];
+  }, [products, storeCategories]);
 
   const filteredAndSortedProducts = useMemo(() => {
       if (!products) return [];
@@ -83,7 +98,7 @@ const ProductList: React.FC<ProductListProps> = ({
 
         const matchesSearch = (name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                               (description || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'Todas' || category === selectedCategory;
+        const matchesCategory = selectedCategory === 'Todas' || normalizeString(category) === normalizeString(selectedCategory);
         return matchesSearch && matchesCategory;
       });
 
