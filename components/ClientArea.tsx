@@ -277,9 +277,9 @@ const ClientArea: React.FC<ClientAreaProps> = ({ user, orders, onLogout, onUpdat
                 if (modalState.order && modalState.order.items) {
                     for (const item of modalState.order.items) {
                         if (typeof item !== 'object' || item === null) continue;
-                        const productQuery = await transaction.get(db.collection('products_public').where('id', '==', item.productId).limit(1));
-                        if (!productQuery.empty) {
-                            const productDoc = productQuery.docs[0];
+                        const productDocRef = db.collection('products_public').doc(item.productId.toString());
+                        const productDoc = await transaction.get(productDocRef);
+                        if (productDoc.exists) {
                             const productData = productDoc.data() as Product;
                             
                             let updatedVariants = productData.variants;
