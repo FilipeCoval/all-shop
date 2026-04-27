@@ -27,8 +27,9 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
-        request.resource.data.stock >= 0 &&
-        request.resource.data.stock < resource.data.stock
+        request.resource.data.stock >= 0
+        // Removido 'request.resource.data.stock < resource.data.stock' para permitir
+        // que os clientes reponham o stock quando cancelam uma encomenda (protótipo client-side).
       );
     }
     
