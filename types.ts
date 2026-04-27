@@ -213,6 +213,7 @@ export interface ProductVariant {
   name: string;
   price: number;
   image?: string;
+  stock?: number;
 }
 
 export interface InventoryProduct {
