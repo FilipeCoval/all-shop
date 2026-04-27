@@ -3,13 +3,14 @@ import {
   Search, Edit2, Trash2, RefreshCw, Camera, BrainCircuit, UploadCloud, Plus, 
   ChevronDown, ChevronRight, Globe, FileText, Copy, DollarSign, Package, TrendingUp, AlertCircle, Users, Loader2, Layers, BellRing, Info, X
 } from 'lucide-react';
-import { InventoryProduct, Order, Product } from '../types';
+import { InventoryProduct, Order, Product, StockReservation } from '../types';
 import KpiCard from './KpiCard';
 
 interface InventoryTabProps {
   products: InventoryProduct[];
   catalogProducts?: Product[]; // NOVO: Para poder ir buscar imagens
   pendingOrders: Order[];
+  reservations: StockReservation[];
   stats: {
     totalInvested: number;
     realizedRevenue: number;
@@ -46,7 +47,7 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
 
 const InventoryTab: React.FC<InventoryTabProps> = ({
-  products, catalogProducts, pendingOrders, stats, onlineUsersCount, stockAlerts,
+  products, catalogProducts, pendingOrders, reservations, stats, onlineUsersCount, stockAlerts,
   onEdit, onEditProduct, onCreateVariant, onDeleteGroup, onSale, onDelete,
   onSyncStock, isSyncingStock,
   onOpenScanner, onOpenCalculator, 
@@ -199,7 +200,12 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                                 }
                             });
 
-                            const availableStock = Math.max(0, totalPhysicalStock - pendingInOrders);
+                            // Calcular stock reservado no carrinho para este grupo
+                            const reservedInCart = reservations
+                                .filter(r => r.productId === mainItem.publicProductId)
+                                .reduce((sum, r) => sum + r.quantity, 0);
+
+                            const availableStock = Math.max(0, totalPhysicalStock - pendingInOrders - reservedInCart);
                             
                             const alertsCount = mainItem.publicProductId 
                                 ? stockAlerts.filter(a => a.productId === mainItem.publicProductId).length
