@@ -184,6 +184,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
     };
 
     const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '');
+    const [storeShippingCost, setStoreShippingCost] = useState<string>('');
     
     const isPickup = order.status === 'Levantamento em Loja';
 
@@ -359,6 +360,11 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     });
                 }
 
+                let finalStoreShippingCost: number | undefined = undefined;
+                if (!isPickup && storeShippingCost.trim() !== '') {
+                    finalStoreShippingCost = parseFloat(storeShippingCost);
+                }
+
                 transaction.update(orderRef, {
                     status: newStatus,
                     fulfilledAt: timestamp,
@@ -367,6 +373,7 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                     fulfillmentStatus: 'COMPLETED',
                     stockDeducted: true,
                     trackingNumber: isPickup ? null : (trackingNumber || null),
+                    ...(finalStoreShippingCost !== undefined ? { storeShippingCost: finalStoreShippingCost } : {}),
                     pointsAwarded: pointsWereAwarded,
                     totalProductCost: calculatedTotalProductCost,
                     packages: updatedPackages || firebase.firestore.FieldValue.delete(),
@@ -471,17 +478,32 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
                         )}
                     </div>
 
-                    {/* Tracking Number Input - Only show if NOT pickup and NO packages (packages have their own tracking) */}
-                    {!isPickup && !hasPackages && (
-                        <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Número de Rastreio (Opcional)</label>
-                            <input 
-                                type="text" 
-                                value={trackingNumber}
-                                onChange={(e) => setTrackingNumber(e.target.value)}
-                                placeholder="Ex: EA123456789PT"
-                                className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
-                            />
+                    {/* Additional Details Input */}
+                    {!isPickup && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-slate-800 p-4 rounded-xl border border-gray-200 dark:border-slate-700 transition-colors">
+                            {!hasPackages && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Número de Rastreio (Opcional)</label>
+                                    <input 
+                                        type="text" 
+                                        value={trackingNumber}
+                                        onChange={(e) => setTrackingNumber(e.target.value)}
+                                        placeholder="Ex: EA123456789PT"
+                                        className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
+                                    />
+                                </div>
+                            )}
+                            <div className={hasPackages ? "md:col-span-2" : ""}>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Custo Pago à Transportadora (Para Relatórios)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={storeShippingCost}
+                                    onChange={(e) => setStoreShippingCost(e.target.value)}
+                                    placeholder="Ex: 3.50"
+                                    className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-gray-900 dark:text-white transition-colors"
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -621,3 +643,4 @@ const OrderFulfillmentModal: React.FC<OrderFulfillmentModalProps> = ({ order, in
 };
 
 export default OrderFulfillmentModal;
+
