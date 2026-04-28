@@ -275,17 +275,27 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
     
     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 transition-colors">
         <h4 className="font-bold text-blue-900 dark:text-blue-300 text-sm mb-3 flex items-center gap-2"><Truck size={16} /> Logística & Envio</h4>
-        <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400">
-                    <Scale size={20} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
+            <div className="flex gap-4">
+                <div className="flex items-center gap-2">
+                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400">
+                        <Scale size={20} />
+                    </div>
+                    <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase">Peso Total Estimado</p>
+                        <p className="font-bold text-lg text-gray-900 dark:text-white">{totalWeight.toFixed(3)} kg</p>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase">Peso Total Estimado</p>
-                    <p className="font-bold text-lg text-gray-900 dark:text-white">{totalWeight.toFixed(3)} kg</p>
-                </div>
+                {order.storeShippingCost !== undefined && (
+                    <div className="flex items-center gap-2 border-l border-blue-200 dark:border-blue-800 pl-4">
+                        <div>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase">Custo Transportadora</p>
+                            <p className="font-bold text-lg text-gray-900 dark:text-white">{formatCurrency(order.storeShippingCost)}</p>
+                        </div>
+                    </div>
+                )}
             </div>
-            <div className="text-right">
+            <div className="text-right whitespace-nowrap">
                 <button 
                     onClick={handleCopyAddress} 
                     className="bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-800 shadow-sm flex items-center gap-1 transition-colors"
