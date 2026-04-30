@@ -195,7 +195,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
     // não seja 'COMPLETED', ainda não deduziu a quantitySold no inventário físico backoffice.
     // Assim, deve ser considerada como "stock retido/pendente".
     const isCancelled = ['Cancelado', 'Devolvido', 'Reclamação'].includes(o.status);
-    const isFulfilled = o.fulfillmentStatus === 'COMPLETED';
+    
+    // Tratamento para encomendas antigas ("legacy") que já foram entregues/enviadas
+    // antes de existir o sistema de "Fulfillment". Estas não devem reter stock, pois já saíram.
+    const isLegacyFulfilled = !o.fulfillmentStatus && ['Enviado', 'Entregue', 'Levantamento em Loja'].includes(o.status) && o.stockDeducted === true;
+    
+    // Se está concluída pelo novo sistema ou foi enviada/entregue no sistema antigo
+    const isFulfilled = o.fulfillmentStatus === 'COMPLETED' || isLegacyFulfilled || (o.fulfillmentStatus === undefined && ['Enviado', 'Entregue'].includes(o.status));
     
     return !isCancelled && !isFulfilled;
   }), [allOrders]);
