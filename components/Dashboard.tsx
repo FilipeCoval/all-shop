@@ -190,16 +190,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
   const selectedPublicProductVariants = useMemo(() => { if (!formData.publicProductId) return []; const prod = publicProductsList.find(p => p.id === Number(formData.publicProductId)); return prod?.variants || []; }, [formData.publicProductId, publicProductsList]);
   const [saleForm, setSaleForm] = useState({ quantity: '1', unitPrice: '', shippingCost: '', date: new Date().toISOString().split('T')[0], notes: '', supplierName: '', supplierOrderId: '' });
   const pendingOrders = useMemo(() => allOrders.filter(o => {
-    const orderDate = new Date(o.date);
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-
-    const isExplicitlyPending = o.stockDeducted === false;
-    const isOldButStuck = o.stockDeducted === undefined && 
-                         ['Processamento', 'Pago'].includes(o.status) && 
-                         orderDate > thirtyDaysAgo;
+    // Para o cálculo do stock online real:
+    // Qualquer encomenda que não esteja cancelada/devolvida e cujo fulfillmentStatus
+    // não seja 'COMPLETED', ainda não deduziu a quantitySold no inventário físico backoffice.
+    // Assim, deve ser considerada como "stock retido/pendente".
+    const isCancelled = ['Cancelado', 'Devolvido', 'Reclamação'].includes(o.status);
+    const isFulfilled = o.fulfillmentStatus === 'COMPLETED';
     
-    return isExplicitlyPending || isOldButStuck;
+    return !isCancelled && !isFulfilled;
   }), [allOrders]);
   
   const groupedCashback = useMemo(() => {
@@ -261,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
 
   useEffect(() => { if (!isAdmin) return; const unsubscribe = db.collection('products_public').onSnapshot(snap => { const loadedProducts: Product[] = []; snap.forEach(doc => { const id = parseInt(doc.id, 10); const data = doc.data(); if (!isNaN(id)) loadedProducts.push({ ...data, id: data.id || id } as Product); }); setPublicProductsList(loadedProducts); }); return () => unsubscribe(); }, [isAdmin]);
   useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('online_users').onSnapshot(snapshot => { const now = Date.now(); const activeUsers: any[] = []; snapshot.forEach(doc => { const data = doc.data(); if (data && typeof data.lastActive === 'number' && (now - data.lastActive < 30000)) { activeUsers.push({ id: doc.id, ...data }); } }); setOnlineUsers(activeUsers); }); return () => unsubscribe(); }, [isAdmin]);
-  useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)).filter(o => o.status !== 'Pendente')); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
+  useEffect(() => { if(!isAdmin) return; const unsubscribe = db.collection('orders').orderBy('date', 'desc').onSnapshot(snapshot => { setAllOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))); setIsOrdersLoading(false); }); return () => unsubscribe(); }, [isAdmin]);
   
   useEffect(() => { 
       // Carregar utilizadores sempre que precisarmos de dados para notificações ou gestão
@@ -710,28 +708,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, isAdmin }) => {
           let pending = 0;
           let variantPending: Record<string, number> = {};
           
-          const now = new Date();
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
           pendingOrders.forEach(order => {
-              const orderDate = new Date(order.date || new Date());
-              const isExplicitlyPending = order.stockDeducted === false;
-              const isOldButStuck = order.stockDeducted === undefined && 
-                                   ['Pendente', 'Processamento', 'Pago'].includes(order.status) && 
-                                   orderDate > thirtyDaysAgo;
-
-              if (isExplicitlyPending || isOldButStuck) {
-                  order.items.forEach((item: any) => {
-                      if (typeof item === 'object' && item.productId === Number(pid)) {
-                          const qty = item.quantity || 1;
-                          pending += qty;
-                          const variant = (item.selectedVariant || '').trim();
-                          if (!variantPending[variant]) variantPending[variant] = 0;
-                          variantPending[variant] += qty;
-                      }
-                  });
-              }
+              order.items.forEach((item: any) => {
+                  if (typeof item === 'object' && item.productId === Number(pid)) {
+                      const qty = item.quantity || 1;
+                      pending += qty;
+                      const variant = (item.selectedVariant || '').trim();
+                      if (!variantPending[variant]) variantPending[variant] = 0;
+                      variantPending[variant] += qty;
+                  }
+              });
           });
           
           const available = Math.max(0, physicalStock - pending);
