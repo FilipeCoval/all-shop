@@ -692,7 +692,10 @@ const App: React.FC = () => {
               } else {
                   transaction.update(orderRef, {
                       status: cleanOrder.status,
-                      statusHistory: cleanOrder.statusHistory
+                      statusHistory: cleanOrder.statusHistory,
+                      shippingInfo: cleanOrder.shippingInfo,
+                      paymentMethod: cleanOrder.paymentMethod,
+                      couponCode: cleanOrder.couponCode || null
                   });
               }
 
