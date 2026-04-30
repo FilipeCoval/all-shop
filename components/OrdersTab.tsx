@@ -170,15 +170,19 @@ const OrdersTab: React.FC<OrdersTabProps> = ({
                                             order.status === 'Enviado' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' : 
                                             order.status === 'Pago' ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300' : 
                                             order.status === 'Cancelado' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' : 
+                                            ['Devolvido', 'Reclamação'].includes(order.status) ? 'bg-red-200 dark:bg-red-900/40 text-red-900 dark:text-red-200' :
                                             order.status === 'Levantamento em Loja' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' : 
                                             'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
                                         }`}
                                     >
+                                        <option value="Pendente">Pendente</option>
                                         <option value="Processamento">Processamento</option>
                                         <option value="Pago">Pago</option>
                                         <option value="Enviado">Enviado</option>
                                         <option value="Levantamento em Loja">Levantamento em Loja</option>
                                         <option value="Entregue">Entregue</option>
+                                        <option value="Reclamação">Reclamação</option>
+                                        <option value="Devolvido">Devolvido</option>
                                         <option value="Cancelado">Cancelado</option>
                                     </select>
                                 </td>
