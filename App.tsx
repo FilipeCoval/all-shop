@@ -687,7 +687,14 @@ const App: React.FC = () => {
               }
 
               // 2. Guardar a encomenda
-              transaction.set(orderRef, cleanOrder);
+              if (!exists) {
+                  transaction.set(orderRef, cleanOrder);
+              } else {
+                  transaction.update(orderRef, {
+                      status: cleanOrder.status,
+                      statusHistory: cleanOrder.statusHistory
+                  });
+              }
 
               // 3. Decrementar stock público imediatamente para outros utilizadores verem (apenas se for nova)
               if (!exists) {
