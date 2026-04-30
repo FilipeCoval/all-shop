@@ -75,7 +75,33 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 }) => {
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info' | 'platform' | 'tutorial' | 'success'>('cart');
   const [isFinalizing, setIsFinalizing] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState('');
+  const [currentOrderId, setCurrentOrderId] = useState(() => localStorage.getItem('as_cart_order_id') || '');
+  
+  useEffect(() => {
+     if (currentOrderId && cartItems.length > 0) {
+         localStorage.setItem('as_cart_order_id', currentOrderId);
+         // Guardar um hash simples do carrinho para invalidar se o utilizador alterar
+         localStorage.setItem('as_cart_hash', JSON.stringify(cartItems));
+     } else {
+         localStorage.removeItem('as_cart_order_id');
+         localStorage.removeItem('as_cart_hash');
+     }
+  }, [currentOrderId, cartItems]);
+
+  // Verificar se o carrinho mudou desde que o currentOrderId foi gerado
+  useEffect(() => {
+     if (currentOrderId && cartItems.length > 0) {
+         const savedHash = localStorage.getItem('as_cart_hash');
+         if (savedHash && savedHash !== JSON.stringify(cartItems)) {
+             // Utilizador alterou o carrinho (qts ou produtos), invalidar a encomenda pendente
+             setCurrentOrderId('');
+             localStorage.removeItem('as_cart_order_id');
+             localStorage.removeItem('as_cart_hash');
+             if (checkoutStep !== 'cart') setCheckoutStep('cart');
+         }
+     }
+  }, [cartItems]);
+
   const [finalMessage, setFinalMessage] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<'wa' | 'tg'>('wa');
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
@@ -249,8 +275,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
             return;
         }
 
-        const id = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
-        setCurrentOrderId(id);
+        if (!currentOrderId) {
+            const id = `#AS-${Math.floor(100000 + Math.random() * 900000)}`;
+            setCurrentOrderId(id);
+        }
         setCheckoutStep('platform');
     }
   };
@@ -346,6 +374,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
       if (success) {
           if (!isAutoSave) {
               setCheckoutStep('success');
+              setCurrentOrderId('');
           }
       }
       setIsFinalizing(false);
@@ -640,5 +669,3 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
 const formatCurrency = (val: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
 export default CartDrawer;
-
-
